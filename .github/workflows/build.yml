@@ -3,6 +3,8 @@ name: Build
 on:
   push:
     branches: [main]
+    # A version tag (v0.2.0) also publishes a GitHub Release with every installer.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -73,3 +75,79 @@ jobs:
             target/release/velopopuli-relay
             target/release/velopopuli-relay.exe
           if-no-files-found: warn
+
+  arch:
+    # Repackages the Debian build as a native Arch package, then installs it on a clean Arch
+    # system and checks every library the app needs is there.
+    needs: app
+    name: Arch Linux package
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: VeloPopuli-Linux
+          path: linux
+      - name: Build the package
+        run: |
+          pacman -Syu --noconfirm --needed pacman-contrib
+          version=$(sed -n 's/^  "version": "\(.*\)",/\1/p' src-tauri/tauri.conf.json | head -1)
+          useradd -m builder
+          mkdir /build && cp packaging/arch/PKGBUILD /build/
+          sed -i "s/^pkgver=.*/pkgver=$version/" /build/PKGBUILD
+          cp "$(find linux -name '*.deb' | head -1)" "/build/VeloPopuli_${version}_amd64.deb"
+          cp LICENSE "/build/LICENSE-${version}"
+          chown -R builder /build
+          cd /build
+          su builder -c "updpkgsums && makepkg --nodeps --noconfirm"
+          ls -la /build
+      - name: Install it and check its libraries
+        run: |
+          pacman -U --noconfirm /build/velopopuli-bin-*.pkg.tar.zst
+          pacman -Ql velopopuli-bin
+          desktop=$(ls /usr/share/applications/*.desktop | head -1)
+          bin=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$desktop" | head -1)
+          bin=$(command -v "$bin" || echo "$bin")
+          echo "launcher $desktop runs $bin"
+          missing=$(ldd "$bin" | grep 'not found' || true)
+          echo "$missing"
+          test -z "$missing"
+          test -f /usr/lib/udev/rules.d/99-velopopuli-ant.rules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VeloPopuli-Arch
+          path: |
+            /build/*.pkg.tar.zst
+            /build/PKGBUILD
+
+  release:
+    # Only for version tags: gather everything into one GitHub Release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [app, arch]
+    name: Publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect the files
+        run: |
+          mkdir out
+          find artifacts -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.pkg.tar.zst' -o -name 'PKGBUILD' \) -exec cp {} out/ \;
+          # The relay has the same name on every system; tell them apart.
+          relay() { find "artifacts/VeloPopuli-$1" -type f -name "$2" | head -1; }
+          cp "$(relay macOS velopopuli-relay)" out/velopopuli-relay-macos-arm64
+          cp "$(relay Linux velopopuli-relay)" out/velopopuli-relay-linux-x86_64
+          cp "$(relay Windows velopopuli-relay.exe)" out/velopopuli-relay-windows-x86_64.exe
+          (cd out && sha256sum * > SHA256SUMS.txt)
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: VeloPopuli ${{ github.ref_name }}
+          body_path: packaging/RELEASE_NOTES.md
+          prerelease: true
+          files: out/*

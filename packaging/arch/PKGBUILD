@@ -1,0 +1,27 @@
+# Maintainer: Graham Barber <pepperstm at me dot com>
+# Packages the official Debian build of VeloPopuli for Arch Linux (and Manjaro, EndeavourOS…).
+pkgname=velopopuli-bin
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="The people's indoor ride: ride real GPX routes in 3D on your smart trainer"
+arch=('x86_64')
+url="https://velopopuli.com"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'dbus' 'hicolor-icon-theme')
+optdepends=('bluez: Bluetooth trainers and sensors'
+            'bluez-utils: bluetoothctl, for checking Bluetooth from the terminal')
+provides=('velopopuli')
+conflicts=('velopopuli')
+source=("VeloPopuli_${pkgver}_amd64.deb::https://github.com/pepperstm/velopopuli/releases/download/v${pkgver}/VeloPopuli_${pkgver}_amd64.deb"
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/pepperstm/velopopuli/v${pkgver}/LICENSE")
+# Filled in for each release by the build (updpkgsums); SKIP here so the template builds.
+sha256sums=('SKIP'
+            'SKIP')
+noextract=("VeloPopuli_${pkgver}_amd64.deb")
+
+package() {
+    cd "$srcdir"
+    bsdtar -xf "VeloPopuli_${pkgver}_amd64.deb"
+    bsdtar -xf data.tar.* -C "$pkgdir"
+    install -Dm644 "LICENSE-${pkgver}" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
