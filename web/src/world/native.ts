@@ -161,7 +161,8 @@ export function nativeLook(l: Look, lampScale = 14): Record<string, unknown> {
     hemiGround: rgb(l.hemi.ground, l.hemi.intensity),
     sunColor: rgb(l.sun.color, l.sun.intensity),
     sunDir: [l.sun.dir.x, l.sun.dir.y, l.sun.dir.z],
-    lamp: l.lamp * lampScale
+    lamp: l.lamp * lampScale,
+    precipitation: l.precipitation === 'rain' ? 1 : l.precipitation === 'snow' ? 2 : 0
   }
 }
 

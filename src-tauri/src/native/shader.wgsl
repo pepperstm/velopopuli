@@ -19,6 +19,11 @@ struct Globals {
     sky_bottom: vec4<f32>,
     cam_right: vec4<f32>,
     cam_up: vec4<f32>,
+    // x: 0 none, 1 rain, 2 snow; y: how far everything has fallen (0…1 of the box);
+    // zw: how far it has streamed back past the rider (0…1 of the box)
+    weather: vec4<f32>,
+    // x: seconds, wrapping
+    clock: vec4<f32>,
 };
 
 struct Draw {
@@ -153,4 +158,84 @@ fn fs_label(i: LabelOut) -> @location(0) vec4<f32> {
     let c = textureSample(tex, samp, i.uv);
     if (c.a < 0.02) { discard; }
     return vec4<f32>(fogged(c.rgb, i.world), c.a);
+}
+
+/// A rider's soft shadow: a blurred disc, as the page draws it (radial falloff 1 → 0.6 → 0).
+@fragment
+fn fs_shadow(i: VsOut) -> @location(0) vec4<f32> {
+    let r = length(i.uv * 2.0 - 1.0);
+    let a = select(mix(0.604, 0.0, (r - 0.45) / 0.55), mix(1.0, 0.604, r / 0.45), r < 0.45);
+    return vec4<f32>(fogged(vec3<f32>(0.0), i.world), 0.42 * clamp(a, 0.0, 1.0));
+}
+
+// ── Rain and snow ─────────────────────────────────────────────────────────────
+// Each drop or flake has a fixed random place in a box around the camera; the box
+// content falls and streams back as the uniforms move on, so nothing is updated per frame.
+
+const BOX: f32 = 70.0;
+const BOX_HEIGHT: f32 = 40.0;
+
+fn hash(n: u32) -> u32 {
+    var x = n * 747796405u + 2891336453u;
+    x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+    return (x >> 22u) ^ x;
+}
+
+fn rand3(i: u32) -> vec3<f32> {
+    let a = hash(i);
+    let b = hash(a);
+    let c = hash(b);
+    return vec3<f32>(f32(a), f32(b), f32(c)) / 4294967296.0;
+}
+
+/// Where particle `i` is now, relative to the camera.
+fn particle(i: u32) -> vec3<f32> {
+    let r = rand3(i);
+    var sway = 0.0;
+    if (g.weather.x > 1.5) {
+        sway = 0.4 * sin(g.clock.x * 0.7 + f32(i));
+    }
+    let x = fract(r.x + g.weather.z + sway / BOX) - 0.5;
+    let z = fract(r.z + g.weather.w) - 0.5;
+    let y = fract(r.y - g.weather.y) - 0.5;
+    return vec3<f32>(x * BOX, y * BOX_HEIGHT, z * BOX);
+}
+
+struct PrecipOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+};
+
+/// Rain: a short streak per drop (line list, two vertices each).
+@vertex
+fn vs_rain(@builtin(vertex_index) v: u32) -> PrecipOut {
+    var o: PrecipOut;
+    let p = particle(v / 2u) + vec3<f32>(0.02, 0.7, 0.0) * f32(v & 1u);
+    o.clip = g.view_proj * vec4<f32>(p, 1.0);
+    o.uv = vec2<f32>(0.0);
+    return o;
+}
+
+@fragment
+fn fs_rain(i: PrecipOut) -> @location(0) vec4<f32> {
+    // #aab8c8 in linear light, mostly see-through.
+    return vec4<f32>(0.402, 0.479, 0.578, 0.45);
+}
+
+/// Snow: a small camera-facing disc per flake (six vertices each).
+@vertex
+fn vs_snow(@builtin(vertex_index) v: u32) -> PrecipOut {
+    var o: PrecipOut;
+    let corners = array<vec2<f32>, 6>(vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0));
+    let c = corners[v % 6u];
+    let p = particle(v / 6u) + (g.cam_right.xyz * c.x + g.cam_up.xyz * c.y) * 0.07;
+    o.clip = g.view_proj * vec4<f32>(p, 1.0);
+    o.uv = c;
+    return o;
+}
+
+@fragment
+fn fs_snow(i: PrecipOut) -> @location(0) vec4<f32> {
+    if (dot(i.uv, i.uv) > 1.0) { discard; }
+    return vec4<f32>(1.0, 1.0, 1.0, 0.9);
 }

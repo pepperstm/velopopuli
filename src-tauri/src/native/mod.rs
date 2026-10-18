@@ -32,6 +32,11 @@ const MAX_DRAWS: u64 = 64;
 const MAX_IN_FLIGHT: usize = 6;
 const FRAME: Duration = Duration::from_micros(16_000);
 
+/// Rain and snow fill a box this wide and tall around the camera (as in shader.wgsl).
+const PRECIP_BOX: [f64; 2] = [70.0, 40.0];
+const RAIN_DROPS: u32 = 6000;
+const SNOW_FLAKES: u32 = 4000;
+
 const CAMERAS: [[f64; 5]; 4] = [
     // back, up, side, look ahead, look up
     [7.5, 3.0, 0.0, 9.0, 1.3],
@@ -66,6 +71,8 @@ struct Globals {
     sky_bottom: [f32; 4],
     cam_right: [f32; 4],
     cam_up: [f32; 4],
+    weather: [f32; 4],
+    clock: [f32; 4],
 }
 
 #[repr(C)]
@@ -99,6 +106,9 @@ pub struct Look {
     sun_color: [f32; 3],
     sun_dir: [f32; 3],
     lamp: f32,
+    /// 0 none, 1 rain, 2 snow.
+    #[serde(default)]
+    precipitation: f32,
 }
 
 impl Default for Look {
@@ -116,6 +126,7 @@ impl Default for Look {
             sun_color: scale(srgb(0xfff1d6), 2.4),
             sun_dir: [0.4, 0.8, 0.28],
             lamp: 0.0,
+            precipitation: 0.0,
         }
     }
 }
@@ -499,6 +510,9 @@ struct Pipelines {
     blended: wgpu::RenderPipeline,
     trees: wgpu::RenderPipeline,
     labels: wgpu::RenderPipeline,
+    shadow: wgpu::RenderPipeline,
+    rain: wgpu::RenderPipeline,
+    snow: wgpu::RenderPipeline,
 }
 
 struct Renderer {
@@ -516,6 +530,7 @@ struct Renderer {
     msaa: wgpu::TextureView,
     depth: wgpu::TextureView,
     tree_mesh: Mesh,
+    shadow_mesh: Mesh,
 }
 
 impl Renderer {
@@ -578,7 +593,7 @@ impl Renderer {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x2, 3 => Float32x2],
         };
-        let pipeline = |vs: &str, fs: &str, buffers: &[wgpu::VertexBufferLayout], blend: bool, depth_write: bool, compare: wgpu::CompareFunction, bias: (i32, f32)| {
+        let pipeline_of = |vs: &str, fs: &str, buffers: &[wgpu::VertexBufferLayout], blend: bool, depth_write: bool, compare: wgpu::CompareFunction, bias: (i32, f32), topology: wgpu::PrimitiveTopology| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(vs),
                 layout: Some(&layout),
@@ -589,7 +604,7 @@ impl Renderer {
                     targets: &[Some(wgpu::ColorTargetState { format, blend: Some(if blend { wgpu::BlendState::ALPHA_BLENDING } else { wgpu::BlendState::REPLACE }), write_mask: wgpu::ColorWrites::ALL })],
                     compilation_options: Default::default(),
                 }),
-                primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, cull_mode: None, ..Default::default() },
+                primitive: wgpu::PrimitiveState { topology, cull_mode: None, ..Default::default() },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH,
                     depth_write_enabled: depth_write,
@@ -602,6 +617,9 @@ impl Renderer {
                 cache: None,
             })
         };
+        let pipeline = |vs: &str, fs: &str, buffers: &[wgpu::VertexBufferLayout], blend: bool, depth_write: bool, compare: wgpu::CompareFunction, bias: (i32, f32)| {
+            pipeline_of(vs, fs, buffers, blend, depth_write, compare, bias, wgpu::PrimitiveTopology::TriangleList)
+        };
         use wgpu::CompareFunction::*;
         let pipes = Pipelines {
             sky: pipeline("vs_sky", "fs_sky", &[], false, false, Always, (0, 0.0)),
@@ -610,6 +628,9 @@ impl Renderer {
             blended: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], true, false, Less, (0, 0.0)),
             trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
             labels: pipeline("vs_label", "fs_label", &[label_layout], true, false, Less, (0, 0.0)),
+            shadow: pipeline("vs_main", "fs_shadow", &[vertex_layout.clone()], true, false, LessEqual, (-4, -2.0)),
+            rain: pipeline_of("vs_rain", "fs_rain", &[], true, false, Less, (0, 0.0), wgpu::PrimitiveTopology::LineList),
+            snow: pipeline("vs_snow", "fs_snow", &[], true, false, Less, (0, 0.0)),
         };
 
         let globals = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: std::mem::size_of::<Globals>() as u64, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
@@ -668,7 +689,8 @@ impl Renderer {
         }
         let (msaa, depth) = targets(&device, &config);
         let tree_mesh = Mesh::new(&device, &tree_geometry(), None).unwrap();
-        Ok(Renderer { device, queue, surface, config, pipes, globals, globals_bg, draws, draws_bg, textures, msaa, depth, tree_mesh })
+        let shadow_mesh = Mesh::new(&device, &shadow_geometry(), None).unwrap();
+        Ok(Renderer { device, queue, surface, config, pipes, globals, globals_bg, draws, draws_bg, textures, msaa, depth, tree_mesh, shadow_mesh })
     }
 
     fn resize(&mut self, size: (u32, u32)) {
@@ -716,6 +738,8 @@ impl Renderer {
         let mut crank = 0.0f64;
         let mut size_check = Instant::now();
         let mut lanes: HashMap<String, f64> = HashMap::new();
+        // Rain and snow: how far they have fallen and streamed back, as fractions of their box.
+        let (mut fallen, mut drift, mut clock) = (0.0f64, [0.0f64; 2], 0.0f64);
 
         while !stop.load(Ordering::SeqCst) {
             let now = Instant::now();
@@ -763,6 +787,14 @@ impl Renderer {
             }
             crank += cadence / 60.0 * dt;
             let p = sample(&route, shown);
+            clock = (clock + dt) % 600.0;
+            if look.precipitation > 0.5 {
+                let fall = if look.precipitation > 1.5 { 1.2 } else { 14.0 };
+                fallen = (fallen + fall * dt / PRECIP_BOX[1]).fract();
+                // Riding into it: everything streams back past the rider.
+                let back = speed * dt / PRECIP_BOX[0];
+                drift = [(drift[0] - p.heading.sin() * back).rem_euclid(1.0), (drift[1] - p.heading.cos() * back).rem_euclid(1.0)];
+            }
 
             // Re-centre the coordinates if the rider has gone far from the origin.
             if (p.x - origin[0]).abs() > REBASE_M || (p.z - origin[1]).abs() > REBASE_M {
@@ -867,6 +899,8 @@ impl Renderer {
                 sky_bottom: [look.horizon[0], look.horizon[1], look.horizon[2], 1.0],
                 cam_right: [right[0] as f32, right[1] as f32, right[2] as f32, 0.0],
                 cam_up: [up[0] as f32, up[1] as f32, up[2] as f32, 0.0],
+                weather: [look.precipitation, fallen as f32, drift[0] as f32, drift[1] as f32],
+                clock: [clock as f32, 0.0, 0.0, 0.0],
             };
             self.queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&g));
 
@@ -1043,6 +1077,15 @@ impl Renderer {
                         r.draw(&mut pass);
                     }
                 }
+                // Riders' shadows on the road (ghosts have none).
+                pass.set_pipeline(&self.pipes.shadow);
+                pass.set_bind_group(1, white, &[]);
+                for &(slot, _, ghost) in &riders {
+                    if !ghost {
+                        pass.set_bind_group(2, &self.draws_bg, &[(slot as u64 * DRAW_STRIDE) as u32]);
+                        self.shadow_mesh.draw(&mut pass);
+                    }
+                }
                 // Water and ghosts, see-through.
                 pass.set_pipeline(&self.pipes.blended);
                 pass.set_bind_group(1, white, &[]);
@@ -1060,6 +1103,14 @@ impl Renderer {
                         pass.set_bind_group(2, &self.draws_bg, &[(slot as u64 * DRAW_STRIDE) as u32]);
                         m.draw(&mut pass);
                     }
+                }
+                // Rain or snow.
+                if look.precipitation > 1.5 {
+                    pass.set_pipeline(&self.pipes.snow);
+                    pass.draw(0..SNOW_FLAKES * 6, 0..1);
+                } else if look.precipitation > 0.5 {
+                    pass.set_pipeline(&self.pipes.rain);
+                    pass.draw(0..RAIN_DROPS * 2, 0..1);
                 }
                 // Signs.
                 if let Some(buf) = &label_buf {
@@ -1180,6 +1231,12 @@ fn tree_geometry() -> Vec<Vertex> {
 }
 
 /// Meshes that span the route rather than one chunk: the road, bridges and tunnels, props and riders.
+/// The quad a rider's shadow is drawn on, in the rider's own frame (forward is +z).
+fn shadow_geometry() -> Vec<Vertex> {
+    let v = |x: f32, z: f32, u: f32, w: f32| Vertex { pos: [x * 0.34, 0.02, z * 0.95], normal: [0.0, 1.0, 0.0], color: [0.0; 3], uv: [u, w] };
+    vec![v(-1.0, -1.0, 0.0, 0.0), v(1.0, -1.0, 1.0, 0.0), v(1.0, 1.0, 1.0, 1.0), v(-1.0, -1.0, 0.0, 0.0), v(1.0, 1.0, 1.0, 1.0), v(-1.0, 1.0, 0.0, 1.0)]
+}
+
 struct SceneMeshes {
     route_road: Option<Mesh>,
     structures_lit: Option<Mesh>,
