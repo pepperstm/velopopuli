@@ -13,10 +13,10 @@ use serde::Serialize;
 use tauri::Emitter;
 use tokio::sync::{mpsc, watch, OnceCell};
 use uuid::Uuid;
-use wintermiles_core::devices::ant::{encode_message, msg};
-use wintermiles_core::devices::ble::*;
-use wintermiles_core::devices::profiles::{decode_fec, fec_pages};
-use wintermiles_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Readings, RevCounter, TrainerCommand, Transport, WHEEL_CIRCUMFERENCE};
+use velopopuli_core::devices::ant::{encode_message, msg};
+use velopopuli_core::devices::ble::*;
+use velopopuli_core::devices::profiles::{decode_fec, fec_pages};
+use velopopuli_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Readings, RevCounter, TrainerCommand, Transport, WHEEL_CIRCUMFERENCE};
 
 use super::{Devices, Handle};
 use crate::now_ms;

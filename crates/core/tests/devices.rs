@@ -1,7 +1,7 @@
-use wintermiles_core::devices::ant::{encode_message, AntParser};
-use wintermiles_core::devices::ble::*;
-use wintermiles_core::devices::profiles::*;
-use wintermiles_core::devices::*;
+use velopopuli_core::devices::ant::{encode_message, AntParser};
+use velopopuli_core::devices::ble::*;
+use velopopuli_core::devices::profiles::*;
+use velopopuli_core::devices::*;
 
 fn close(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() <= tol

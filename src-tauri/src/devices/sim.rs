@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use wintermiles_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Readings, TrainerCommand, Transport};
+use velopopuli_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Readings, TrainerCommand, Transport};
 
 use super::{Devices, Handle};
 

@@ -1,5 +1,5 @@
 [package]
-name = "wintermiles"
+name = "velopopuli"
 version = "0.2.0"
 edition = "2021"
 license = "MIT"
@@ -10,7 +10,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 fitparser = "0.9"
-wintermiles-core = { path = "../crates/core" }
+velopopuli-core = { path = "../crates/core" }
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"

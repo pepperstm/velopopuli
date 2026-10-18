@@ -1,6 +1,8 @@
-# WinterMiles
+# Velo Populi
 
-Ride any GPX route on your indoor trainer. WinterMiles turns a route file into a 3D world, drives your smart trainer's resistance from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, XP and badges.
+*The people's indoor ride: open source, built by riders, for riders.*
+
+Ride any GPX route on your indoor trainer. Velo Populi turns a route file into a 3D world, drives your smart trainer's resistance from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, XP and badges.
 
 Open source (MIT) for **Windows, macOS and Linux**. Written in **Rust**, with a thin web layer for drawing. Not affiliated with icTrainer or any other commercial product.
 
@@ -70,7 +72,7 @@ Be aware of what has and has not been proven:
 | Area | Status |
 | --- | --- |
 | GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, Health export scanning, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 64 core tests) |
-| Group-ride relay | Tested in-process (`cargo test -p wintermiles-relay`) and with two app instances riding together through a local relay |
+| Group-ride relay | Tested in-process (`cargo test -p velopopuli-relay`) and with two app instances riding together through a local relay |
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
 | Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain |
 | Strava segments and ghosts from Strava | Matching is unit-tested; the Strava calls have **not** been made against the live API |
@@ -89,14 +91,14 @@ Be aware of what has and has not been proven:
 
 ## Installing on a Mac
 
-Download `WinterMiles_<version>_universal.dmg` (from the latest run on the repo's Actions tab, or build it with `npm run build:mac`), open it and drag **WinterMiles** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
+Download `Velo Populi_<version>_universal.dmg` (from the latest run on the repo's Actions tab, or build it with `npm run build:mac`), open it and drag **Velo Populi** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
 
 The app isn't notarised by Apple (that needs a paid developer account), so the first time you open it macOS will refuse. Either:
 
-- open **System Settings → Privacy & Security**, scroll down to *"WinterMiles" was blocked* and click **Open Anyway**, or
-- run `xattr -dr com.apple.quarantine /Applications/WinterMiles.app` once in Terminal.
+- open **System Settings → Privacy & Security**, scroll down to *"Velo Populi" was blocked* and click **Open Anyway**, or
+- run `xattr -dr com.apple.quarantine "/Applications/Velo Populi.app"` once in Terminal.
 
-On first connecting to a sensor macOS asks to let WinterMiles use Bluetooth — allow it.
+On first connecting to a sensor macOS asks to let Velo Populi use Bluetooth — allow it.
 
 ## Getting started
 
@@ -117,9 +119,9 @@ Then: **Routes → Import GPX…**, **Devices → connect your trainer**, and pr
 
 Ride keys: `Space` pause · `C` camera (behind, high behind, alongside, overhead) · `↑`/`↓` ERG target, workout intensity or demo rider effort.
 
-Group rides: run `cargo run --release -p wintermiles-relay` on a machine everyone can reach (port 47800), put its address (`ws://host:47800`) in Settings → Group rides, tick *Ride with friends* when starting, and give the room code to the others (Routes → *Join a group ride*).
+Group rides: run `cargo run --release -p velopopuli-relay` on a machine everyone can reach (port 47800), put its address (`ws://host:47800`) in Settings → Group rides, tick *Ride with friends* when starting, and give the room code to the others (Routes → *Join a group ride*).
 
-To inspect a recorded ride: `cargo run -p wintermiles-core --example fitinfo -- path/to/ride.fit`.
+To inspect a recorded ride: `cargo run -p velopopuli-core --example fitinfo -- path/to/ride.fit`.
 
 ## Connecting hardware
 
@@ -134,7 +136,7 @@ To inspect a recorded ride: `cargo run -p wintermiles-core --example fitinfo -- 
 
 ### ANT+
 
-Plug in an ANT+ USB stick (Garmin/Dynastream ANTUSB2 or ANTUSB-m) and press **Devices → Start ANT+ search**. WinterMiles listens for one device of each kind — trainer (FE-C), power meter, heart rate, speed, cadence, speed+cadence — and adds each as it is heard.
+Plug in an ANT+ USB stick (Garmin/Dynastream ANTUSB2 or ANTUSB-m) and press **Devices → Start ANT+ search**. Velo Populi listens for one device of each kind — trainer (FE-C), power meter, heart rate, speed, cadence, speed+cadence — and adds each as it is heard.
 
 The stick is driven directly through libusb, with no vendor SDK:
 
@@ -150,13 +152,13 @@ Strava issues API keys per application, and a secret can't be shipped inside an 
 
 1. Go to <https://www.strava.com/settings/api> and create an application (any name/website).
 2. Set **Authorization Callback Domain** to `localhost`.
-3. In WinterMiles → **Settings → Strava**, paste the Client ID and Client Secret and press **Connect**.
+3. In Velo Populi → **Settings → Strava**, paste the Client ID and Client Secret and press **Connect**.
 
 Your browser opens for approval. The key and tokens are stored in the system keychain on macOS and Windows; on Linux they are kept in a file in the app's data folder readable only by your user. Rides upload as Virtual Rides with the route map.
 
 ## Apple Health and Apple Watch
 
-Apple only allows apps running **on the iPhone** to read or write Health data — there is no Health access for desktop apps on any platform, including macOS. So WinterMiles integrates in the ways that are actually possible from a computer:
+Apple only allows apps running **on the iPhone** to read or write Health data — there is no Health access for desktop apps on any platform, including macOS. So Velo Populi integrates in the ways that are actually possible from a computer:
 
 - **Read your data:** iPhone → Health → profile picture → *Export All Health Data*. Import the resulting `export.zip` under **Settings → Apple Health** to pull in your latest weight, cycling FTP, resting heart rate, VO₂max and the highest heart rate recorded in the last year. The file is read locally and nothing is uploaded.
 - **Live Apple Watch heart rate:** the watch can't broadcast heart rate natively. Run a broadcaster app on it (e.g. HeartCast or BlueHeart) and it appears as a normal Bluetooth heart-rate sensor.

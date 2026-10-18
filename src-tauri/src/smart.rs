@@ -5,8 +5,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
-use wintermiles_core::fitness::power_zone;
-use wintermiles_core::types::SmartHome;
+use velopopuli_core::fitness::power_zone;
+use velopopuli_core::types::SmartHome;
 
 use crate::secrets;
 

@@ -104,7 +104,7 @@ export function App(): React.JSX.Element | null {
       <div className="shell">
         <header className="topbar">
           <div className="brand">
-            <span className="brand-mark">❄</span> WinterMiles
+            <span className="brand-mark">▲</span> Velo Populi
           </div>
           <nav>
             {TABS.map((t) => (

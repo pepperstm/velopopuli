@@ -1,9 +1,9 @@
 [package]
-name = "wintermiles-core"
+name = "velopopuli-core"
 version = "0.2.0"
 edition = "2021"
 license = "MIT"
-description = "Route, physics, recording, sensor-protocol and terrain logic for WinterMiles. No I/O."
+description = "Route, physics, recording, sensor-protocol and terrain logic for Velo Populi. No I/O."
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

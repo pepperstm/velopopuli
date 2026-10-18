@@ -1,4 +1,4 @@
-//! WinterMiles group-ride relay.
+//! Velo Populi group-ride relay.
 //!
 //! Riders connect over WebSocket and join a room by code. The first rider to
 //! join shares the route (its GPX), later riders download it, and from then

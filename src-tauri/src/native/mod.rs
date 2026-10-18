@@ -19,8 +19,8 @@ use bytemuck::{Pod, Zeroable};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use wgpu::util::DeviceExt;
-use wintermiles_core::ride::{RideEngine, RivalKind};
-use wintermiles_core::world::{GridMesh, World, LAYOUT};
+use velopopuli_core::ride::{RideEngine, RivalKind};
+use velopopuli_core::world::{GridMesh, World, LAYOUT};
 
 use host::HostView;
 
@@ -539,7 +539,7 @@ impl Renderer {
             .request_adapter(&wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, compatible_surface: Some(&surface), force_fallback_adapter: false })
             .await
             .map_err(|e| e.to_string())?;
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor { label: Some("WinterMiles"), ..Default::default() }).await.map_err(|e| e.to_string())?;
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor { label: Some("Velo Populi"), ..Default::default() }).await.map_err(|e| e.to_string())?;
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats.iter().copied().find(|f| f.is_srgb()).unwrap_or(caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
@@ -1298,7 +1298,7 @@ struct Pos {
 }
 
 /// A point along the route, as the page's `sampleAt` gives it.
-fn sample(route: &wintermiles_core::gpx::Route, dist: f64) -> Pos {
+fn sample(route: &velopopuli_core::gpx::Route, dist: f64) -> Pos {
     let f = (dist / route.step).clamp(0.0, (route.n - 1) as f64);
     let i = (f.floor() as usize).min(route.n - 2);
     let t = f - i as f64;

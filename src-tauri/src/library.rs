@@ -4,11 +4,11 @@
 use chrono::{Datelike, Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use wintermiles_core::gpx::Route;
-use wintermiles_core::ride::GhostTrace;
-use wintermiles_core::segments::{ghost_trace, Segment};
-use wintermiles_core::types::{Goal, RideSummary};
-use wintermiles_core::workout::{builtin_workouts, parse_erg, parse_zwo, Workout};
+use velopopuli_core::gpx::Route;
+use velopopuli_core::ride::GhostTrace;
+use velopopuli_core::segments::{ghost_trace, Segment};
+use velopopuli_core::types::{Goal, RideSummary};
+use velopopuli_core::workout::{builtin_workouts, parse_erg, parse_zwo, Workout};
 
 use crate::store::Store;
 
@@ -33,9 +33,9 @@ fn meta(w: &Workout, built_in: bool) -> WorkoutMeta {
     let mut t = 0.0;
     for s in &w.steps {
         let (a, b) = match s.kind {
-            wintermiles_core::workout::StepKind::Power => (s.from, s.to),
-            wintermiles_core::workout::StepKind::Free => (0.6, 0.6),
-            wintermiles_core::workout::StepKind::Max => (1.6, 1.6),
+            velopopuli_core::workout::StepKind::Power => (s.from, s.to),
+            velopopuli_core::workout::StepKind::Free => (0.6, 0.6),
+            velopopuli_core::workout::StepKind::Max => (1.6, 1.6),
         };
         shape.push([t, a]);
         t += s.duration_s;
@@ -162,7 +162,7 @@ pub fn read_track(path: &std::path::Path) -> Result<Vec<(f64, f64, f64)>, String
         }
         Ok(points)
     } else {
-        wintermiles_core::gpx::parse_gpx_track_times(&std::fs::read_to_string(path).map_err(|e| e.to_string())?)
+        velopopuli_core::gpx::parse_gpx_track_times(&std::fs::read_to_string(path).map_err(|e| e.to_string())?)
     }
 }
 

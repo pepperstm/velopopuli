@@ -9,5 +9,5 @@ codegen-units = 4
 strip = true
 
 # Terrain meshing and the ride simulation are hot loops; keep them fast in dev builds too.
-[profile.dev.package.wintermiles-core]
+[profile.dev.package.velopopuli-core]
 opt-level = 2

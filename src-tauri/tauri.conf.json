@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "WinterMiles",
+  "productName": "Velo Populi",
   "version": "0.2.0",
-  "identifier": "org.wintermiles.WinterMiles",
+  "identifier": "org.velopopuli.VeloPopuli",
   "build": {
     "frontendDist": "../dist-web",
     "devUrl": "http://localhost:5173",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "WinterMiles",
+        "title": "Velo Populi",
         "width": 1360,
         "height": 860,
         "minWidth": 1000,
@@ -41,7 +41,7 @@
     "linux": {
       "deb": {
         "files": {
-          "/usr/lib/udev/rules.d/99-wintermiles-ant.rules": "../resources/99-ant-usb.rules"
+          "/usr/lib/udev/rules.d/99-velopopuli-ant.rules": "../resources/99-ant-usb.rules"
         }
       }
     },

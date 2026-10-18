@@ -1,7 +1,7 @@
 //! Prints a summary of a FIT file using an independent decoder — handy for
-//! checking what WinterMiles recorded.
+//! checking what Velo Populi recorded.
 //!
-//!     cargo run -p wintermiles-core --example fitinfo -- path/to/ride.fit
+//!     cargo run -p velopopuli-core --example fitinfo -- path/to/ride.fit
 
 use fitparser::profile::MesgNum;
 

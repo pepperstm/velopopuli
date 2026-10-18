@@ -9,19 +9,19 @@ use tauri::ipc::Response;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
-use wintermiles_core::gamify::{Badge, BADGES};
-use wintermiles_core::gpx::{build_route, demo_route, parse_gpx, Route};
-use wintermiles_core::types::{HealthSummary, RideSummary, RouteMeta, Settings};
-use wintermiles_core::world::GridMesh;
+use velopopuli_core::gamify::{Badge, BADGES};
+use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Route};
+use velopopuli_core::types::{HealthSummary, RideSummary, RouteMeta, Settings};
+use velopopuli_core::world::GridMesh;
 
 use crate::devices::DevicesSnapshot;
 use crate::library::{self, GhostMeta, WorkoutMeta};
 use crate::session::{load_route, local_day, RideInit, RideRequest, Session, DEMO_ROUTE_ID};
 use crate::strava::{self, StravaStatus};
 use crate::{geo, group, health, now_ms, photos, secrets, smart, AppState};
-use wintermiles_core::fitness::{estimate_ftp, training_load, FtpEstimate, LoadDay, CURVE_DURATIONS};
-use wintermiles_core::gamify::{streaks, Streaks};
-use wintermiles_core::segments::{decode_polyline, place_segment, Segment, SegmentSource};
+use velopopuli_core::fitness::{estimate_ftp, training_load, FtpEstimate, LoadDay, CURVE_DURATIONS};
+use velopopuli_core::gamify::{streaks, Streaks};
+use velopopuli_core::segments::{decode_polyline, place_segment, Segment, SegmentSource};
 
 type Res<T> = Result<T, String>;
 
@@ -111,7 +111,7 @@ pub async fn choose_dir(app: AppHandle) -> Res<Option<String>> {
 #[tauri::command]
 pub fn reveal_file(app: AppHandle, state: State<AppState>, path: String) -> Res<()> {
     if !state.store.owns_activity(Path::new(&path)) {
-        return Err("Not a WinterMiles activity file.".into());
+        return Err("Not a Velo Populi activity file.".into());
     }
     app.opener().reveal_item_in_dir(path).map_err(|e| e.to_string())
 }
@@ -344,7 +344,7 @@ pub fn native_look(state: State<AppState>, look: crate::native::Look) {
 /// For the automated check: saves the next native frame next to its report; returns frames drawn so far.
 #[tauri::command]
 pub fn native_capture(state: State<AppState>) -> Res<(u64, Option<String>)> {
-    let path = std::env::var_os("WM_SMOKE").map(PathBuf::from).ok_or("Only during the automated check.")?;
+    let path = std::env::var_os("VP_SMOKE").map(PathBuf::from).ok_or("Only during the automated check.")?;
     let native = state.native.lock().unwrap();
     let n = native.as_ref().ok_or("The native renderer is not running.")?;
     n.capture(path.with_extension("native.png"));
@@ -381,7 +381,7 @@ pub async fn strava_upload(state: State<'_, AppState>, ride_id: String, file_pat
     // Only files this app wrote are eligible — the UI can't use this to send arbitrary paths.
     let path = PathBuf::from(&file_path);
     if !state.store.owns_activity(&path) {
-        return Err("Not a WinterMiles activity file.".into());
+        return Err("Not a Velo Populi activity file.".into());
     }
     let activity_id = strava::upload(state.store.dir(), &state.http, &path, &name, &description).await?;
     // Remember the link so the ride isn't uploaded twice.
@@ -659,7 +659,7 @@ pub async fn geo_plan(state: State<'_, AppState>, points: Vec<[f64; 2]>, profile
 
 /// Street-level photos along the route being ridden.
 #[tauri::command]
-pub async fn ride_photos(state: State<'_, AppState>) -> Res<Vec<wintermiles_core::segments::Photo>> {
+pub async fn ride_photos(state: State<'_, AppState>) -> Res<Vec<velopopuli_core::segments::Photo>> {
     let session = state.current_session()?;
     let token = state.store.get::<Settings>("settings").unwrap_or_default().look.mapillary_token;
     photos::along(&state.http, &state.store, &session.route_id, &session.world.route, &token).await
@@ -737,21 +737,21 @@ pub struct SmokeConfig {
 
 #[tauri::command]
 pub fn smoke_config() -> Option<SmokeConfig> {
-    std::env::var_os("WM_SMOKE")?;
+    std::env::var_os("VP_SMOKE")?;
     Some(SmokeConfig {
-        screen: std::env::var("WM_SMOKE_SCREEN").unwrap_or_else(|_| "ride".into()),
-        ms: std::env::var("WM_SMOKE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(9000),
-        camera: std::env::var("WM_SMOKE_CAM").ok().and_then(|v| v.parse().ok()).unwrap_or(0),
-        workout: std::env::var("WM_SMOKE_WORKOUT").ok(),
-        room: std::env::var("WM_SMOKE_ROOM").ok(),
-        ghosts: std::env::var("WM_SMOKE_GHOSTS").ok().map(|v| v.split(',').map(str::to_string).collect()),
+        screen: std::env::var("VP_SMOKE_SCREEN").unwrap_or_else(|_| "ride".into()),
+        ms: std::env::var("VP_SMOKE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(9000),
+        camera: std::env::var("VP_SMOKE_CAM").ok().and_then(|v| v.parse().ok()).unwrap_or(0),
+        workout: std::env::var("VP_SMOKE_WORKOUT").ok(),
+        room: std::env::var("VP_SMOKE_ROOM").ok(),
+        ghosts: std::env::var("VP_SMOKE_GHOSTS").ok().map(|v| v.split(',').map(str::to_string).collect()),
     })
 }
 
 /// Receives the automated check's screenshot (a PNG data URL) and notes, writes them out and quits.
 #[tauri::command]
 pub fn smoke_done(app: AppHandle, png: Option<String>, info: String) {
-    if let Some(path) = std::env::var_os("WM_SMOKE").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("VP_SMOKE").map(PathBuf::from) {
         if let Some(bytes) = png.as_deref().and_then(|p| p.split(',').nth(1)).and_then(|b| base64::engine::general_purpose::STANDARD.decode(b).ok()) {
             let _ = std::fs::write(&path, bytes);
         }

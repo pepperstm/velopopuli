@@ -5,8 +5,8 @@ use std::time::Duration;
 use base64::Engine;
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
-use wintermiles_core::gpx::Route;
-use wintermiles_core::segments::{pick_photos, Photo, PhotoCandidate};
+use velopopuli_core::gpx::Route;
+use velopopuli_core::segments::{pick_photos, Photo, PhotoCandidate};
 
 use crate::now_ms;
 use crate::store::Store;

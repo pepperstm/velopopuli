@@ -2,20 +2,20 @@
 
 use std::sync::Arc;
 
-use wintermiles_core::fitness::{estimate_ftp, power_curve, power_zone, training_load, CURVE_DURATIONS};
-use wintermiles_core::gamify::streaks;
-use wintermiles_core::gpx::{build_route, parse_gpx_track_times, parse_iso_time, RawPoint, M_PER_DEG};
-use wintermiles_core::ride::{GhostTrace, RideEngine, RideInput, RideOptions};
-use wintermiles_core::segments::{decode_polyline, follow_track, ghost_trace, place_segment, Segment, SegmentSource};
-use wintermiles_core::types::{Settings, TrainerSettings};
-use wintermiles_core::workout::{builtin_workouts, parse_erg, parse_zwo, StepKind};
+use velopopuli_core::fitness::{estimate_ftp, power_curve, power_zone, training_load, CURVE_DURATIONS};
+use velopopuli_core::gamify::streaks;
+use velopopuli_core::gpx::{build_route, parse_gpx_track_times, parse_iso_time, RawPoint, M_PER_DEG};
+use velopopuli_core::ride::{GhostTrace, RideEngine, RideInput, RideOptions};
+use velopopuli_core::segments::{decode_polyline, follow_track, ghost_trace, place_segment, Segment, SegmentSource};
+use velopopuli_core::types::{Settings, TrainerSettings};
+use velopopuli_core::workout::{builtin_workouts, parse_erg, parse_zwo, StepKind};
 
 fn close(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() <= tol
 }
 
 /// A road heading north for `km`, then east, on flat ground.
-fn l_route(km: f64) -> Arc<wintermiles_core::gpx::Route> {
+fn l_route(km: f64) -> Arc<velopopuli_core::gpx::Route> {
     let mut pts = Vec::new();
     let n = (km * 100.0) as usize;
     for i in 0..=n {
@@ -268,7 +268,7 @@ fn reads_gpx_times() {
 
 #[test]
 fn landmarks_along_the_route() {
-    use wintermiles_core::world::{landmarks, Label, Scenery};
+    use velopopuli_core::world::{landmarks, Label, Scenery};
     let route = l_route(2.0);
     let at = |d: f64, east_m: f64| {
         let p = route.sample_at(d);
@@ -298,7 +298,7 @@ fn landmarks_along_the_route() {
 
 #[test]
 fn picks_photos_facing_along_the_route() {
-    use wintermiles_core::segments::pick_photos;
+    use velopopuli_core::segments::pick_photos;
     let route = l_route(1.0);
     let p = |d: f64| route.sample_at(d);
     let c = |id: &str, d: f64, bearing: f64, t: u64| (id.to_string(), p(d).lat, p(d).lon, bearing, format!("https://x/{id}"), t);

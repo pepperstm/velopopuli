@@ -7,9 +7,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use rusb::{DeviceHandle, GlobalContext};
-use wintermiles_core::devices::ant::{encode_message, event, msg, AntMessage, AntParser};
-use wintermiles_core::devices::profiles::{fec_pages, AntProfile, PageDecoder, ProfileId, ANT_PROFILES};
-use wintermiles_core::devices::{DeviceInfo, DeviceStatus, Readings, TrainerCommand, Transport};
+use velopopuli_core::devices::ant::{encode_message, event, msg, AntMessage, AntParser};
+use velopopuli_core::devices::profiles::{fec_pages, AntProfile, PageDecoder, ProfileId, ANT_PROFILES};
+use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Readings, TrainerCommand, Transport};
 
 use super::{Devices, Handle};
 use crate::now_ms;

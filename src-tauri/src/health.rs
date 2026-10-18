@@ -4,8 +4,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use wintermiles_core::health::HealthScanner;
-use wintermiles_core::types::HealthSummary;
+use velopopuli_core::health::HealthScanner;
+use velopopuli_core::types::HealthSummary;
 
 use crate::now_ms;
 

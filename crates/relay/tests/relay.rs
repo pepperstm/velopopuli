@@ -19,7 +19,7 @@ async fn recv(ws: &mut Ws) -> Value {
 async fn relays_positions_and_shares_the_route() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}", listener.local_addr().unwrap());
-    tokio::spawn(wintermiles_relay::serve(listener));
+    tokio::spawn(velopopuli_relay::serve(listener));
 
     let (mut host, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
     send(&mut host, json!({ "t": "join", "room": "abc1" })).await;

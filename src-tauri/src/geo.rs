@@ -82,13 +82,13 @@ pub const CLASSICS: &[Classic] = &[
 
 #[cfg(test)]
 mod tests {
-    use wintermiles_core::gpx::{build_route, parse_gpx};
+    use velopopuli_core::gpx::{build_route, parse_gpx};
 
-    /// Needs the network: `cargo test -p wintermiles -- --ignored`.
+    /// Needs the network: `cargo test -p velopopuli -- --ignored`.
     #[tokio::test]
     #[ignore]
     async fn plans_every_classic_climb() {
-        let http = reqwest::Client::builder().user_agent("WinterMiles/0.2 (open-source indoor cycling app)").build().unwrap();
+        let http = reqwest::Client::builder().user_agent("VeloPopuli/0.2 (open-source indoor cycling app)").build().unwrap();
         let found = super::search(&http, "Bourg d'Oisans").await.unwrap();
         assert!(found.iter().any(|p| (p.lat - 45.05).abs() < 0.05), "{}", found.len());
         for c in super::CLASSICS {

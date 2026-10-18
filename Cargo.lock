@@ -5275,6 +5275,60 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
+name = "velopopuli"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "btleplug",
+ "bytemuck",
+ "chrono",
+ "fitparser",
+ "futures",
+ "keyring",
+ "objc2 0.6.5",
+ "objc2-app-kit",
+ "objc2-foundation 0.3.2",
+ "png 0.17.16",
+ "pollster",
+ "raw-window-handle",
+ "reqwest 0.12.28",
+ "rusb",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tokio",
+ "tokio-tungstenite",
+ "uuid",
+ "velopopuli-core",
+ "wgpu",
+ "zip",
+]
+
+[[package]]
+name = "velopopuli-core"
+version = "0.2.0"
+dependencies = [
+ "fitparser",
+ "roxmltree",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "velopopuli-relay"
+version = "0.2.0"
+dependencies = [
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
 name = "version-compare"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6251,60 +6305,6 @@ checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
 dependencies = [
  "cfg-if",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "wintermiles"
-version = "0.2.0"
-dependencies = [
- "base64 0.22.1",
- "btleplug",
- "bytemuck",
- "chrono",
- "fitparser",
- "futures",
- "keyring",
- "objc2 0.6.5",
- "objc2-app-kit",
- "objc2-foundation 0.3.2",
- "png 0.17.16",
- "pollster",
- "raw-window-handle",
- "reqwest 0.12.28",
- "rusb",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tokio",
- "tokio-tungstenite",
- "uuid",
- "wgpu",
- "wintermiles-core",
- "zip",
-]
-
-[[package]]
-name = "wintermiles-core"
-version = "0.2.0"
-dependencies = [
- "fitparser",
- "roxmltree",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "wintermiles-relay"
-version = "0.2.0"
-dependencies = [
- "futures",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
 ]
 
 [[package]]

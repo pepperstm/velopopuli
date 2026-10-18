@@ -1,16 +1,16 @@
 {
-  "name": "wintermiles",
+  "name": "velopopuli",
   "version": "0.2.0",
   "description": "Open-source indoor cycling: ride any GPX route on your smart trainer in a 3D virtual world.",
   "license": "MIT",
-  "author": "WinterMiles contributors",
+  "author": "Velo Populi contributors",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
     "dev:web": "vite",
     "build:web": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "cargo test -p wintermiles-core",
+    "test": "cargo test -p velopopuli-core",
     "tauri": "tauri",
     "build:mac": "tauri build --target universal-apple-darwin --bundles app,dmg"
   },

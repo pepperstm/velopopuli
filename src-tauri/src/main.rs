@@ -58,12 +58,12 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // WM_DATA_DIR redirects all storage, for tests and portable installs.
-            let data_dir = match std::env::var_os("WM_DATA_DIR") {
+            // VP_DATA_DIR redirects all storage, for tests and portable installs.
+            let data_dir = match std::env::var_os("VP_DATA_DIR") {
                 Some(dir) => PathBuf::from(dir),
                 None => app.path().app_data_dir()?,
             };
-            let http = reqwest::Client::builder().user_agent("WinterMiles/0.2 (open-source indoor cycling app)").connect_timeout(std::time::Duration::from_secs(8)).build()?;
+            let http = reqwest::Client::builder().user_agent("VeloPopuli/0.2 (open-source indoor cycling app)").connect_timeout(std::time::Duration::from_secs(8)).build()?;
             app.manage(AppState {
                 store: Store::new(data_dir),
                 devices: Arc::new(Devices::new(app.handle().clone())),
@@ -146,5 +146,5 @@ fn main() {
             commands::log,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running WinterMiles");
+        .expect("error while running Velo Populi");
 }

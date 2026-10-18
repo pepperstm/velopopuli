@@ -96,7 +96,7 @@ async fn await_callback(listener: TcpListener, state: &str) -> Result<String, St
         let code = param("code").filter(|_| param("state").as_deref() == Some(state));
         let granted = code.is_some() && param("scope").unwrap_or_default().contains("activity:write");
         let (title, detail) = if granted {
-            ("WinterMiles is connected to Strava", "You can close this tab.")
+            ("Velo Populi is connected to Strava", "You can close this tab.")
         } else if code.is_some() {
             ("Strava authorization failed", "The \u{201c}Upload your activities\u{201d} permission is required.")
         } else {
@@ -210,7 +210,7 @@ async fn get_json(http: &reqwest::Client, token: &str, url: &str) -> Result<serd
     let json: serde_json::Value = res.json().await.unwrap_or_default();
     match status.as_u16() {
         200..=299 => Ok(json),
-        401 | 403 => Err("Strava refused: reconnect Strava in Settings so WinterMiles may read your activities and segments.".into()),
+        401 | 403 => Err("Strava refused: reconnect Strava in Settings so Velo Populi may read your activities and segments.".into()),
         429 => Err("Strava's rate limit was reached — try again in 15 minutes.".into()),
         code => Err(format!("Strava request failed ({code}): {}", json["message"].as_str().unwrap_or("unknown error"))),
     }
@@ -292,7 +292,7 @@ pub async fn recent_rides(dir: &Path, http: &reqwest::Client) -> Result<Vec<Acti
 pub async fn activity_track(dir: &Path, http: &reqwest::Client, id: u64) -> Result<(String, Vec<(f64, f64, f64)>), String> {
     let token = access_token(dir, http).await?;
     let info = get_json(http, &token, &format!("https://www.strava.com/api/v3/activities/{id}")).await?;
-    let start = info["start_date"].as_str().and_then(wintermiles_core::gpx::parse_iso_time).unwrap_or(0.0);
+    let start = info["start_date"].as_str().and_then(velopopuli_core::gpx::parse_iso_time).unwrap_or(0.0);
     let streams = get_json(http, &token, &format!("https://www.strava.com/api/v3/activities/{id}/streams?keys=latlng,time&key_by_type=true")).await?;
     let (Some(ll), Some(tt)) = (streams["latlng"]["data"].as_array(), streams["time"]["data"].as_array()) else {
         return Err("That activity has no GPS track.".into());

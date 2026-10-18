@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-const SERVICE: &str = "WinterMiles";
+const SERVICE: &str = "Velo Populi";
 
 pub fn load(dir: &Path) -> Option<String> {
     load_named(dir, "strava")

@@ -524,7 +524,7 @@ export function SettingsScreen(): React.JSX.Element {
         <h2>Group rides</h2>
         <p className="muted">
           Riding together goes through a small relay server that passes everyone's position around. Anyone can run one: it is the{' '}
-          <code>wintermiles-relay</code> program in this app's source (<code>cargo run --release -p wintermiles-relay</code>), and needs port 47800 open. Everyone in the group
+          <code>velopopuli-relay</code> program in this app's source (<code>cargo run --release -p velopopuli-relay</code>), and needs port 47800 open. Everyone in the group
           enters the same address here.
         </p>
         <label className="field">

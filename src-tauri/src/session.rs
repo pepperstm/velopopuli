@@ -10,16 +10,16 @@ use std::time::{Duration, Instant};
 use chrono::{Local, Offset, TimeZone};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use wintermiles_core::devices::TrainerCommand;
-use wintermiles_core::fit::encode_fit;
-use wintermiles_core::fitness::{estimate_ftp, power_curve};
-use wintermiles_core::gamify::{apply_ride, streaks, RideFacts};
-use wintermiles_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
-use wintermiles_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
-use wintermiles_core::segments::{Segment, SegmentSource};
-use wintermiles_core::workout::{Workout, WorkoutPos};
-use wintermiles_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
-use wintermiles_core::world::{align_dem_with, landmarks, route_structures, Landmark, SceneryCounts, World, WorldLayout, LAYOUT};
+use velopopuli_core::devices::TrainerCommand;
+use velopopuli_core::fit::encode_fit;
+use velopopuli_core::fitness::{estimate_ftp, power_curve};
+use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
+use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
+use velopopuli_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
+use velopopuli_core::segments::{Segment, SegmentSource};
+use velopopuli_core::workout::{Workout, WorkoutPos};
+use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
+use velopopuli_core::world::{align_dem_with, landmarks, route_structures, Landmark, SceneryCounts, World, WorldLayout, LAYOUT};
 
 use crate::devices::sim::DemoRider;
 use crate::devices::Devices;
@@ -193,7 +193,7 @@ impl Session {
         let route = Arc::new(route);
         let real_terrain = dem.is_some();
         let world = Arc::new(World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints));
-        if std::env::var_os("WM_SMOKE").is_some() {
+        if std::env::var_os("VP_SMOKE").is_some() {
             // For the automated check: where along the route the bridges and tunnels are.
             let kinds = world.field.kinds();
             let mut from = 0;
@@ -216,7 +216,7 @@ impl Session {
                 }
             }
             // How much the roads add to what is on screen at once, at the place the check looks at.
-            let at = std::env::var("WM_SMOKE_AT").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+            let at = std::env::var("VP_SMOKE_AT").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
             let i = ((at / route.step) as usize).min(route.n - 1);
             let (cx, cz) = ((route.x[i] / LAYOUT.chunk).floor() as i32, (route.z[i] / LAYOUT.chunk).floor() as i32);
             let began = std::time::Instant::now();
@@ -261,7 +261,7 @@ impl Session {
         let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default() };
         let mut engine = RideEngine::with_options(route.clone(), &settings, pb.clone(), options);
         // The automated check can start part-way along, to look at a particular spot.
-        if let Some(at) = std::env::var("WM_SMOKE_AT").ok().filter(|_| std::env::var_os("WM_SMOKE").is_some()).and_then(|v| v.parse::<f64>().ok()) {
+        if let Some(at) = std::env::var("VP_SMOKE_AT").ok().filter(|_| std::env::var_os("VP_SMOKE").is_some()).and_then(|v| v.parse::<f64>().ok()) {
             engine.distance = at.clamp(0.0, route.total - 50.0);
             engine.pos = route.sample_at(engine.distance);
         }
@@ -284,7 +284,7 @@ impl Session {
             hour: { use chrono::Timelike; let t = Local::now(); t.hour() as f64 + t.minute() as f64 / 60.0 },
             landmarks: if settings.look.landmarks { landmarks(&route, map.scenery.as_ref()) } else { Vec::new() },
         };
-        if std::env::var_os("WM_SMOKE").is_some() {
+        if std::env::var_os("VP_SMOKE").is_some() {
             for m in &init.landmarks {
                 eprintln!("Landmark at {:.0} m ({}): {} {} {}", m.distance, if m.side > 0.0 { "+" } else { "-" }, m.kind, m.name, m.detail);
             }
@@ -365,7 +365,7 @@ impl Session {
         let stamp = Local.timestamp_millis_opt(session.start_time as i64).single().unwrap_or_else(Local::now).format("%Y-%m-%d-%H%M");
         let slug: String = engine.route.name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
         let slug: String = slug.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-").chars().take(40).collect();
-        let file_name = format!("wintermiles-{stamp}-{}.fit", if slug.is_empty() { "ride" } else { &slug });
+        let file_name = format!("velopopuli-{stamp}-{}.fit", if slug.is_empty() { "ride" } else { &slug });
         let path = store.save_activity(&file_name, &encode_fit(&engine.samples, &session), &settings.export_dir)?;
 
         let completed = engine.finished;

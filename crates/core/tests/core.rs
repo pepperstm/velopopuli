@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use wintermiles_core::fit::{encode_fit, fit_crc, FitSample, FitSession};
-use wintermiles_core::gamify::{apply_ride, level_for, RideFacts};
-use wintermiles_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, M_PER_DEG};
-use wintermiles_core::health::{parse_health_date, HealthScanner};
-use wintermiles_core::physics::{step_speed, PhysicsParams};
-use wintermiles_core::ride::{RideEngine, RideInput, RivalKind};
-use wintermiles_core::types::{BotSettings, HealthSummary, PersonalBest, Profile, Settings};
-use wintermiles_core::world::{align_dem, Dem, World, CELLS, CHUNK, FAR_CELLS, TILE};
+use velopopuli_core::fit::{encode_fit, fit_crc, FitSample, FitSession};
+use velopopuli_core::gamify::{apply_ride, level_for, RideFacts};
+use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, M_PER_DEG};
+use velopopuli_core::health::{parse_health_date, HealthScanner};
+use velopopuli_core::physics::{step_speed, PhysicsParams};
+use velopopuli_core::ride::{RideEngine, RideInput, RivalKind};
+use velopopuli_core::types::{BotSettings, HealthSummary, PersonalBest, Profile, Settings};
+use velopopuli_core::world::{align_dem, Dem, World, CELLS, CHUNK, FAR_CELLS, TILE};
 
 /// A straight road heading north with a given elevation profile.
 fn straight(length_m: f64, ele_at: impl Fn(f64) -> Option<f64>) -> Vec<RawPoint> {
@@ -463,7 +463,7 @@ fn hairpin_ground_never_buries_the_lower_arm() {
 
 mod buildings {
     use super::*;
-    use wintermiles_core::world::{overpass_query, parse_overpass, Footprint};
+    use velopopuli_core::world::{overpass_query, parse_overpass, Footprint};
 
     #[test]
     fn parses_overpass_ways_relations_and_heights() {
@@ -576,7 +576,7 @@ mod buildings {
 
 mod vector_tiles {
     use super::*;
-    use wintermiles_core::world::{corridor_tiles, parse_building_tile, parse_tile, AreaKind, RoadKind, WaterwayKind, MAP_ZOOM};
+    use velopopuli_core::world::{corridor_tiles, parse_building_tile, parse_tile, AreaKind, RoadKind, WaterwayKind, MAP_ZOOM};
 
     // A tiny protobuf writer, enough to assemble a vector tile by hand.
     fn varint(mut v: u64, out: &mut Vec<u8>) {
@@ -768,7 +768,7 @@ mod vector_tiles {
 
 mod scenery {
     use super::*;
-    use wintermiles_core::world::{Area, AreaKind, Crossing, GridMesh, Road, RoadKind, Scenery, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL};
+    use velopopuli_core::world::{Area, AreaKind, Crossing, GridMesh, Road, RoadKind, Scenery, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL};
 
     /// Terrain tiles at a constant height, covering the route.
     fn level_ground(route: &Route, height: f64) -> Dem {
@@ -911,7 +911,7 @@ mod scenery {
         // 100–300 m along is z 1200–1400, all in chunk row 5 (z 1200–1440): chunk (0, 5) east of the road, (−1, 5) west.
         let woods = world.chunk(0, 5);
         let lake = world.chunk(-1, 5);
-        let trees = |m: &wintermiles_core::world::GridMesh| m.trees.chunks(6).map(|t| (t[0] as f64, t[2] as f64)).collect::<Vec<_>>();
+        let trees = |m: &velopopuli_core::world::GridMesh| m.trees.chunks(6).map(|t| (t[0] as f64, t[2] as f64)).collect::<Vec<_>>();
         let in_forest = trees(&woods).iter().filter(|t| t.0 >= 40.0 && t.0 <= 200.0 && t.1 >= 1200.0 && t.1 <= 1400.0).count();
         // 160 m × 200 m of forest at one tree per ten-metre cell, less the thinning.
         assert!(in_forest > 120, "{in_forest} trees");
@@ -925,7 +925,7 @@ mod scenery {
             assert!(v[0] >= -211.0 && v[0] <= -29.0 && v[2] >= 1189.0 && v[2] <= 1411.0, "water at {}, {}", v[0], v[2]);
         }
         // The bed is below the surface, the island in the middle is dry, and no tree stands in the lake.
-        let ground = |m: &wintermiles_core::world::GridMesh, x: f32, z: f32| m.positions.chunks(3).find(|p| p[0] == x && p[2] == z).unwrap()[1];
+        let ground = |m: &velopopuli_core::world::GridMesh, x: f32, z: f32| m.positions.chunks(3).find(|p| p[0] == x && p[2] == z).unwrap()[1];
         assert!(ground(&lake, -80.0, 1300.0) < 98.6);
         assert!(ground(&lake, -120.0, 1300.0) > 99.9);
         assert!(trees(&lake).iter().all(|t| !(t.0 > -200.0 && t.0 < -40.0 && t.1 > 1200.0 && t.1 < 1400.0) || ((t.0 + 120.0).abs() < 15.0 && (t.1 - 1300.0).abs() < 15.0)), "{:?}", trees(&lake));
@@ -1071,7 +1071,7 @@ mod scenery {
 
     #[test]
     fn a_road_with_no_elevation_runs_level_through_a_hill_and_over_a_valley() {
-        use wintermiles_core::world::{align_dem_with, route_structures};
+        use velopopuli_core::world::{align_dem_with, route_structures};
         // Terrain that is flat at 1000 m, with a 100 m ridge across the road at 1000–1400 m along
         // and a 60 m deep valley at 2000–2200 m. (North is up; a tile row is about 27 m here.)
         let mut route = build_route("planner", &straight(3000.0, |_| None)).unwrap();

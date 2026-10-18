@@ -1,9 +1,9 @@
 [package]
-name = "wintermiles-relay"
+name = "velopopuli-relay"
 version = "0.2.0"
 edition = "2021"
 license = "MIT"
-description = "Group-ride relay for WinterMiles: passes riders' positions between everyone in a room."
+description = "Group-ride relay for Velo Populi: passes riders' positions between everyone in a room."
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }

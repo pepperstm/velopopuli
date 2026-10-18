@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use wintermiles_core::devices::{DeviceInfo, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
+use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
 
 use crate::now_ms;
 

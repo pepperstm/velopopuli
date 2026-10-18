@@ -13,8 +13,8 @@ use std::time::Duration;
 use futures::future::select_ok;
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
-use wintermiles_core::gpx::Route;
-use wintermiles_core::world::{corridor_tiles, overpass_query, parse_overpass, parse_tile, route_corridor, Footprint, MapTile, RoadKind, Scenery, MAP_ZOOM};
+use velopopuli_core::gpx::Route;
+use velopopuli_core::world::{corridor_tiles, overpass_query, parse_overpass, parse_tile, route_corridor, Footprint, MapTile, RoadKind, Scenery, MAP_ZOOM};
 
 use crate::now_ms;
 use crate::store::Store;
@@ -80,8 +80,8 @@ async fn overpass_request(http: &reqwest::Client, endpoint: &'static str, query:
 
 async fn from_overpass(http: &reqwest::Client, route: &Route) -> Result<Vec<Footprint>, String> {
     // Diagnostic switch: go straight to the vector-tile source.
-    if std::env::var_os("WM_SKIP_OVERPASS").is_some() {
-        return Err("skipped by WM_SKIP_OVERPASS".into());
+    if std::env::var_os("VP_SKIP_OVERPASS").is_some() {
+        return Err("skipped by VP_SKIP_OVERPASS".into());
     }
     let per_stretch = ((STRETCH_M / route.step) as usize).max(1);
     let stretches: Vec<String> = (0..route.n).step_by(per_stretch).map(|from| overpass_query(route, from, (from + per_stretch).min(route.n), RADIUS_M, SPACING_M)).collect();

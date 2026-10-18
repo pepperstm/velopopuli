@@ -4,8 +4,8 @@
 use std::time::Duration;
 
 use futures::future::join_all;
-use wintermiles_core::gpx::Route;
-use wintermiles_core::world::{Dem, TILE};
+use velopopuli_core::gpx::Route;
+use velopopuli_core::world::{Dem, TILE};
 
 const TILE_URL: &str = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium";
 
