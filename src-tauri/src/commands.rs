@@ -259,12 +259,36 @@ pub fn ride_route_data(state: State<AppState>) -> Res<Response> {
     Ok(Response::new(out))
 }
 
-/// Road ribbon: positions (3 per vertex) then UVs (2 per vertex), as f32; `layout.roadSection` vertices per sample.
+/// Road ribbon: positions (3 per vertex), UVs (2 per vertex), then the surface per sample, as f32;
+/// `layout.roadSection` vertices per sample.
 #[tauri::command]
 pub async fn ride_road_mesh(state: State<'_, AppState>) -> Res<Response> {
     let world = state.current_session()?.world.clone();
     let mesh = tauri::async_runtime::spawn_blocking(move || world.road()).await.map_err(blocking_err)?;
-    Ok(Response::new(f32_bytes(&[], &[&mesh.positions, &mesh.uvs])))
+    let surfaces: Vec<f32> = mesh.surfaces.iter().map(|&s| s as f32).collect();
+    Ok(Response::new(f32_bytes(&[], &[&mesh.positions, &mesh.uvs, &surfaces])))
+}
+
+/// Race barriers. Layout: `[sections, looks, then the vertex count of each look]` as u32, then as f32:
+/// the sections (`[x, y, z, yaw, distance, look]` each), then per look its positions, normals,
+/// colours (3 each per vertex) and UVs (2).
+#[tauri::command]
+pub async fn ride_barriers(state: State<'_, AppState>) -> Res<Response> {
+    let world = state.current_session()?.world.clone();
+    let (sections, models) = tauri::async_runtime::spawn_blocking(move || {
+        let models: Vec<_> = (0..velopopuli_core::world::BARRIER_LOOKS).map(velopopuli_core::world::barrier_model).collect();
+        (world.barriers(), models)
+    })
+    .await
+    .map_err(blocking_err)?;
+    let mut header = vec![sections.len() as u32, models.len() as u32];
+    header.extend(models.iter().map(|m| m.vertices() as u32));
+    let flat: Vec<f32> = sections.iter().flatten().copied().collect();
+    let mut parts: Vec<&[f32]> = vec![&flat];
+    for m in &models {
+        parts.extend([&m.positions[..], &m.normals[..], &m.colors[..], &m.uvs[..]]);
+    }
+    Ok(Response::new(f32_bytes(&header, &parts)))
 }
 
 /// Bridges, tunnels and whatever crosses overhead. Layout: `[sunlit vertices, unlit vertices]`

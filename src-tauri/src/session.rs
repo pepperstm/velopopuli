@@ -192,7 +192,12 @@ impl Session {
         let pb: Option<PersonalBest> = store.get(&format!("pb-{route_id}"));
         let route = Arc::new(route);
         let real_terrain = dem.is_some();
-        let world = Arc::new(World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints));
+        let mut world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints);
+        // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
+        if let Some(s) = std::env::var("VP_SMOKE_SURFACE").ok().filter(|_| std::env::var_os("VP_SMOKE").is_some()).and_then(|v| v.parse::<usize>().ok()).and_then(|i| velopopuli_core::world::Surface::ALL.get(i).copied()) {
+            world.scene.surfaces = vec![s; route.n];
+        }
+        let world = Arc::new(world);
         if std::env::var_os("VP_SMOKE").is_some() {
             // For the automated check: where along the route the bridges and tunnels are.
             let kinds = world.field.kinds();
@@ -290,6 +295,17 @@ impl Session {
             }
         }
         let group = req.group_room.as_ref().filter(|r| !r.trim().is_empty()).map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
+        crate::diag::event(
+            "ride",
+            format!(
+                "surfaces {}",
+                velopopuli_core::world::surface_runs(&world.scene.surfaces)
+                    .iter()
+                    .map(|(a, b, s)| format!("{}:{:.0}-{:.0}m", s.name(), *a as f64 * route.step, *b as f64 * route.step))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        );
         crate::diag::event(
             "ride",
             format!(

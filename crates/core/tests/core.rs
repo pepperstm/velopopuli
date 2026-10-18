@@ -714,7 +714,7 @@ mod vector_tiles {
 
 mod scenery {
     use super::*;
-    use velopopuli_core::world::{Area, AreaKind, Crossing, GridMesh, Road, RoadKind, Scenery, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL};
+    use velopopuli_core::world::{barrier_model, parse_surfaces, surface_query, surface_runs, Area, AreaKind, Crossing, GridMesh, Road, RoadKind, Scenery, Surface, SurfaceWay, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL};
 
     /// Terrain tiles at a constant height, covering the route.
     fn level_ground(route: &Route, height: f64) -> Dem {
@@ -799,10 +799,81 @@ mod scenery {
             .chain(roundabout(&route))
             .collect(),
             labels: Vec::new(),
+            surfaces: vec![
+                // Cobbles on the first 300 m of the route's own road (mapped a metre to one side),
+                // a gravel road across it at 900 m, and a short patch of concrete at 1500 m.
+                SurfaceWay { surface: Surface::Cobbles, line: geo(&route, &[(1.0, 0.0), (1.0, 300.0)]) },
+                SurfaceWay { surface: Surface::Gravel, line: geo(&route, &[(-300.0, 900.0), (300.0, 900.0)]) },
+                SurfaceWay { surface: Surface::Concrete, line: geo(&route, &[(0.0, 1500.0), (0.0, 1510.0)]) },
+            ],
+            surface_tags: true,
         };
         let dem = level_ground(&route, 100.0);
         let world = World::with_map(route.clone(), Some(dem), 0.0, Some(&scenery), &[]);
         (route, world)
+    }
+
+    #[test]
+    fn knows_the_road_surface_along_the_route() {
+        let (route, world) = world();
+        let s = &world.scene.surfaces;
+        assert_eq!(s.len(), route.n);
+        let at = |m: f64| s[(m / route.step) as usize];
+        assert_eq!(at(10.0), Surface::Cobbles);
+        assert_eq!(at(250.0), Surface::Cobbles);
+        // Past the cobbles the mapped road is a plain lane: tarmac.
+        assert_eq!(at(400.0), Surface::Asphalt);
+        // A road crossing the route doesn't lend it its surface, nor does a patch shorter than 30 m.
+        assert_eq!(at(900.0), Surface::Asphalt);
+        assert_eq!(at(1505.0), Surface::Asphalt);
+        let runs = surface_runs(s);
+        assert_eq!(runs.first().map(|r| (r.0, r.2)), Some((0, Surface::Cobbles)));
+        assert_eq!(runs.last().map(|r| (r.1, r.2)), Some((route.n, Surface::Asphalt)));
+        assert_eq!(world.road().surfaces[(100.0 / route.step) as usize], Surface::Cobbles as u8);
+    }
+
+    #[test]
+    fn closes_the_road_with_barriers() {
+        let (route, world) = world();
+        let b = world.barriers();
+        // Both sides, every 2.5 m, in order along the route.
+        assert!(b.len() > 1800, "{}", b.len());
+        assert!(b.windows(2).all(|w| w[0][4] <= w[1][4]));
+        // None on the bridge (500–600 m) or in the tunnel (1000–1400 m); plenty either side of them.
+        let near = |from: f32, to: f32| b.iter().filter(|s| s[4] > from && s[4] < to).count();
+        assert_eq!(near(520.0, 580.0), 0);
+        assert_eq!(near(1050.0, 1350.0), 0);
+        assert!(near(300.0, 400.0) >= 70, "{}", near(300.0, 400.0));
+        // Standing on the shoulder, just clear of the tarmac, on both sides; some with banners.
+        for s in b.iter().filter(|s| s[4] > 300.0 && s[4] < 400.0) {
+            let off = (s[0] as f64).abs();
+            assert!((3.7..3.9).contains(&off), "{off}");
+        }
+        assert!(b.iter().any(|s| s[0] > 0.0) && b.iter().any(|s| s[0] < 0.0));
+        assert!(b.iter().any(|s| s[5] > 0.0) && b.iter().any(|s| s[5] == 0.0));
+        // Every look of barrier has a model, and a banner faces the road with the texture on it.
+        let plain = barrier_model(0);
+        let banner = barrier_model(1);
+        assert!(plain.vertices() > 100 && banner.vertices() > plain.vertices());
+        assert!(banner.uvs.chunks(2).any(|uv| uv == [1.0, 1.0]));
+        let _ = route;
+    }
+
+    #[test]
+    fn reads_surfaces_from_overpass() {
+        let json = r#"{"elements":[
+            {"type":"way","id":1,"tags":{"highway":"track","surface":"fine_gravel"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]},
+            {"type":"way","id":2,"tags":{"highway":"residential","surface":"sett"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.0,"lon":6.001}]},
+            {"type":"way","id":3,"tags":{"highway":"service","surface":"something_odd"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.0,"lon":6.001}]},
+            {"type":"way","id":4,"tags":{"highway":"path","surface":"ground"},"geometry":[{"lat":45.0,"lon":6.0}]}
+        ]}"#;
+        let ways = parse_surfaces(json).unwrap();
+        assert_eq!(ways.iter().map(|w| w.surface).collect::<Vec<_>>(), vec![Surface::Gravel, Surface::Cobbles]);
+        assert_eq!(Surface::from_osm("concrete:plates"), Some(Surface::Concrete));
+        assert_eq!(Surface::from_osm("dirt;grass"), Some(Surface::Dirt));
+        let route = build_route("q", &straight(1000.0, |_| Some(100.0))).unwrap();
+        let q = surface_query(&route, 0, route.n, 12.0, 40.0);
+        assert!(q.contains("way[\"highway\"][\"surface\"](around:12,") && q.ends_with("out tags geom;"), "{q}");
     }
 
     #[test]

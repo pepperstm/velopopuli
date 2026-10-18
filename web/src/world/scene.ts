@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { Barriers } from './barriers'
+import { SURFACES, surfaceRuns, surfaceTexture } from './surfaces'
 import { api } from '../bridge'
 import { sampleAt, type Route, type RoutePos } from '../core/gpx'
 import type { Landmark, WorldLayout } from '../types'
@@ -80,36 +82,18 @@ const POI_ICON: Record<string, string> = {
 }
 
 export function roadTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
-  const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = '#6d6552' // gravel shoulder, stretched down the embankment
-  ctx.fillRect(0, 0, 256, 256)
-  ctx.fillStyle = '#3d3f45'
-  ctx.fillRect(20, 0, 216, 256)
-  // Speckle so the surface visibly moves at speed.
-  for (let i = 0; i < 2600; i++) {
-    const shade = 50 + Math.random() * 40
-    ctx.fillStyle = `rgba(${shade},${shade},${shade + 4},0.5)`
-    ctx.fillRect(20 + Math.random() * 216, Math.random() * 256, 2, 2)
-  }
-  ctx.fillStyle = '#e8e8e2'
-  ctx.fillRect(25, 0, 4, 256)
-  ctx.fillRect(227, 0, 4, 256)
-  ctx.fillRect(126, 0, 4, 128)
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.wrapT = THREE.RepeatWrapping
-  texture.wrapS = THREE.ClampToEdgeWrapping
-  return texture
+  return surfaceTexture(0)
 }
 
-/** Wraps the road ribbon computed in Rust (`section` vertices across, per route sample) in a mesh. */
-function buildRoad(buffer: ArrayBuffer, n: number, section: number, texture: THREE.Texture, dim: (sample: number) => number): THREE.Mesh {
+/**
+ * Wraps the road ribbon computed in Rust (`section` vertices across, per route sample) in a mesh,
+ * each stretch textured for its surface: tarmac, concrete, cobbles, gravel or dirt.
+ */
+function buildRoad(buffer: ArrayBuffer, n: number, section: number, dim: (sample: number) => number): THREE.Mesh {
   const verts = n * section
   const pos = new Float32Array(buffer, 0, verts * 3)
   const uv = new Float32Array(buffer, verts * 12, verts * 2)
+  const surfaces = buffer.byteLength >= verts * 20 + n * 4 ? new Float32Array(buffer, verts * 20, n) : new Float32Array(n)
   const nor = new Float32Array(verts * 3)
   for (let i = 1; i < nor.length; i += 3) nor[i] = 1
   // Daylight doesn't follow the road into a tunnel.
@@ -135,7 +119,11 @@ function buildRoad(buffer: ArrayBuffer, n: number, section: number, texture: THR
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
   geo.setIndex(new THREE.BufferAttribute(idx, 1))
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: texture, side: THREE.DoubleSide, vertexColors: true }))
+  // One draw group per stretch of surface; the quads after sample i start at index i·(section−1)·6.
+  const perSample = (section - 1) * 6
+  for (const [from, to, surface] of surfaceRuns(surfaces)) geo.addGroup(from * perSample, (Math.min(to, n - 1) - from) * perSample, surface)
+  const materials = SURFACES.map((_, s) => new THREE.MeshLambertMaterial({ map: surfaceTexture(s), side: THREE.DoubleSide, vertexColors: true }))
+  const mesh = new THREE.Mesh(geo, materials)
   // One mesh spans the whole route, so its bounding sphere is useless for culling.
   mesh.frustumCulled = false
   return mesh
@@ -214,6 +202,7 @@ export class World {
   private camPos = {} as RoutePos
   private camHeading: number | null = null
   private camMode = 0
+  private barriers: Barriers | null = null
   private camInit = false
   private lookAt = new THREE.Vector3()
 
@@ -245,11 +234,12 @@ export class World {
   /** Fetches the road and the landscape around the start; resolves when the first frame can be drawn. */
   async load(): Promise<void> {
     const start = sampleAt(this.route, 0)
-    const [road, structures] = await Promise.all([api.ride.roadMesh(), api.ride.structures(), this.terrain.prime(start.x, start.z)])
-    const texture = roadTexture()
-    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
+    const [road, structures, barriers] = await Promise.all([api.ride.roadMesh(), api.ride.structures(), api.ride.barriers(), this.terrain.prime(start.x, start.z)])
+    this.barriers = new Barriers(barriers)
+    this.scene.add(this.barriers.group)
+    for (let k = 0; k < SURFACES.length; k++) surfaceTexture(k).anisotropy = this.renderer.capabilities.getMaxAnisotropy()
     const dim = (sample: number): number => 1 - 0.62 * this.cover(sample * this.route.step, 12)
-    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, texture, dim), ...buildStructures(structures))
+    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...buildStructures(structures))
   }
 
   /** Everything the native renderer needs from this scene (see `native.ts`). */
@@ -460,6 +450,7 @@ export class World {
     }
 
     this.terrain.update(p.x, p.z)
+    this.barriers?.update(f.distance)
     this.updateCamera(dt, p, f.distance)
     this.sky.position.copy(this.camera.position)
     // The rider's lamp, just ahead and above, lights the road at night.

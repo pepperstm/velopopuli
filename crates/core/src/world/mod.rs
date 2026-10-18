@@ -2,6 +2,7 @@
 //! geometry — road ribbon, terrain chunks, the distant sheet — is computed here,
 //! off the render thread.
 
+mod barriers;
 mod buildings;
 mod dem;
 mod height;
@@ -11,7 +12,9 @@ mod mvt;
 mod roads;
 mod scenery;
 mod structures;
+mod surface;
 
+pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
@@ -20,6 +23,7 @@ pub use landmarks::{landmarks, Landmark};
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
+pub use surface::{parse_surfaces, runs as surface_runs, surface_query, Surface, SurfaceWay};
 
 use std::sync::Arc;
 
@@ -88,6 +92,8 @@ pub struct RoadMesh {
     /// foot, tarmac edge, tarmac edge, embankment foot, wall base.
     pub positions: Vec<f32>,
     pub uvs: Vec<f32>,
+    /// The road surface per route sample (`Surface as u8`).
+    pub surfaces: Vec<u8>,
 }
 
 pub struct World {
@@ -436,7 +442,8 @@ impl World {
         let kinds = self.field.kinds();
         // Texture columns: gravel shoulder on the outer 20/256ths, tarmac between.
         let us = [0.0f32, 0.0, 20.0 / 256.0, 236.0 / 256.0, 1.0, 1.0];
-        let mut mesh = RoadMesh { positions: Vec::with_capacity(n * ROAD_SECTION * 3), uvs: Vec::with_capacity(n * ROAD_SECTION * 2) };
+        let surfaces = if self.scene.surfaces.len() == n { self.scene.surfaces.iter().map(|s| *s as u8).collect() } else { vec![0; n] };
+        let mut mesh = RoadMesh { positions: Vec::with_capacity(n * ROAD_SECTION * 3), uvs: Vec::with_capacity(n * ROAD_SECTION * 2), surfaces };
         for i in 0..n {
             let (a, b) = (i.saturating_sub(1), (i + 1).min(n - 1));
             let (mut tx, mut tz) = (r.x[b] - r.x[a], r.z[b] - r.z[a]);

@@ -20,7 +20,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use wgpu::util::DeviceExt;
 use velopopuli_core::ride::{RideEngine, RivalKind};
-use velopopuli_core::world::{GridMesh, World, LAYOUT};
+use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, LAYOUT};
 
 use host::HostView;
 
@@ -437,6 +437,15 @@ impl Mesh {
         Some(Mesh { vertices, count: verts.len() as u32, indices })
     }
 
+    /// Draws `count` indices from `first` (indexed meshes only).
+    fn draw_range<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, first: u32, count: u32) {
+        if let Some((b, n)) = &self.indices {
+            pass.set_vertex_buffer(0, self.vertices.slice(..));
+            pass.set_index_buffer(b.slice(..), wgpu::IndexFormat::Uint32);
+            pass.draw_indexed(first.min(*n)..(first + count).min(*n), 0, 0..1);
+        }
+    }
+
     fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         match &self.indices {
@@ -738,6 +747,16 @@ impl Renderer {
         let mut crank = 0.0f64;
         let mut size_check = Instant::now();
         let mut lanes: HashMap<String, f64> = HashMap::new();
+        // Race barriers: one mesh per look, instanced over the stretch near the rider.
+        let barrier_sections = world.barriers();
+        let barrier_models: Vec<Option<Mesh>> = (0..BARRIER_LOOKS)
+            .map(|look| {
+                let m = barrier_model(look);
+                Mesh::new(&self.device, &verts_from(&m.positions, Some(&m.normals), &m.colors, Some(&m.uvs), [0.0, 0.0]), None)
+            })
+            .collect();
+        let mut barrier_instances: Vec<Option<(wgpu::Buffer, u32)>> = (0..BARRIER_LOOKS).map(|_| None).collect();
+        let mut barriers_for: Option<(f64, [f64; 2])> = None;
         // Rain and snow: how far they have fallen and streamed back, as fractions of their box.
         let (mut fallen, mut drift, mut clock) = (0.0f64, [0.0f64; 2], 0.0f64);
 
@@ -847,6 +866,23 @@ impl Renderer {
                 far_busy = false;
                 let v = verts_from(&mesh.positions, Some(&mesh.normals), &mesh.colors, None, origin);
                 far = Mesh::new(&self.device, &v, Some(&far_idx)).map(|m| (m, k));
+            }
+
+            // Barriers from a little behind to well ahead, moved on every 40 m (or when re-centred).
+            if barriers_for.is_none_or(|(at, o)| (shown - at).abs() > 40.0 || o != origin) {
+                barriers_for = Some((shown, origin));
+                let mut per_look: Vec<Vec<f32>> = vec![Vec::new(); BARRIER_LOOKS];
+                let first = barrier_sections.partition_point(|b| (b[4] as f64) < shown - 150.0);
+                for b in barrier_sections[first..].iter().take_while(|b| (b[4] as f64) < shown + 900.0) {
+                    if let Some(list) = per_look.get_mut(b[5] as usize) {
+                        list.extend_from_slice(&[(b[0] as f64 - origin[0]) as f32, b[1], (b[2] as f64 - origin[1]) as f32, b[3], 1.0, 1.0]);
+                    }
+                }
+                for (slot, list) in barrier_instances.iter_mut().zip(per_look) {
+                    *slot = (!list.is_empty()).then(|| {
+                        (self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("barriers"), contents: bytemuck::cast_slice(&list), usage: wgpu::BufferUsages::VERTEX }), (list.len() / 6) as u32)
+                    });
+                }
             }
 
             // Camera, as the page's chase camera does it.
@@ -1032,9 +1068,12 @@ impl Renderer {
                         b.draw(&mut pass);
                     }
                 }
-                pass.set_bind_group(1, tex("road"), &[]);
+                // The route's road, each stretch textured for its surface.
                 if let Some(r) = &scene.route_road {
-                    r.draw(&mut pass);
+                    for &(first, count, texture) in &scene.road_runs {
+                        pass.set_bind_group(1, tex(texture), &[]);
+                        r.draw_range(&mut pass, first, count);
+                    }
                 }
                 pass.set_bind_group(1, white, &[]);
                 if let Some(m) = &scene.structures_lit {
@@ -1057,6 +1096,17 @@ impl Renderer {
                         pass.draw(0..self.tree_mesh.count, 0..*n);
                     }
                 }
+                // Race barriers, through the instanced pipeline the trees use (lit, smooth normals).
+                pass.set_bind_group(1, tex("banner"), &[]);
+                pass.set_bind_group(2, &self.draws_bg, &[0]);
+                for (model, instances) in barrier_models.iter().zip(&barrier_instances) {
+                    if let (Some(m), Some((buf, count))) = (model, instances) {
+                        pass.set_vertex_buffer(0, m.vertices.slice(..));
+                        pass.set_vertex_buffer(1, buf.slice(..));
+                        pass.draw(0..m.count, 0..*count);
+                    }
+                }
+                pass.set_bind_group(1, white, &[]);
                 // Riders.
                 pass.set_pipeline(&self.pipes.opaque);
                 for &(slot, pose, ghost) in &riders {
@@ -1239,6 +1289,8 @@ fn shadow_geometry() -> Vec<Vertex> {
 
 struct SceneMeshes {
     route_road: Option<Mesh>,
+    /// `(first index, index count, texture)` per stretch of road surface.
+    road_runs: Vec<(u32, u32, &'static str)>,
     structures_lit: Option<Mesh>,
     structures_unlit: Option<Mesh>,
     props: Option<Mesh>,
@@ -1276,10 +1328,26 @@ impl SceneMeshes {
                 idx.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
             }
         }
+        let surfaces: Vec<Surface> = road.surfaces.iter().map(|&s| Surface::ALL.get(s as usize).copied().unwrap_or_default()).collect();
+        let per_sample = ((section - 1) * 6) as u32;
+        let road_runs = surface_runs(&surfaces)
+            .into_iter()
+            .map(|(from, to, s)| {
+                let texture = match s {
+                    Surface::Asphalt => "road",
+                    Surface::Concrete => "road_concrete",
+                    Surface::Cobbles => "road_cobbles",
+                    Surface::Gravel => "road_gravel",
+                    Surface::Dirt => "road_dirt",
+                };
+                (from as u32 * per_sample, (to.min(n - 1).saturating_sub(from)) as u32 * per_sample, texture)
+            })
+            .collect();
         let s = world.structures();
         let shift = |v: &[Vertex]| -> Vec<Vertex> { v.iter().map(|q| Vertex { pos: [(q.pos[0] as f64 - origin[0]) as f32, q.pos[1], (q.pos[2] as f64 - origin[1]) as f32], ..*q }).collect() };
         SceneMeshes {
             route_road: Mesh::new(device, &road_verts, Some(&idx)),
+            road_runs,
             structures_lit: Mesh::new(device, &verts_from(&s.lit.positions, Some(&s.lit.normals), &s.lit.colors, None, origin), None),
             structures_unlit: Mesh::new(device, &verts_from(&s.unlit.positions, None, &s.unlit.colors, None, origin), None),
             props: Mesh::new(device, &shift(&assets.props), None),

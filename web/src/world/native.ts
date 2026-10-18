@@ -1,6 +1,8 @@
 import * as THREE from 'three'
+import { bannerTexture } from './barriers'
 import { RiderModel } from './rider'
 import { roadTexture } from './scene'
+import { SURFACES, surfaceTexture } from './surfaces'
 import { waysTexture, windowTexture } from './terrain'
 import type { Look } from './weather'
 
@@ -178,7 +180,9 @@ export function packNative(scene: THREE.Scene, skip: (o: THREE.Object3D) => bool
 
   const textures: { name: string; canvas: HTMLCanvasElement; wrap: string; flip: boolean }[] = [
     { name: 'road', canvas: roadTexture().image as HTMLCanvasElement, wrap: 'clampS', flip: true },
+    ...SURFACES.slice(1).map((name, k) => ({ name: `road_${name}`, canvas: surfaceTexture(k + 1).image as HTMLCanvasElement, wrap: 'clampS', flip: true })),
     { name: 'windows', canvas: windowTexture().image as HTMLCanvasElement, wrap: 'repeat', flip: true },
+    { name: 'banner', canvas: bannerTexture().image as HTMLCanvasElement, wrap: 'clamp', flip: true },
     { name: 'ways', canvas: waysTexture().image as HTMLCanvasElement, wrap: 'clampS', flip: true },
     { name: 'labels', canvas: atlas.canvas, wrap: 'clamp', flip: false }
   ]

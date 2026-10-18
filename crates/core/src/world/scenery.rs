@@ -146,6 +146,12 @@ pub struct Scenery {
     /// Place names and points of interest.
     #[serde(default)]
     pub labels: Vec<super::mvt::Label>,
+    /// Roads near the route whose surface is mapped (from the Overpass API, not the tiles).
+    #[serde(default)]
+    pub surfaces: Vec<super::surface::SurfaceWay>,
+    /// Whether `surfaces` was asked for successfully (an empty answer is then a real one).
+    #[serde(default)]
+    pub surface_tags: bool,
 }
 
 impl Scenery {
@@ -326,6 +332,8 @@ pub struct Scene {
     pub overbridges: Vec<Overbridge>,
     /// `OPEN`, `BRIDGE` or `TUNNEL` per route sample.
     pub kinds: Vec<u8>,
+    /// What the route's road is made of, per route sample.
+    pub surfaces: Vec<super::surface::Surface>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
     pub counts: SceneryCounts,
@@ -760,6 +768,40 @@ const RAIL_HEAD: f64 = 0.16;
 /// Width of the line painted along each edge of a main road.
 const EDGE_LINE: f64 = 0.18;
 
+/// The surface at every route sample: the mapped `surface` of the road the route follows
+/// where the map has one, otherwise a guess from what kind of road it is.
+fn route_surfaces(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::SurfaceWay]) -> Vec<super::surface::Surface> {
+    use super::surface::{tidy, Surface, MIN_RUN_M};
+    let mut out: Vec<Surface> = kinds
+        .iter()
+        .map(|k| match k {
+            Some(RoadKind::Track) => Surface::Gravel,
+            Some(RoadKind::Path) => Surface::Dirt,
+            _ => Surface::Asphalt,
+        })
+        .collect();
+    // Mapped surfaces, on the stretches of road that run along the route (not ones crossing it).
+    let mut best = vec![f64::INFINITY; route.n];
+    for way in mapped {
+        // Fine enough that every route sample beside the way is the nearest to some piece of it.
+        let line = resample(&way.line.iter().map(|p| route.to_local(p[0], p[1])).collect::<Vec<_>>(), (route.step / 2.0).min(4.0));
+        for w in line.windows(2) {
+            if !beside.along(w[0], w[1], SAME_ROAD_M, SAME_COS) {
+                continue;
+            }
+            let mid = ((w[0].0 + w[1].0) / 2.0, (w[0].1 + w[1].1) / 2.0);
+            let Some(i) = beside.nearest(mid, SAME_ROAD_M) else { continue };
+            let d = (route.x[i] - mid.0).hypot(route.z[i] - mid.1);
+            if d < best[i] {
+                best[i] = d;
+                out[i] = way.surface;
+            }
+        }
+    }
+    tidy(&mut out, (MIN_RUN_M / route.step).ceil() as usize);
+    out
+}
+
 impl Scene {
     pub fn new(route: &Route, scenery: &Scenery) -> Self {
         let local = |line: &[[f64; 2]]| line.iter().map(|p| route.to_local(p[0], p[1])).collect::<Vec<_>>();
@@ -826,13 +868,20 @@ impl Scene {
         scene.counts.roads = roads.len();
         // Of the mapped roads that run close beside the route, only the nearest at each place is the route's own.
         let mut nearest_road = vec![f64::INFINITY; route.n];
+        // … and what kind of road that is, for guessing its surface where it isn't mapped.
+        let mut nearest_kind: Vec<Option<RoadKind>> = vec![None; route.n];
         for road in &roads {
             for (i, d) in beside.shadowed(road, &road.points()).into_iter().flatten() {
-                for claim in &mut nearest_road[i.saturating_sub(3)..(i + 4).min(route.n)] {
-                    *claim = claim.min(d);
+                let range = i.saturating_sub(3)..(i + 4).min(route.n);
+                for (claim, kind) in nearest_road[range.clone()].iter_mut().zip(&mut nearest_kind[range]) {
+                    if d < *claim {
+                        *claim = d;
+                        *kind = Some(road.kind);
+                    }
                 }
             }
         }
+        scene.surfaces = route_surfaces(route, &beside, &nearest_kind, &scenery.surfaces);
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }
