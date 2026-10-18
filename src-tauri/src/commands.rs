@@ -6,7 +6,7 @@ use base64::Engine;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::ipc::Response;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use velopopuli_core::gamify::{Badge, BADGES};
@@ -789,6 +789,22 @@ pub struct SmokeConfig {
     workout: Option<String>,
     room: Option<String>,
     ghosts: Option<Vec<String>>,
+    /// Seconds of window frames to save before the end, for demo clips (VP_SMOKE_CLIP).
+    clip: Option<f64>,
+}
+
+/// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
+#[tauri::command]
+pub fn smoke_frame(app: AppHandle, index: u32) {
+    let Some(path) = std::env::var_os("VP_SMOKE").map(PathBuf::from) else { return };
+    let Some(window) = app.get_webview_window("main") else { return };
+    let dir = path.with_extension("frames");
+    let _ = std::fs::create_dir_all(&dir);
+    crate::snapshot::window_png(&window, dir.join(format!("{index:04}.png")), |r| {
+        if let Err(e) = r {
+            eprintln!("clip frame: {e}");
+        }
+    });
 }
 
 #[tauri::command]
@@ -801,6 +817,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         workout: std::env::var("VP_SMOKE_WORKOUT").ok(),
         room: std::env::var("VP_SMOKE_ROOM").ok(),
         ghosts: std::env::var("VP_SMOKE_GHOSTS").ok().map(|v| v.split(',').map(str::to_string).collect()),
+        clip: std::env::var("VP_SMOKE_CLIP").ok().and_then(|v| v.parse().ok()),
     })
 }
 
@@ -820,6 +837,20 @@ pub fn smoke_done(app: AppHandle, state: State<AppState>, png: Option<String>, i
             let _ = std::fs::write(&path, bytes);
         }
         let _ = std::fs::write(path.with_extension("txt"), info);
+        // VP_SMOKE_WINDOW=1 also saves the whole window (page and HUD) as <name>.window.png.
+        if std::env::var_os("VP_SMOKE_WINDOW").is_some() {
+            if let Some(window) = app.get_webview_window("main") {
+                let out = path.with_extension("window.png");
+                let app = app.clone();
+                crate::snapshot::window_png(&window, out, move |r| {
+                    if let Err(e) = r {
+                        eprintln!("window snapshot: {e}");
+                    }
+                    app.exit(0);
+                });
+                return;
+            }
+        }
         app.exit(0);
     }
 }

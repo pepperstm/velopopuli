@@ -1,6 +1,8 @@
 # Velo Populi
 
-*The people's indoor ride: open source, built by riders, for riders.*
+*The people's indoor ride: open source, built by riders, for riders.* — **[velopopuli.com](https://velopopuli.com)**
+
+<p align="center"><img src="docs/images/hero.gif" alt="Climbing Alpe d'Huez on a closed road lined with Velo Populi barriers, with power, speed, heart rate and cadence on the HUD" width="680"></p>
 
 Ride any GPX route on your indoor trainer. Velo Populi turns a route file into a 3D world, drives your smart trainer's resistance from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, XP and badges.
 
@@ -22,6 +24,26 @@ Open source (MIT) for **Windows, macOS and Linux**. Written in **Rust**, with a 
 - **Fan and lights.** A fan that speeds up with your speed, power or heart rate, and a light coloured by power zone, through Home Assistant, a Shelly or Tasmota plug, or any webhook.
 - **Recording and sharing.** Every ride is saved as a standard `.FIT` file (GPS, power, heart rate, cadence, laps, normalised power) and can be uploaded to Strava as a Virtual Ride in one click or automatically.
 - **Demo rider.** A simulated rider and trainer so you can try everything with no hardware.
+
+### On the road
+
+| | |
+|---|---|
+| <img src="docs/images/ride-town.jpg" alt="Riding through Bourg d'Oisans between crowd barriers, with buildings and side roads from OpenStreetMap"> | <img src="docs/images/ride-cobbles.jpg" alt="The Trouée d'Arenberg cobbles from Paris–Roubaix, a narrow track between barriers"> |
+| **A closed road through the real town** — buildings, side roads and landmarks from OpenStreetMap | **The real surface and width** — the Arenberg trench on its setts, three metres wide |
+| <img src="docs/images/ride-hairpins.jpg" alt="Overhead view of the Alpe d'Huez hairpins"> | <img src="docs/images/ride-workout.jpg" alt="A sweet-spot workout in ERG with the step targets shown above the road"> |
+| **Real terrain** — the Alpe d'Huez switchbacks from the overhead camera | **Structured workouts** on any route, the trainer holding each target |
+| <img src="docs/images/ride-dusk-rain.jpg" alt="Climbing at dusk in the rain with the bike lamp on"> | <img src="docs/images/ride-snow.jpg" alt="Climbing at dawn in falling snow"> |
+| **Time of day and weather** — dusk in the rain, with a lamp on the bike | …or dawn in the snow, or the live weather at the real place |
+
+### In the app
+
+| | |
+|---|---|
+| <img src="docs/images/screen-home.jpg" alt="The route library with route outlines"> | <img src="docs/images/screen-explore.jpg" alt="The route finder: a map, place search and famous climbs"> |
+| **Your routes** — import GPX from anywhere | **Find a route** — plan one on the map or pick a famous climb |
+| <img src="docs/images/screen-workouts.jpg" alt="Built-in workouts with their power profiles"> | <img src="docs/images/screen-progress.jpg" alt="Progress: level, season goal, weekly distance, training load and power curve"> |
+| **Workouts** — built-in sessions or your own .zwo/.erg/.mrc | **Progress** — season goal, streaks, training load and power curve (sample data shown) |
 
 ## How it is built
 
@@ -123,6 +145,8 @@ To inspect a recorded ride: `cargo run -p velopopuli-core --example fitinfo -- p
 
 ## Connecting hardware
 
+<img src="docs/images/screen-devices.jpg" alt="The Devices page with Bluetooth and ANT+ search and a connected trainer" width="680">
+
 ### Bluetooth
 
 **Devices → Add Bluetooth device…** lists nearby trainers and sensors. Supported: FTMS smart trainers (Wahoo, Elite, Saris, Zwift, JetBlack and most others made since ~2018), Tacx trainers using FE-C over Bluetooth, Cycling Power meters, heart-rate monitors, and speed/cadence sensors.
@@ -195,6 +219,7 @@ The logs themselves live in the app's data folder under `logs/` (**Settings → 
 
 - Map tiles, building and scenery data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL), via the OSM tile servers, the public [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) instances and [vector.openstreetmap.org](https://vector.openstreetmap.org). Heavy users should configure their own servers, per the OSM usage policies.
 - Place search by [Nominatim](https://nominatim.org) and route planning by [BRouter](https://brouter.de) (both OpenStreetMap-based); weather from [Open-Meteo](https://open-meteo.com); street-level photos from [Mapillary](https://www.mapillary.com) (CC BY-SA).
+- Typefaces [DM Sans](https://github.com/googlefonts/dm-fonts) and [Manrope](https://github.com/googlefonts/manrope), bundled under the SIL Open Font Licence (`web/src/fonts/`).
 - Terrain from the [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) open dataset (Tilezen/Mapzen; sources include SRTM, USGS 3DEP, EU-DEM and others).
 - ANT+ access uses the ANT+ managed network key, which is issued to ANT+ adopters. If you distribute builds, register as an adopter (free) at [thisisant.com](https://www.thisisant.com).
 

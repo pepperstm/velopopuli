@@ -1,11 +1,29 @@
+/* The website's typefaces, bundled so the app looks the same offline (SIL Open Font Licence, see fonts/). */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./fonts/dm-sans-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('./fonts/manrope-latin.woff2') format('woff2');
+}
+
 :root {
-  --bg: #0e1116;
-  --panel: #171b23;
-  --panel-2: #1f2430;
-  --line: #2a3140;
-  --text: #e8ecf2;
-  --muted: #8f9aad;
-  --accent: #ff5a36;
+  --bg: #141812;
+  --panel: #1c211a;
+  --panel-2: #262c23;
+  --line: #363f31;
+  --text: #f2f3e8;
+  --muted: #a5ab98;
+  --accent: #e9ff60;
+  /* Text on the accent: the site's ink. */
+  --accent-ink: #24271f;
   --ok: #4ddb8a;
   --warn: #ffd24a;
   --strava: #fc4c02;
@@ -26,12 +44,18 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font: 14px/1.45 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   overflow: hidden;
 }
 
+h1,
+h2,
+h3,
+.brand {
+  font-family: 'Manrope', 'DM Sans', system-ui, sans-serif;
+}
 h1 {
   font-size: 26px;
   margin: 0 0 4px;
@@ -48,7 +72,7 @@ p {
   margin: 0 0 10px;
 }
 a {
-  color: #6fb3ff;
+  color: #d7e960;
 }
 code {
   background: var(--panel-2);
@@ -75,8 +99,8 @@ button {
   white-space: nowrap;
 }
 button:hover:not(:disabled) {
-  border-color: #46516a;
-  background: #262d3b;
+  border-color: #4f5a47;
+  background: #2e3529;
 }
 button:disabled {
   opacity: 0.5;
@@ -85,12 +109,12 @@ button:disabled {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-weight: 600;
 }
 button.primary:hover:not(:disabled) {
-  background: #ff7153;
-  border-color: #ff7153;
+  background: #f1ff8c;
+  border-color: #f1ff8c;
 }
 button.ghost {
   background: transparent;
@@ -121,7 +145,7 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid #3b6fb8;
+  outline: 2px solid #aabc50;
   outline-offset: -1px;
 }
 
@@ -143,9 +167,14 @@ textarea:focus {
   font-weight: 700;
   font-size: 17px;
   letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .brand-mark {
-  color: #ff5a36;
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
 }
 .topbar nav {
   display: flex;
@@ -269,9 +298,9 @@ textarea:focus {
   padding: 5px 10px;
 }
 .notice {
-  background: #14263a;
-  border: 1px solid #23486e;
-  color: #a9d0f7;
+  background: #232b1c;
+  border: 1px solid #4b5a2c;
+  color: #dae874;
   border-radius: 8px;
   padding: 9px 12px;
   margin: 12px 0;
@@ -280,7 +309,7 @@ textarea:focus {
   font-size: 11px;
   font-weight: 700;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border-radius: 4px;
   padding: 1px 6px;
   vertical-align: 1px;
@@ -363,13 +392,13 @@ textarea:focus {
   gap: 14px;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 10, 14, 0.6);
+  background: rgba(12, 15, 10, 0.6);
   z-index: 2000;
 }
 .ride-overlay {
   position: absolute;
   z-index: 1500;
-  background: rgba(8, 10, 14, 0.35);
+  background: rgba(12, 15, 10, 0.35);
   pointer-events: none;
 }
 .ride-overlay.solid {
@@ -589,7 +618,7 @@ textarea {
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
   padding: 14px 20px 30px;
-  background: linear-gradient(rgba(8, 10, 14, 0.7), transparent);
+  background: linear-gradient(rgba(12, 15, 10, 0.7), transparent);
   pointer-events: none;
 }
 .hud-title,
@@ -603,7 +632,7 @@ textarea {
 .hud-title span,
 .hud-grade span {
   font-size: 13px;
-  color: #d5dbe6;
+  color: #d9ddcc;
 }
 .hud-clock {
   font-size: 34px;
@@ -628,7 +657,7 @@ textarea {
   width: 150px;
 }
 .tile {
-  background: rgba(14, 17, 22, 0.72);
+  background: rgba(20, 24, 18, 0.72);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -647,7 +676,7 @@ textarea {
 }
 .tile-label {
   font-size: 12px;
-  color: #c2c9d6;
+  color: #cbd2bd;
 }
 .hud.right {
   right: 18px;
@@ -659,7 +688,7 @@ textarea {
 }
 .gap,
 .standings {
-  background: rgba(14, 17, 22, 0.72);
+  background: rgba(20, 24, 18, 0.72);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -674,7 +703,7 @@ textarea {
 .gap span {
   font-size: 12px;
   font-weight: 400;
-  color: #c2c9d6;
+  color: #cbd2bd;
 }
 .gap.ahead {
   color: var(--ok);
@@ -702,7 +731,7 @@ textarea {
 }
 .standings em {
   font-style: normal;
-  color: #c2c9d6;
+  color: #cbd2bd;
   font-variant-numeric: tabular-nums;
 }
 .standings .me {
@@ -714,7 +743,7 @@ textarea {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
   text-shadow: none;
-  background: #1b2029;
+  background: #20261d;
 }
 .minimap .leaflet-control-attribution {
   font-size: 9px;
@@ -762,7 +791,7 @@ textarea {
   right: 0;
   bottom: 0;
   padding: 26px 18px 12px;
-  background: linear-gradient(transparent, rgba(8, 10, 14, 0.85) 45%);
+  background: linear-gradient(transparent, rgba(12, 15, 10, 0.85) 45%);
   text-shadow: none;
 }
 .controls {
@@ -772,7 +801,7 @@ textarea {
   margin-bottom: 8px;
 }
 .controls button {
-  background: rgba(31, 36, 48, 0.85);
+  background: rgba(38, 44, 35, 0.85);
   padding: 5px 12px;
 }
 .controls .spacer {
@@ -798,7 +827,7 @@ textarea {
 .seg button.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 .stepper {
   display: flex;
@@ -819,7 +848,7 @@ textarea {
 .profile-next,
 .profile-all {
   position: relative;
-  background: rgba(14, 17, 22, 0.72);
+  background: rgba(20, 24, 18, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   overflow: hidden;
@@ -829,7 +858,7 @@ textarea {
   top: 3px;
   left: 7px;
   font-size: 11px;
-  color: #c2c9d6;
+  color: #cbd2bd;
 }
 .profile-chart {
   width: 100%;
@@ -859,7 +888,7 @@ textarea {
   width: min(560px, 46vw);
   padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(14, 17, 22, 0.82);
+  background: rgba(20, 24, 18, 0.82);
   border: 1px solid var(--line);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
@@ -905,7 +934,7 @@ textarea {
 .banner.cue {
   top: auto;
   bottom: 210px;
-  background: rgba(14, 17, 22, 0.85);
+  background: rgba(20, 24, 18, 0.85);
   border: 1px solid var(--warn);
   color: var(--warn);
   font-weight: 600;
@@ -929,7 +958,7 @@ textarea {
   left: 20px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(14, 17, 22, 0.8);
+  background: rgba(20, 24, 18, 0.8);
   border: 1px solid var(--line);
   font-size: 12px;
 }
@@ -937,7 +966,7 @@ textarea {
 /* ── Ride set-up ──────────────────────────────────────────── */
 .setup-backdrop {
   z-index: 2000;
-  background: rgba(8, 10, 14, 0.75) !important;
+  background: rgba(12, 15, 10, 0.75) !important;
   position: fixed;
   overflow-y: auto;
   align-items: flex-start;
@@ -1029,7 +1058,7 @@ button.small {
   stroke-dasharray: 4 3;
 }
 .chart .series.fitness {
-  stroke: #4aa3ff;
+  stroke: #9ec5a8;
 }
 .chart .series.fatigue {
   stroke: #ff9a3c;
@@ -1046,7 +1075,7 @@ button.small {
   font-size: 12px;
 }
 .legend .fitness {
-  color: #4aa3ff;
+  color: #9ec5a8;
 }
 .legend .fatigue {
   color: #ff9a3c;
@@ -1123,8 +1152,8 @@ button.small {
 }
 .wp {
   background: var(--accent);
-  color: #fff;
-  border: 2px solid #fff;
+  color: var(--accent-ink);
+  border: 2px solid var(--accent-ink);
   border-radius: 50%;
   display: flex !important;
   align-items: center;
@@ -1136,7 +1165,7 @@ button.small {
   height: 70px;
 }
 .chart.elevation path {
-  fill: rgba(255, 90, 54, 0.35);
+  fill: rgba(233, 255, 96, 0.35);
   stroke: var(--accent);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
@@ -1149,9 +1178,21 @@ button.small {
 .ok {
   color: var(--ok);
 }
+.coming-up-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 240px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(20, 24, 18, 0.72);
+}
 .coming-up {
   font-size: 12px;
-  opacity: 0.85;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .street-photo {
   margin-top: 8px;
@@ -1159,7 +1200,7 @@ button.small {
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: rgba(14, 17, 22, 0.8);
+  background: rgba(20, 24, 18, 0.8);
   position: relative;
 }
 .street-photo img {

@@ -957,8 +957,8 @@ impl Renderer {
                 let at = rel([q.x + q.heading.cos() * lane, q.ele + LAYOUT.road_lift, q.z - q.heading.sin() * lane]);
                 model(at, q.heading as f32, -(q.grade.atan()) as f32)
             };
-            // The rider's own colour, #ff5a36, in linear light.
-            slots.push(Draw { model: place(&p, 0.0), tint: [1.0, 0.102, 0.036, 1.0], flags: [1.0, 1.0, 0.0, 0.0] });
+            // The rider's own colour, #e9ff60, in linear light.
+            slots.push(Draw { model: place(&p, 0.0), tint: [0.815, 1.0, 0.117, 1.0], flags: [1.0, 1.0, 0.0, 0.0] });
             riders.push((slots.len() - 1, pose, false));
             let mut rider_tags: Vec<(String, [f64; 3])> = Vec::new();
             for (i, (id, kind, color, d, _)) in rivals.iter().enumerate() {

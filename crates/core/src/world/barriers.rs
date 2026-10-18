@@ -15,8 +15,8 @@ const HEIGHT: f64 = 1.1;
 /// How far beyond the edge of the tarmac the barriers stand.
 const SET_BACK: f64 = 0.55;
 
-/// Banner colours (sRGB), in the order of `look` 1, 2, 3, 4.
-pub const BANNER_COLOURS: [[f64; 3]; 4] = [[0.86, 0.22, 0.17], [0.13, 0.42, 0.80], [0.97, 0.75, 0.10], [0.16, 0.62, 0.38]];
+/// Banner colours (sRGB), in the order of `look` 1, 2, 3, 4: the website's lime, paper, olive and pale lime.
+pub const BANNER_COLOURS: [[f64; 3]; 4] = [[0.914, 1.0, 0.376], [0.969, 0.969, 0.937], [0.667, 0.737, 0.314], [0.855, 0.910, 0.455]];
 pub const LOOKS: usize = 1 + BANNER_COLOURS.len();
 
 fn linear(c: [f64; 3]) -> [f32; 3] {

@@ -195,7 +195,7 @@ export class World {
   private lamp = new THREE.PointLight(0xfff4e0, 0, 32, 1.6)
   private precipitation: Precipitation | null = null
   private terrain: Terrain
-  private rider = new RiderModel(0xff5a36)
+  private rider = new RiderModel(0xe9ff60)
   private others = new Map<string, Other>()
   private pos = {} as RoutePos
   private otherPos = {} as RoutePos

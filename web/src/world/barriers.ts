@@ -20,11 +20,18 @@ export function bannerTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, 512, 128)
-  ctx.fillStyle = '#6a6a6a'
-  ctx.font = 'bold 64px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
+  ctx.fillStyle = '#2e322a'
+  // The logo's V (the website's mark, drawn on a 36-unit grid), then the name.
+  ctx.save()
+  ctx.translate(20, 22)
+  ctx.scale(2.6, 2.6)
+  ctx.fill(new Path2D('M3 8h8l7 18L29 8h5L20 32h-7z'))
+  ctx.fill(new Path2D('M15 8h8l-4 9z'))
+  ctx.restore()
+  ctx.font = '800 54px Manrope, "DM Sans", -apple-system, Helvetica, Arial, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('▲ VELO POPULI', 256, 68)
+  ctx.fillText('VELO POPULI', 318, 68)
   banner = new THREE.CanvasTexture(canvas)
   banner.colorSpace = THREE.SRGBColorSpace
   banner.anisotropy = 8

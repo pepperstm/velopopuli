@@ -103,6 +103,9 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         }
         const canvas = canvasRef.current!
         const imperial = settingsRef.current.units === 'imperial'
+        // The banners on the barriers are lettered in the website's typeface; make sure it is loaded first.
+        await document.fonts.load('800 60px Manrope').catch(() => undefined)
+        if (disposed) return
         const world = new World(canvas, loaded, started.layout, started.covered, (i) => `${i} ${imperial ? 'mi' : 'km'}`, imperial ? 1609.344 : 1000, started.landmarks)
         worldRef.current = world
         const native = settingsRef.current.nativeRenderer && (await api.native.available())
@@ -270,7 +273,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const mode = settings.trainer.mode
   const standings = ready
     ? [
-        { id: 'me', name: settings.rider.name || 'You', color: '#ff5a36', delta: 0, me: true },
+        { id: 'me', name: settings.rider.name || 'You', color: '#e9ff60', delta: 0, me: true },
         ...hud.rivals.map((r) => ({ id: r.id, name: r.name, color: hex(r.color), delta: r.distance - hud.distance, me: false }))
       ].sort((a, b) => b.delta - a.delta)
     : []
@@ -294,14 +297,6 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               <span>
                 {fmtDist(hud.distance, units, 2)} / {fmtDist(route.total, units)} · {fmtDist(route.total - hud.distance, units)} to go
               </span>
-              {init.landmarks
-                .filter((m) => m.distance > hud.distance && m.distance < hud.distance + 5000)
-                .slice(0, 3)
-                .map((m, i) => (
-                  <span key={i} className="coming-up">
-                    {m.kind === 'summit' ? `⛰ ${m.name} ${m.detail}` : m.name} · {fmtDist(m.distance - hud.distance, units, 1)}
-                  </span>
-                ))}
             </div>
             <div className="hud-clock">{fmtTime(hud.elapsed)}</div>
             <div className="hud-grade" style={{ color: gradeColor(hud.grade) }}>
@@ -335,6 +330,19 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               <div className="tile-value">{hud.cadence === null ? '–' : Math.round(hud.cadence)}</div>
               <div className="tile-label">rpm</div>
             </div>
+            {/* Coming up: below the tiles, where it can't run into them. */}
+            {init.landmarks.some((m) => m.distance > hud.distance && m.distance < hud.distance + 5000) && (
+              <div className="coming-up-list">
+                {init.landmarks
+                  .filter((m) => m.distance > hud.distance && m.distance < hud.distance + 5000)
+                  .slice(0, 3)
+                  .map((m, i) => (
+                    <span key={i} className="coming-up">
+                      <b>{fmtDist(m.distance - hud.distance, units, 1)}</b> {m.kind === 'summit' ? `⛰ ${m.name} ${m.detail}` : m.name}
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
 
           {init.workout && (

@@ -38,6 +38,17 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
     if (smoke.screen === 'devices') await api.devices.demoAdd()
     setScreen({ name: smoke.screen })
   }
+  // Demo clips: window frames at 15 a second over the last `clip` seconds.
+  if (smoke.clip) {
+    const count = Math.round(smoke.clip * 15)
+    setTimeout(() => {
+      let i = 0
+      const timer = window.setInterval(() => {
+        void api.smoke.frame(i++)
+        if (i >= count) window.clearInterval(timer)
+      }, 1000 / 15)
+    }, Math.max(0, smoke.ms - smoke.clip * 1000 - 300))
+  }
   setTimeout(async () => {
     // The native renderer saves its own picture of the next frame.
     let native = ''
@@ -104,7 +115,11 @@ export function App(): React.JSX.Element | null {
       <div className="shell">
         <header className="topbar">
           <div className="brand">
-            <span className="brand-mark">▲</span> Velo Populi
+            <svg className="brand-mark" viewBox="0 0 36 36" aria-hidden="true">
+              <path d="M3 8h8l7 18L29 8h5L20 32h-7z" fill="currentColor" />
+              <path d="M15 8h8l-4 9z" fill="currentColor" />
+            </svg>
+            Velo Populi
           </div>
           <nav>
             {TABS.map((t) => (

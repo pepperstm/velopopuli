@@ -86,7 +86,10 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
     const g = layer.current
     if (!g) return
     g.clearLayers()
-    if (planned) L.polyline(planned.line, { color: '#ff5a36', weight: 5, opacity: 0.9 }).addTo(g)
+    if (planned) {
+      L.polyline(planned.line, { color: '#24271f', weight: 8, opacity: 0.85 }).addTo(g)
+      L.polyline(planned.line, { color: '#d4ee2a', weight: 5, opacity: 1 }).addTo(g)
+    }
     points.forEach((p, i) => {
       const marker = L.marker(p, {
         draggable: true,

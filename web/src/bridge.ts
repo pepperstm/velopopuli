@@ -124,7 +124,8 @@ export const api = {
     test: () => invoke<void>('smart_test')
   },
   smoke: {
-    config: () => invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null } | null>('smoke_config'),
+    config: () => invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null; clip: number | null } | null>('smoke_config'),
+    frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })
   },
   diag: {

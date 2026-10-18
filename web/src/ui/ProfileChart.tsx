@@ -78,7 +78,7 @@ export function ProfileChart({ route, distance, from = 0, to = route.total, mark
     const px = ((distance - from) / span) * w
     ctx.fillStyle = 'rgba(255,255,255,0.75)'
     ctx.fillRect(px - dpr / 2, 0, dpr, h)
-    mark(distance, '#ff5a36', 5)
+    mark(distance, '#e9ff60', 5)
   })
 
   return <canvas ref={ref} className="profile-chart" />

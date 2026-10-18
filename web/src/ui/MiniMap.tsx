@@ -16,7 +16,8 @@ export function MiniMap({ route, lat, lon }: { route: Route; lat: number; lon: n
     const line: [number, number][] = []
     const stride = Math.max(1, Math.floor(route.n / 4000))
     for (let i = 0; i < route.n; i += stride) line.push([route.lat[i], route.lon[i]])
-    L.polyline(line, { color: '#ff5a36', weight: 4, opacity: 0.9 }).addTo(m)
+    L.polyline(line, { color: '#24271f', weight: 7, opacity: 0.85 }).addTo(m)
+    L.polyline(line, { color: '#d4ee2a', weight: 4, opacity: 1 }).addTo(m)
     marker.current = L.circleMarker([route.lat[0], route.lon[0]], { radius: 7, color: '#fff', weight: 2, fillColor: '#2f7fd8', fillOpacity: 1 }).addTo(m)
     m.setView([route.lat[0], route.lon[0]], 14, { animate: false })
     map.current = m

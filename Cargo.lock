@@ -5259,6 +5259,7 @@ name = "velopopuli"
 version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
+ "block2 0.6.2",
  "btleplug",
  "bytemuck",
  "chrono",
@@ -5268,6 +5269,7 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-foundation 0.3.2",
+ "objc2-web-kit",
  "png 0.17.16",
  "pollster",
  "raw-window-handle",

@@ -14,6 +14,7 @@ mod library;
 mod secrets;
 mod session;
 mod smart;
+mod snapshot;
 mod store;
 mod strava;
 mod terrain;
@@ -155,6 +156,7 @@ fn main() {
             commands::strava_upload,
             commands::smoke_config,
             commands::smoke_done,
+            commands::smoke_frame,
             commands::log,
         ])
         .run(tauri::generate_context!())
