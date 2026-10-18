@@ -128,7 +128,8 @@ export const api = {
   },
   diag: {
     report: (note: string) => invoke<string | null>('diag_report', { note }),
-    openFolder: () => invoke<void>('diag_open_folder')
+    openFolder: () => invoke<void>('diag_open_folder'),
+    issue: (note: string) => invoke<string | null>('diag_issue', { note })
   },
   log: (message: string) => invoke<void>('log', { message })
 }

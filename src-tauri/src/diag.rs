@@ -19,7 +19,7 @@ const KEEP_LOGS: usize = 12;
 /// Raw sensor data stops being written once a log reaches this size (events carry on).
 const RAW_LIMIT: u64 = 60 * 1024 * 1024;
 /// How much log text a report includes at most.
-const REPORT_BUDGET: usize = 12 * 1024 * 1024;
+pub const REPORT_BUDGET: usize = 12 * 1024 * 1024;
 
 struct Log {
     dir: PathBuf,
@@ -119,9 +119,24 @@ fn os_version() -> String {
 
 // ── Reports ─────────────────────────────────────────────────────────────────
 
-/// Writes a report to `path`: environment, settings and devices, an automatic
-/// summary of the recent logs, then the logs themselves (newest first).
+/// Writes a report to `path` (see `build`).
 pub fn report(path: &Path, settings: &serde_json::Value, devices: &serde_json::Value, note: &str) -> Result<(), String> {
+    let report = build(settings, devices, note, REPORT_BUDGET)?;
+    fs::write(path, report.text).map_err(|e| format!("Could not write the report: {e}"))?;
+    event("app", format!("diagnostics report saved ({})", path.display()));
+    Ok(())
+}
+
+pub struct Report {
+    /// The whole report.
+    pub text: String,
+    /// Just the environment line and the automatic summary, for an issue body.
+    pub summary: String,
+}
+
+/// A report: environment, settings and devices, an automatic summary of the
+/// recent logs, then the logs themselves (newest first), within `budget` bytes of log.
+pub fn build(settings: &serde_json::Value, devices: &serde_json::Value, note: &str, budget: usize) -> Result<Report, String> {
     let log = LOG.get().ok_or("Diagnostics are not running.")?;
     if let Some(f) = log.file.lock().unwrap().as_mut() {
         let _ = f.flush();
@@ -129,7 +144,7 @@ pub fn report(path: &Path, settings: &serde_json::Value, devices: &serde_json::V
     // Logs from the last two days, newest first, within the size budget.
     let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(48 * 3600);
     let mut texts: Vec<(String, String)> = Vec::new();
-    let mut budget = REPORT_BUDGET;
+    let mut budget = budget;
     for file in logs(&log.dir) {
         if !texts.is_empty() && fs::metadata(&file).and_then(|m| m.modified()).is_ok_and(|t| t < cutoff) {
             break;
@@ -157,19 +172,18 @@ pub fn report(path: &Path, settings: &serde_json::Value, devices: &serde_json::V
     if !note.trim().is_empty() {
         let _ = writeln!(out, "== What happened (from the rider)\n{}\n", note.trim());
     }
-    let _ = writeln!(out, "== Summary (worked out from the logs below)");
+    let environment = format!("Velo Populi {} · {} {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH);
+    let mut summary = format!("{environment}\n");
     for (name, text) in &texts {
-        let _ = writeln!(out, "\n-- {name}");
-        out.push_str(&summarise(text));
+        let _ = write!(summary, "\n-- {name}\n{}", summarise(text));
     }
+    let _ = writeln!(out, "== Summary (worked out from the logs below)\n{summary}");
     let _ = writeln!(out, "\n== Devices now\n{}", serde_json::to_string_pretty(devices).unwrap_or_default());
     let _ = writeln!(out, "\n== Settings (account details removed)\n{}", serde_json::to_string_pretty(&redact(settings.clone())).unwrap_or_default());
     for (name, text) in &texts {
         let _ = writeln!(out, "\n== Log {name}\n{text}");
     }
-    fs::write(path, out).map_err(|e| format!("Could not write the report: {e}"))?;
-    event("app", format!("diagnostics report saved ({})", path.display()));
-    Ok(())
+    Ok(Report { text: out, summary })
 }
 
 fn floor(s: &str, mut i: usize) -> &str {

@@ -65,6 +65,18 @@ pub async fn diag_report(app: AppHandle, state: State<'_, AppState>, note: Strin
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
+/// Saves a report (asking where), then opens GitHub's new-issue page with the summary
+/// filled in and shows the file, ready to drag onto the page. Returns the file's path.
+#[tauri::command]
+pub async fn diag_issue(app: AppHandle, state: State<'_, AppState>, note: String) -> Res<Option<String>> {
+    let Some(path) = diag_report(app.clone(), state.clone(), note.clone()).await? else { return Ok(None) };
+    let settings = settings_json(&state);
+    let devices = serde_json::to_value(state.devices.snapshot().devices).unwrap_or(Value::Null);
+    let report = crate::diag::build(&settings, &devices, &note, 64 * 1024)?;
+    app.opener().open_url(crate::issues::issue_url(&note, &report.summary), None::<&str>).map_err(|e| e.to_string())?;
+    Ok(Some(path))
+}
+
 #[tauri::command]
 pub fn diag_open_folder(app: AppHandle) -> Res<()> {
     let dir = crate::diag::dir().ok_or("Diagnostics are not running.")?;

@@ -8,6 +8,7 @@ mod commands;
 mod devices;
 mod diag;
 mod geo;
+mod issues;
 mod group;
 mod library;
 mod secrets;
@@ -89,6 +90,7 @@ fn main() {
             commands::kv_set,
             commands::diag_report,
             commands::diag_open_folder,
+            commands::diag_issue,
             commands::kv_del,
             commands::routes_import_dialog,
             commands::routes_import_text,
