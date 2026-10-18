@@ -5,7 +5,7 @@
 use super::height::{smoothstep, BLEND, BRIDGE, TUNNEL};
 use super::mesh::TriMesh;
 use super::scenery::{runs, Deck, Overbridge};
-use super::{World, DECK_DEPTH, ROAD_LIFT, ROAD_WIDTH};
+use super::{World, DECK_DEPTH, ROAD_LIFT};
 
 /// One mesh for the whole route, like the road.
 #[derive(Default)]
@@ -33,7 +33,8 @@ const BANK: [f64; 3] = [0.36, 0.48, 0.24];
 const LAMP: [f64; 3] = [1.0, 0.90, 0.66];
 
 /// Half-width of the bridge deck, out to the slab edge.
-const DECK_HALF: f64 = ROAD_WIDTH / 2.0 + 3.0;
+/// A bridge deck reaches this far beyond the edge of the road on it.
+const DECK_BEYOND: f64 = 3.0;
 /// The tunnel bore, as (sideways offset, height above the road) from one foot of the arch to the other.
 const BORE: [(f64, f64); 7] = [(-4.7, -1.6), (-4.7, 3.4), (-3.2, 5.2), (0.0, 5.8), (3.2, 5.2), (4.7, 3.4), (4.7, -1.6)];
 /// How bright the lining is at each of those points: the lamps hang from the crown and light the walls.
@@ -91,12 +92,13 @@ impl World {
     fn bridge(&self, mesh: &mut TriMesh, from: usize, to: usize) {
         let (concrete, dark) = (rgb(CONCRETE), rgb(CONCRETE_DARK));
         for i in from..to {
-            let under = [self.beside(i, -DECK_HALF, -DECK_DEPTH), self.beside(i, DECK_HALF, -DECK_DEPTH), self.beside(i + 1, DECK_HALF, -DECK_DEPTH), self.beside(i + 1, -DECK_HALF, -DECK_DEPTH)];
+            let (h0, h1) = (self.half_width(i) + DECK_BEYOND, self.half_width(i + 1) + DECK_BEYOND);
+            let under = [self.beside(i, -h0, -DECK_DEPTH), self.beside(i, h0, -DECK_DEPTH), self.beside(i + 1, h1, -DECK_DEPTH), self.beside(i + 1, -h1, -DECK_DEPTH)];
             mesh.quad(under, [0.0, -1.0, 0.0], [dark; 4]);
             for side in [-1.0, 1.0] {
-                let at = side * (DECK_HALF - 0.25);
+                let (a0, a1) = (side * (h0 - 0.25), side * (h1 - 0.25));
                 let (tx, tz) = self.heading(i);
-                let wall = [self.beside(i, at, -0.25), self.beside(i + 1, at, -0.25), self.beside(i + 1, at, 0.85), self.beside(i, at, 0.85)];
+                let wall = [self.beside(i, a0, -0.25), self.beside(i + 1, a1, -0.25), self.beside(i + 1, a1, 0.85), self.beside(i, a0, 0.85)];
                 mesh.quad(wall, [-tz * side, 0.0, tx * side], [dark, dark, concrete, concrete]);
             }
         }

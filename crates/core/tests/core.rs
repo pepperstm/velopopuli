@@ -714,7 +714,7 @@ mod vector_tiles {
 
 mod scenery {
     use super::*;
-    use velopopuli_core::world::{barrier_model, parse_surfaces, surface_query, surface_runs, Area, AreaKind, Crossing, GridMesh, Road, RoadKind, Scenery, Surface, SurfaceWay, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL};
+    use velopopuli_core::world::{barrier_model, highway_width, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, WAY_TAGS};
 
     /// Terrain tiles at a constant height, covering the route.
     fn level_ground(route: &Route, height: f64) -> Dem {
@@ -799,14 +799,16 @@ mod scenery {
             .chain(roundabout(&route))
             .collect(),
             labels: Vec::new(),
-            surfaces: vec![
-                // Cobbles on the first 300 m of the route's own road (mapped a metre to one side),
-                // a gravel road across it at 900 m, and a short patch of concrete at 1500 m.
-                SurfaceWay { surface: Surface::Cobbles, line: geo(&route, &[(1.0, 0.0), (1.0, 300.0)]) },
-                SurfaceWay { surface: Surface::Gravel, line: geo(&route, &[(-300.0, 900.0), (300.0, 900.0)]) },
-                SurfaceWay { surface: Surface::Concrete, line: geo(&route, &[(0.0, 1500.0), (0.0, 1510.0)]) },
+            ways: vec![
+                // Cobbles on the first 300 m of the route's own road (a residential street, mapped a metre
+                // to one side), a gravel road across it at 900 m, a short patch of concrete at 1500 m,
+                // and a main road 9 m wide from 2000 to 2400 m.
+                MappedWay { highway: "residential".into(), surface: Some(Surface::Cobbles), width: None, line: geo(&route, &[(1.0, 0.0), (1.0, 300.0)]) },
+                MappedWay { highway: "unclassified".into(), surface: Some(Surface::Gravel), width: None, line: geo(&route, &[(-300.0, 900.0), (300.0, 900.0)]) },
+                MappedWay { highway: "service".into(), surface: Some(Surface::Concrete), width: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 1510.0)]) },
+                MappedWay { highway: "primary".into(), surface: None, width: Some(9.0), line: geo(&route, &[(0.0, 2000.0), (0.0, 2400.0)]) },
             ],
-            surface_tags: true,
+            way_tags: WAY_TAGS,
         };
         let dem = level_ground(&route, 100.0);
         let world = World::with_map(route.clone(), Some(dem), 0.0, Some(&scenery), &[]);
@@ -833,6 +835,33 @@ mod scenery {
     }
 
     #[test]
+    fn makes_the_road_as_wide_as_the_mapped_one() {
+        let (route, world) = world();
+        let w = &world.scene.widths;
+        assert_eq!(w.len(), route.n);
+        let at = |m: f64| w[(m / route.step) as usize];
+        // A residential street of cobbles; then the lane the tiles say it is; a 9 m main road at 2200 m.
+        assert!((at(150.0) - 5.0).abs() < 0.2, "{}", at(150.0));
+        assert!((at(400.0) - 5.5).abs() < 0.3, "{}", at(400.0));
+        assert!((at(2200.0) - 9.0).abs() < 0.2, "{}", at(2200.0));
+        // It widens gradually, never in a step.
+        assert!(w.windows(2).all(|p| (p[0] - p[1]).abs() < 0.6));
+        // The road, the barriers and the half-width all agree.
+        let i = (2200.0 / route.step) as usize;
+        assert!((world.half_width(i) - 4.5).abs() < 0.1);
+        let road = world.road();
+        let edge = road.positions[(i * ROAD_SECTION + 3) * 3] as f64;
+        assert!(((edge - route.x[i]).abs() - 4.5).abs() < 0.15, "{edge}");
+        let barrier = world.barriers().into_iter().find(|b| (b[4] - 2210.0).abs() < 1.3).unwrap();
+        assert!(((barrier[0] as f64).abs() - 5.05).abs() < 0.15, "{}", barrier[0]);
+        // Widths from tags: metres as written, else lanes, else the road class.
+        assert_eq!(tagged_width(Some("5.5 m"), Some("2")), Some(5.5));
+        assert_eq!(tagged_width(Some("abc"), Some("2")), Some(7.0));
+        assert_eq!(tagged_width(None, None), None);
+        assert_eq!(highway_width("track"), Some(3.0));
+    }
+
+    #[test]
     fn closes_the_road_with_barriers() {
         let (route, world) = world();
         let b = world.barriers();
@@ -847,7 +876,8 @@ mod scenery {
         // Standing on the shoulder, just clear of the tarmac, on both sides; some with banners.
         for s in b.iter().filter(|s| s[4] > 300.0 && s[4] < 400.0) {
             let off = (s[0] as f64).abs();
-            assert!((3.7..3.9).contains(&off), "{off}");
+            let half = world.half_width(((s[4] as f64) / route.step).round() as usize);
+            assert!((off - half - 0.55).abs() < 0.1, "{off} {half}");
         }
         assert!(b.iter().any(|s| s[0] > 0.0) && b.iter().any(|s| s[0] < 0.0));
         assert!(b.iter().any(|s| s[5] > 0.0) && b.iter().any(|s| s[5] == 0.0));
@@ -856,7 +886,6 @@ mod scenery {
         let banner = barrier_model(1);
         assert!(plain.vertices() > 100 && banner.vertices() > plain.vertices());
         assert!(banner.uvs.chunks(2).any(|uv| uv == [1.0, 1.0]));
-        let _ = route;
     }
 
     #[test]
@@ -867,13 +896,14 @@ mod scenery {
             {"type":"way","id":3,"tags":{"highway":"service","surface":"something_odd"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.0,"lon":6.001}]},
             {"type":"way","id":4,"tags":{"highway":"path","surface":"ground"},"geometry":[{"lat":45.0,"lon":6.0}]}
         ]}"#;
-        let ways = parse_surfaces(json).unwrap();
-        assert_eq!(ways.iter().map(|w| w.surface).collect::<Vec<_>>(), vec![Surface::Gravel, Surface::Cobbles]);
+        let ways = parse_ways(json).unwrap();
+        assert_eq!(ways.iter().map(|w| w.surface).collect::<Vec<_>>(), vec![Some(Surface::Gravel), Some(Surface::Cobbles), None]);
+        assert_eq!(ways[1].highway, "residential");
         assert_eq!(Surface::from_osm("concrete:plates"), Some(Surface::Concrete));
         assert_eq!(Surface::from_osm("dirt;grass"), Some(Surface::Dirt));
         let route = build_route("q", &straight(1000.0, |_| Some(100.0))).unwrap();
-        let q = surface_query(&route, 0, route.n, 12.0, 40.0);
-        assert!(q.contains("way[\"highway\"][\"surface\"](around:12,") && q.ends_with("out tags geom;"), "{q}");
+        let q = way_query(&route, 0, route.n, 12.0, 40.0);
+        assert!(q.contains("way[\"highway\"](around:12,") && q.ends_with("out tags geom;"), "{q}");
     }
 
     #[test]

@@ -298,12 +298,13 @@ impl Session {
         crate::diag::event(
             "ride",
             format!(
-                "surfaces {}",
+"surfaces {} widths {}",
                 velopopuli_core::world::surface_runs(&world.scene.surfaces)
                     .iter()
                     .map(|(a, b, s)| format!("{}:{:.0}-{:.0}m", s.name(), *a as f64 * route.step, *b as f64 * route.step))
                     .collect::<Vec<_>>()
-                    .join(" ")
+                    .join(" "),
+                world.scene.widths.iter().step_by(((250.0 / route.step) as usize).max(1)).map(|w| format!("{w:.1}")).collect::<Vec<_>>().join(",")
             ),
         );
         crate::diag::event(

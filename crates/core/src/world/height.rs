@@ -214,6 +214,23 @@ impl HeightField {
         (p.ground, p.road)
     }
 
+    /// The nearest route sample to a point, and how far away it is (within the blend radius).
+    pub fn nearest_sample(&self, x: f64, z: f64) -> Option<(f64, usize)> {
+        let (cx, cz) = (cell(x, HASH_CELL), cell(z, HASH_CELL));
+        let mut best: Option<(f64, usize)> = None;
+        for ix in cx - 2..=cx + 2 {
+            for iz in cz - 2..=cz + 2 {
+                for &i in self.grid.get(&(ix, iz)).map_or(&[][..], |v| v) {
+                    let d2 = (self.route.x[i as usize] - x).powi(2) + (self.route.z[i as usize] - z).powi(2);
+                    if d2 < BLEND * BLEND && best.is_none_or(|b| d2 < b.0) {
+                        best = Some((d2, i as usize));
+                    }
+                }
+            }
+        }
+        best.map(|(d2, i)| (d2.sqrt(), i))
+    }
+
     /// Height of the visible ground at a point (over a tunnel, the land above it), and the distance to the nearest visible road.
     pub fn surface(&self, x: f64, z: f64) -> (f64, f64) {
         let p = self.probe(x, z, 1.0);

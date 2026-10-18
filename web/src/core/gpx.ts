@@ -24,7 +24,15 @@ export interface Route {
   grade: Float64Array
   lat: Float64Array
   lon: Float64Array
+  /** Width of the road in metres, per sample (it follows the mapped road). */
+  width: Float64Array
   climbs: Climb[]
+}
+
+/** Half the road's width at `dist` metres along the route. */
+export function halfWidthAt(route: Route, dist: number): number {
+  const i = Math.max(0, Math.min(route.n - 1, Math.round(dist / route.step)))
+  return (route.width[i] ?? 6.5) / 2
 }
 
 export interface RoutePos {

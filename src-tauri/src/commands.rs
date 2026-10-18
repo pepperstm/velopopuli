@@ -244,18 +244,20 @@ pub async fn ride_start(app: AppHandle, state: State<'_, AppState>, request: Rid
     Ok(init)
 }
 
-/// The route's per-sample arrays as six consecutive f64 blocks: x, z, lat, lon, elevation, gradient.
+/// The route's per-sample arrays as seven consecutive f64 blocks: x, z, lat, lon, elevation,
+/// gradient, and the width of the road.
 #[tauri::command]
 pub fn ride_route_data(state: State<AppState>) -> Res<Response> {
     let session = state.current_session()?;
     let r = &session.world.route;
-    let mut out = Vec::with_capacity(r.n * 48);
+    let mut out = Vec::with_capacity(r.n * 56);
     for block in [&r.x, &r.z, &r.lat, &r.lon] {
         block.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     }
     for block in [&r.ele, &r.grade] {
         block.iter().for_each(|v| out.extend_from_slice(&(*v as f64).to_le_bytes()));
     }
+    (0..r.n).for_each(|i| out.extend_from_slice(&(session.world.half_width(i) * 2.0).to_le_bytes()));
     Ok(Response::new(out))
 }
 

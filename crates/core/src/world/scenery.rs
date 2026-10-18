@@ -146,12 +146,12 @@ pub struct Scenery {
     /// Place names and points of interest.
     #[serde(default)]
     pub labels: Vec<super::mvt::Label>,
-    /// Roads near the route whose surface is mapped (from the Overpass API, not the tiles).
+    /// The roads along the route with their surface and width tags (from the Overpass API, not the tiles).
     #[serde(default)]
-    pub surfaces: Vec<super::surface::SurfaceWay>,
-    /// Whether `surfaces` was asked for successfully (an empty answer is then a real one).
+    pub ways: Vec<super::surface::MappedWay>,
+    /// `WAY_TAGS` once `ways` was asked for successfully (an empty answer is then a real one); 0 if not.
     #[serde(default)]
-    pub surface_tags: bool,
+    pub way_tags: u32,
 }
 
 impl Scenery {
@@ -277,6 +277,8 @@ impl RoadStrip {
 pub(super) struct Kerb {
     /// Distance from the centre line.
     pub d: f64,
+    /// Half the route's road width there.
+    pub half: f64,
     /// The route's elevation there.
     pub level: f64,
     pub foot: (f64, f64),
@@ -334,6 +336,8 @@ pub struct Scene {
     pub kinds: Vec<u8>,
     /// What the route's road is made of, per route sample.
     pub surfaces: Vec<super::surface::Surface>,
+    /// How wide the route's road is (the carriageway, in metres), per route sample.
+    pub widths: Vec<f64>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
     pub counts: SceneryCounts,
@@ -768,11 +772,11 @@ const RAIL_HEAD: f64 = 0.16;
 /// Width of the line painted along each edge of a main road.
 const EDGE_LINE: f64 = 0.18;
 
-/// The surface at every route sample: the mapped `surface` of the road the route follows
-/// where the map has one, otherwise a guess from what kind of road it is.
-fn route_surfaces(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::SurfaceWay]) -> Vec<super::surface::Surface> {
-    use super::surface::{tidy, Surface, MIN_RUN_M};
-    let mut out: Vec<Surface> = kinds
+/// The surface and width at every route sample: from the tags of the mapped road the route
+/// follows where the map has them, otherwise guessed from what kind of road it is.
+fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay]) -> (Vec<super::surface::Surface>, Vec<f64>) {
+    use super::surface::{highway_width, smooth_widths, tidy, Surface, MAX_WIDTH, MIN_RUN_M, MIN_WIDTH};
+    let mut surfaces: Vec<Surface> = kinds
         .iter()
         .map(|k| match k {
             Some(RoadKind::Track) => Surface::Gravel,
@@ -780,9 +784,25 @@ fn route_surfaces(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], ma
             _ => Surface::Asphalt,
         })
         .collect();
-    // Mapped surfaces, on the stretches of road that run along the route (not ones crossing it).
+    let mut widths: Vec<f64> = kinds
+        .iter()
+        .map(|k| match k {
+            Some(RoadKind::Major) => 7.5,
+            Some(RoadKind::Main) => 6.8,
+            Some(RoadKind::Minor) => 5.5,
+            Some(RoadKind::Pedestrian) => 4.5,
+            Some(RoadKind::Service) => 3.5,
+            Some(RoadKind::Track) => 3.0,
+            Some(RoadKind::Footway) => 2.5,
+            Some(RoadKind::Path) => 2.0,
+            // Nothing mapped alongside: a recorded track off the map, or no map at all.
+            _ => super::ROAD_WIDTH,
+        })
+        .collect();
+    // Mapped tags, on the stretches of road that run along the route (not ones crossing it).
     let mut best = vec![f64::INFINITY; route.n];
     for way in mapped {
+        let width = way.width.or_else(|| highway_width(&way.highway));
         // Fine enough that every route sample beside the way is the nearest to some piece of it.
         let line = resample(&way.line.iter().map(|p| route.to_local(p[0], p[1])).collect::<Vec<_>>(), (route.step / 2.0).min(4.0));
         for w in line.windows(2) {
@@ -794,12 +814,21 @@ fn route_surfaces(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], ma
             let d = (route.x[i] - mid.0).hypot(route.z[i] - mid.1);
             if d < best[i] {
                 best[i] = d;
-                out[i] = way.surface;
+                if let Some(s) = way.surface {
+                    surfaces[i] = s;
+                }
+                if let Some(w) = width {
+                    widths[i] = w;
+                }
             }
         }
     }
-    tidy(&mut out, (MIN_RUN_M / route.step).ceil() as usize);
-    out
+    tidy(&mut surfaces, (MIN_RUN_M / route.step).ceil() as usize);
+    for w in &mut widths {
+        *w = w.clamp(MIN_WIDTH, MAX_WIDTH);
+    }
+    smooth_widths(&mut widths, ((40.0 / route.step).round() as usize) | 1);
+    (surfaces, widths)
 }
 
 impl Scene {
@@ -881,7 +910,7 @@ impl Scene {
                 }
             }
         }
-        scene.surfaces = route_surfaces(route, &beside, &nearest_kind, &scenery.surfaces);
+        (scene.surfaces, scene.widths) = route_road(route, &beside, &nearest_kind, &scenery.ways);
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }
@@ -1050,7 +1079,9 @@ impl Scene {
             let foot = (a.0 + dx * t, a.1 + dz * t);
             let d = (p.0 - foot.0).hypot(p.1 - foot.1);
             if best.as_ref().is_none_or(|b| d < b.d) {
-                best = Some(Kerb { d, level: route.ele[k] as f64 + (route.ele[k + 1] as f64 - route.ele[k] as f64) * t, foot, heading: (dx / len, dz / len) });
+                let width = |j: usize| self.widths.get(j).copied().unwrap_or(super::ROAD_WIDTH);
+                let half = (width(k) + (width(k + 1) - width(k)) * t) / 2.0;
+                best = Some(Kerb { d, half, level: route.ele[k] as f64 + (route.ele[k + 1] as f64 - route.ele[k] as f64) * t, foot, heading: (dx / len, dz / len) });
             }
         }
         best

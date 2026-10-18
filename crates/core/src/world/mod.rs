@@ -23,7 +23,7 @@ pub use landmarks::{landmarks, Landmark};
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
-pub use surface::{parse_surfaces, runs as surface_runs, surface_query, Surface, SurfaceWay};
+pub use surface::{highway_width, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, WAY_TAGS};
 
 use std::sync::Arc;
 
@@ -152,7 +152,7 @@ impl World {
 
     /// Adds buildings (OpenStreetMap footprints) to the landscape.
     pub fn with_buildings(mut self, footprints: &[Footprint]) -> Self {
-        self.buildings = Buildings::new(&self.route, &self.field, footprints);
+        self.buildings = Buildings::new(&self.route, &self.field, &self.scene.widths, footprints);
         self
     }
 
@@ -431,11 +431,14 @@ impl World {
     }
 
     /// The road ribbon along the whole route.
+    /// Half the route's road width at sample `i`: the road is as wide as the mapped one.
+    pub fn half_width(&self, i: usize) -> f64 {
+        self.scene.widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0
+    }
+
     pub fn road(&self) -> RoadMesh {
         let r = &self.route;
         let n = r.n;
-        let (edge, foot) = (ROAD_WIDTH / 2.0, ROAD_WIDTH / 2.0 + 2.6);
-        let offsets = [-foot - 0.4, -foot, -edge, edge, foot, foot + 0.4];
         let drops = [-0.9 - WALL_DEPTH, -0.9, 0.0, 0.0, -0.9, -0.9 - WALL_DEPTH];
         // A bridge deck has a kerb and a slab edge in place of an embankment and retaining wall.
         let deck = [-DECK_DEPTH, -0.25, 0.0, 0.0, -0.25, -DECK_DEPTH];
@@ -459,6 +462,8 @@ impl World {
                 0.0
             };
             let inside = if curvature.abs() > 1e-6 { 0.8 / curvature.abs() } else { f64::INFINITY };
+            let (edge, foot) = (self.half_width(i), self.half_width(i) + 2.6);
+            let offsets = [-foot - 0.4, -foot, -edge, edge, foot, foot + 0.4];
             for k in 0..ROAD_SECTION {
                 let offset = if offsets[k] * curvature > 0.0 { offsets[k].signum() * offsets[k].abs().min(inside) } else { offsets[k] };
                 mesh.positions.extend_from_slice(&[(r.x[i] + tz * offset) as f32, (r.ele[i] as f64 + ROAD_LIFT + if kinds[i] == BRIDGE { deck[k] } else { drops[k] }) as f32, (r.z[i] - tx * offset) as f32]);

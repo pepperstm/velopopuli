@@ -6,7 +6,7 @@
 //! every `SECTION_M` along each side; the renderers draw the ones near the rider.
 
 use super::mesh::TriMesh;
-use super::{World, OPEN, ROAD_LIFT, ROAD_WIDTH};
+use super::{World, OPEN, ROAD_LIFT};
 
 /// Length of one barrier section, and the gap left between neighbours.
 pub const SECTION_M: f64 = 2.5;
@@ -89,7 +89,6 @@ impl World {
     pub fn barriers(&self) -> Vec<[f32; 6]> {
         let r = &self.route;
         let kinds = self.field.kinds();
-        let offset = ROAD_WIDTH / 2.0 + SET_BACK;
         let mut out = Vec::new();
         let count = ((r.total - 8.0) / SECTION_M).floor().max(0.0) as usize;
         for k in 0..count {
@@ -109,6 +108,7 @@ impl World {
                 0.0
             };
             let p = r.sample_at(d);
+            let offset = self.half_width(i) + SET_BACK;
             let heading = tx.atan2(tz);
             // Banners come in runs of four sections, each run in the next colour, with plain runs between.
             let run = k / 4;

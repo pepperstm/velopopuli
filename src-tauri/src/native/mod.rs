@@ -967,6 +967,9 @@ impl Renderer {
                     continue;
                 }
                 let lane = *lanes.entry(id.clone()).or_insert_with(|| (if i % 2 == 1 { 1.0 } else { -1.0 }) * (1.3 + 0.5 * (i / 2) as f64));
+                // Kept on the road where it is narrow.
+                let room = (world.half_width(((*d / route.step) as usize).min(route.n - 1)) - 0.6).max(0.4);
+                let lane = lane.signum() * lane.abs().min(room);
                 let q = sample(&route, *d);
                 let ghost = *kind == RivalKind::Ghost;
                 let rgb = [((color >> 16) & 255) as f32 / 255.0, ((color >> 8) & 255) as f32 / 255.0, (color & 255) as f32 / 255.0].map(|c| c.powf(2.2));

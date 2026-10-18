@@ -198,7 +198,13 @@ fn chunk_of(x: f64, z: f64) -> (i32, i32) {
 impl Buildings {
     /// Places footprints in the route's local frame, dropping any that are
     /// implausible or that would stand on the road.
-    pub fn new(route: &Route, field: &HeightField, footprints: &[Footprint]) -> Self {
+    /// `widths` is the route's road width per sample (empty: the standard width throughout).
+    pub fn new(route: &Route, field: &HeightField, widths: &[f64], footprints: &[Footprint]) -> Self {
+        // Clear of the road and the barriers beside it, however wide the road is there.
+        let clear = |x: f64, z: f64| match field.nearest_sample(x, z) {
+            Some((d, i)) => d >= ROAD_CLEARANCE.max(widths.get(i).map_or(0.0, |w| w / 2.0 + 1.8)),
+            None => true,
+        };
         let mut out = Buildings::default();
         for f in footprints {
             let mut ring: Vec<(f64, f64)> = f.ring.iter().map(|p| route.to_local(p[0], p[1])).collect();
@@ -235,9 +241,9 @@ impl Buildings {
             // Corners, wall midpoints and the middle must all be clear of the road.
             let mid_clear = (0..n).all(|i| {
                 let (a, b) = (ring[i], ring[(i + 1) % n]);
-                field.surface((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0).1 >= ROAD_CLEARANCE
+                clear((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0)
             });
-            if ground.iter().any(|g| g.1 < ROAD_CLEARANCE) || !mid_clear || field.surface(centre.0, centre.1).1 < ROAD_CLEARANCE {
+            if ground.iter().any(|g| g.1 < ROAD_CLEARANCE) || !ring.iter().all(|p| clear(p.0, p.1)) || !mid_clear || !clear(centre.0, centre.1) {
                 continue;
             }
             let radius = ring.iter().map(|p| (p.0 - centre.0).hypot(p.1 - centre.1)).fold(0.0, f64::max);

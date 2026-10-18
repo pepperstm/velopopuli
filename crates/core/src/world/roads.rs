@@ -6,7 +6,7 @@
 use super::mesh::TriMesh;
 use super::height::smoothstep;
 use super::scenery::{Kerb, RoadStrip};
-use super::{CELLS, ROAD_LIFT, ROAD_WIDTH};
+use super::{CELLS, ROAD_LIFT};
 
 /// How far the surface sits above the ground. The renderer also draws roads without
 /// writing depth, in the order given, so they never fight the ground or each other.
@@ -106,7 +106,7 @@ impl Ground<'_> {
             match (self.route)(middle) {
                 Some(kerb) => {
                     // Where it runs into the route's side it is plain tarmac: the route has the lines.
-                    let overlaps = kerb.d - strip.half < ROAD_WIDTH / 2.0 && (heading.0 * kerb.heading.0 + heading.1 * kerb.heading.1).abs() >= ALONGSIDE;
+                    let overlaps = kerb.d - strip.half < kerb.half && (heading.0 * kerb.heading.0 + heading.1 * kerb.heading.1).abs() >= ALONGSIDE;
                     let plain = slice.map(|p| [p[0], p[1], BLANK, BLANK]);
                     if strip.casing && overlaps {
                         // No edge line of its own where it merges with the route.
@@ -124,7 +124,7 @@ impl Ground<'_> {
     /// Lays a piece of road that is near the route, leaving out what would lie on the route's own tarmac.
     /// `middle` is the piece's centre and `heading` its direction (zero for a round patch).
     fn lay_beside(&self, mesh: &mut TriMesh, polygon: &[Point], middle: (f64, f64), heading: (f64, f64), half: f64, kerb: &Kerb, colour: [f32; 3]) {
-        let edge = ROAD_WIDTH / 2.0;
+        let edge = kerb.half;
         // A road that runs alongside — a fork, the arc of a roundabout the route follows, the same road
         // mapped a little to one side — stops at the route's edge line. One that meets or crosses it
         // comes a little way onto the tarmac, opening a mouth in the edge line.
@@ -186,7 +186,7 @@ impl Ground<'_> {
                         let mut y = y + LIFT;
                         // At a junction the road climbs off the verge to meet the route's tarmac, a touch proud of it.
                         if let Some(kerb) = shaped.then(|| (self.route)((x, z))).flatten() {
-                            let edge = ROAD_WIDTH / 2.0;
+                            let edge = kerb.half;
                             y += (kerb.level + ROAD_LIFT + 0.03 - y).max(0.0) * (1.0 - smoothstep(edge + 0.3, edge + RAMP, kerb.d));
                         }
                         ([x, y, z], normal, [p[2] as f32, p[3] as f32])

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { Barriers } from './barriers'
 import { SURFACES, surfaceRuns, surfaceTexture } from './surfaces'
 import { api } from '../bridge'
-import { sampleAt, type Route, type RoutePos } from '../core/gpx'
+import { halfWidthAt, sampleAt, type Route, type RoutePos } from '../core/gpx'
 import type { Landmark, WorldLayout } from '../types'
 import { RiderModel } from './rider'
 import { Terrain } from './terrain'
@@ -315,11 +315,11 @@ export class World {
       )
       const holder = new THREE.Object3D()
       for (let i = 1; i <= count; i++) {
-        this.sideOfRoad(i * spacing, this.layout.roadWidth / 2 + 1.6, 1.0, holder)
+        this.sideOfRoad(i * spacing, halfWidthAt(route, i * spacing) + 1.6, 1.0, holder)
         holder.updateMatrix()
         posts.setMatrixAt(i - 1, holder.matrix)
         const sign = textSprite(kmLabel(i), 'rgba(20,24,32,0.85)')
-        this.sideOfRoad(i * spacing, this.layout.roadWidth / 2 + 1.6, 2.6, sign)
+        this.sideOfRoad(i * spacing, halfWidthAt(route, i * spacing) + 1.6, 2.6, sign)
         sign.scale.set(0.9 * sign.userData.aspect, 0.9, 1)
         this.scene.add(sign)
       }
@@ -333,11 +333,11 @@ export class World {
         `▲ Climb ${i + 1} · ${(c.length / 1000).toFixed(1)} km · ${(c.avgGrade * 100).toFixed(1)}%`,
         'rgba(200,60,40,0.92)'
       )
-      this.sideOfRoad(c.start, -this.layout.roadWidth / 2 - 2, 3.4, foot)
+      this.sideOfRoad(c.start, -halfWidthAt(route, c.start) - 2, 3.4, foot)
       foot.scale.set(1.3 * foot.userData.aspect, 1.3, 1)
       const named = this.landmarks.find((m) => m.kind === 'summit' && Math.abs(m.distance - c.end) < 1)
       const top = textSprite(`${named && !named.name.startsWith('Climb ') ? named.name : 'Summit'} · ${Math.round(route.ele[Math.round(c.end / route.step)])} m`, 'rgba(40,150,90,0.92)')
-      this.sideOfRoad(c.end, -this.layout.roadWidth / 2 - 2, 3.4, top)
+      this.sideOfRoad(c.end, -halfWidthAt(route, c.end) - 2, 3.4, top)
       top.scale.set(1.3 * top.userData.aspect, 1.3, 1)
       this.scene.add(foot, top)
     })
@@ -354,7 +354,7 @@ export class World {
     for (const m of this.landmarks) {
       if (m.kind === 'summit') continue
       const place = ['city', 'town', 'village', 'hamlet', 'suburb', 'locality'].includes(m.kind)
-      const off = (this.layout.roadWidth / 2 + (place ? 2.2 : 3.2)) * m.side
+      const off = (halfWidthAt(this.route, m.distance) + (place ? 2.2 : 3.2)) * m.side
       const sign = place ? textSprite(m.name, '#ffffff', '#1a1a1a', '#d42020') : textSprite(`${POI_ICON[m.kind] ?? '•'} ${m.name}`, 'rgba(30,70,140,0.9)')
       const height = place ? 2.3 : 2.0
       this.sideOfRoad(m.distance, off, height, sign)
@@ -378,7 +378,7 @@ export class World {
     const p = sampleAt(this.route, dist)
     const arch = new THREE.Group()
     const mat = new THREE.MeshLambertMaterial({ color })
-    const half = this.layout.roadWidth / 2 + 0.6
+    const half = halfWidthAt(this.route, dist) + 0.6
     for (const side of [-1, 1]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 5.2, 10), mat)
       post.position.set(side * half, 2.6, 0)
@@ -434,7 +434,9 @@ export class World {
       other.label.visible = visible && gap < 250 && gap > 12
       if (!visible) return
       const op = sampleAt(this.route, r.distance, this.otherPos)
-      this.place(other.model.group, op, other.lane)
+      // Kept on the road where it is narrow.
+      const room = Math.max(0.4, halfWidthAt(this.route, r.distance) - 0.6)
+      this.place(other.model.group, op, Math.sign(other.lane) * Math.min(Math.abs(other.lane), room))
       other.model.update(dt, r.speed, r.speed > 0.5 ? 85 : 0)
       other.label.position.copy(other.model.group.position)
       other.label.position.y += 2.3

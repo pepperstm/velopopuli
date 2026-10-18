@@ -1,8 +1,10 @@
-//! What the route's road is made of: tarmac, concrete, cobbles, gravel or dirt.
+//! What the route's road is like: what it is made of (tarmac, concrete, cobbles, gravel or
+//! dirt) and how wide it is.
 //!
-//! OpenStreetMap records it in each road's `surface` tag. The vector tiles leave that
-//! tag out, so it is asked of the Overpass API for the roads along the route; where no
-//! answer is to be had, it is guessed from the kind of road (a track is gravel, a path dirt).
+//! OpenStreetMap records these in each road's `highway`, `surface`, `width` and `lanes` tags.
+//! The vector tiles carry only a coarse road class, so the tags are asked of the Overpass API
+//! for the roads along the route; where no answer is to be had, both are guessed from the
+//! class (a track is gravel and narrow, a main road tarmac and wide).
 
 use serde::{Deserialize, Serialize};
 
@@ -49,19 +51,57 @@ impl Surface {
     }
 }
 
-/// A mapped road with a known surface, as `[lat, lon]` points.
+/// A mapped road near the route and what its tags say, as `[lat, lon]` points.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SurfaceWay {
-    pub surface: Surface,
+pub struct MappedWay {
+    /// The `highway` value: "primary", "residential", "track"…
+    pub highway: String,
+    #[serde(default)]
+    pub surface: Option<Surface>,
+    /// Carriageway width in metres, from `width` or else `lanes`.
+    #[serde(default)]
+    pub width: Option<f64>,
     pub line: Vec<[f64; 2]>,
 }
 
-/// The Overpass QL query for every road with a `surface` tag within `radius_m` of a stretch of the route.
-pub fn surface_query(route: &Route, from: usize, to: usize, radius_m: f64, spacing_m: f64) -> String {
+/// Version of what `MappedWay` holds; caches from older versions are fetched again.
+pub const WAY_TAGS: u32 = 2;
+
+/// Usual carriageway width in metres for an OpenStreetMap `highway` class.
+pub fn highway_width(highway: &str) -> Option<f64> {
+    Some(match highway {
+        "motorway" | "trunk" => 7.5,
+        "primary" => 7.0,
+        "secondary" => 6.5,
+        "tertiary" => 6.0,
+        "motorway_link" | "trunk_link" | "primary_link" | "secondary_link" | "tertiary_link" => 4.5,
+        "unclassified" | "residential" | "busway" => 5.0,
+        "living_street" | "pedestrian" => 4.5,
+        "service" => 3.5,
+        "track" => 3.0,
+        "cycleway" => 2.5,
+        "path" | "footway" | "bridleway" | "steps" => 2.0,
+        _ => return None,
+    })
+}
+
+/// Width in metres from a `width` tag ("5", "5.5 m", "6m") or, failing that, a `lanes` tag.
+pub fn tagged_width(width: Option<&str>, lanes: Option<&str>) -> Option<f64> {
+    let metres = width.and_then(|w| w.trim().trim_end_matches('m').trim().replace(',', ".").parse::<f64>().ok()).filter(|w| (1.0..40.0).contains(w));
+    let from_lanes = lanes.and_then(|l| l.trim().parse::<f64>().ok()).filter(|l| (1.0..=8.0).contains(l)).map(|l| l * 3.25 + 0.5);
+    metres.or(from_lanes)
+}
+
+/// The narrowest and widest the route's road is drawn, whatever the map says.
+pub const MIN_WIDTH: f64 = 2.4;
+pub const MAX_WIDTH: f64 = 11.0;
+
+/// The Overpass QL query for every road within `radius_m` of a stretch of the route.
+pub fn way_query(route: &Route, from: usize, to: usize, radius_m: f64, spacing_m: f64) -> String {
     let stride = ((spacing_m / route.step).round() as usize).max(1);
     let mut line: Vec<String> = (from..to).step_by(stride).map(|i| format!("{:.5},{:.5}", route.lat[i], route.lon[i])).collect();
     line.push(format!("{:.5},{:.5}", route.lat[to - 1], route.lon[to - 1]));
-    format!("[out:json][timeout:25];way[\"highway\"][\"surface\"](around:{radius_m:.0},{});out tags geom;", line.join(","))
+    format!("[out:json][timeout:25];way[\"highway\"](around:{radius_m:.0},{});out tags geom;", line.join(","))
 }
 
 #[derive(Deserialize)]
@@ -83,15 +123,48 @@ struct Point {
     lon: f64,
 }
 
-/// Roads with a known surface from an Overpass reply produced with `out tags geom`.
-pub fn parse_surfaces(json: &str) -> Result<Vec<SurfaceWay>, String> {
+/// Roads and their tags from an Overpass reply produced with `out tags geom`.
+pub fn parse_ways(json: &str) -> Result<Vec<MappedWay>, String> {
     let reply: Reply = serde_json::from_str(json).map_err(|e| format!("Unexpected reply from the OpenStreetMap server: {e}"))?;
     Ok(reply
         .elements
         .into_iter()
         .filter(|e| e.geometry.len() >= 2)
-        .filter_map(|e| Some(SurfaceWay { surface: Surface::from_osm(e.tags.get("surface")?)?, line: e.geometry.iter().map(|p| [p.lat, p.lon]).collect() }))
+        .filter_map(|e| {
+            let tag = |k: &str| e.tags.get(k).map(String::as_str);
+            Some(MappedWay {
+                highway: tag("highway")?.to_string(),
+                surface: tag("surface").and_then(Surface::from_osm),
+                width: tagged_width(tag("width").or(tag("est_width")), tag("lanes")),
+                line: e.geometry.iter().map(|p| [p.lat, p.lon]).collect(),
+            })
+        })
         .collect())
+}
+
+/// Evens out a width per sample: a median over `window` samples drops stray values, then a
+/// running mean over the same span tapers the changes from one width to the next.
+pub fn smooth_widths(widths: &mut [f64], window: usize) {
+    let n = widths.len();
+    let half = window / 2;
+    if n == 0 || half == 0 {
+        return;
+    }
+    let median: Vec<f64> = (0..n)
+        .map(|i| {
+            let mut w: Vec<f64> = widths[i.saturating_sub(half)..(i + half + 1).min(n)].to_vec();
+            w.sort_by(f64::total_cmp);
+            w[w.len() / 2]
+        })
+        .collect();
+    let mut sum = vec![0.0; n + 1];
+    for i in 0..n {
+        sum[i + 1] = sum[i] + median[i];
+    }
+    for (i, w) in widths.iter_mut().enumerate() {
+        let (a, b) = (i.saturating_sub(half), (i + half + 1).min(n));
+        *w = (sum[b] - sum[a]) / (b - a) as f64;
+    }
 }
 
 /// Stretches shorter than this are taken to be mapping noise (a patch at a junction,

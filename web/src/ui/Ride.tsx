@@ -98,6 +98,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           lon: block(3),
           ele: block(4),
           grade: block(5),
+          width: data.byteLength >= n * 56 ? block(6) : new Float64Array(n).fill(6.5),
           climbs: started.climbs
         }
         const canvas = canvasRef.current!
