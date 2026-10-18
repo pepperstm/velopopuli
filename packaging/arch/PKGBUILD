@@ -17,6 +17,7 @@ source=("VeloPopuli_${pkgver}_amd64.deb::https://github.com/pepperstm/velopopuli
 # Filled in for each release by the build (updpkgsums); SKIP here so the template builds.
 sha256sums=('SKIP'
             'SKIP')
+options=('!debug')
 noextract=("VeloPopuli_${pkgver}_amd64.deb")
 
 package() {

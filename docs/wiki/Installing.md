@@ -1,6 +1,6 @@
 # Installing
 
-Installers for every platform are built automatically on each change: open the repository's [Actions tab](https://github.com/pepperstm/velopopuli/actions), pick the latest green run and download the artifact for your system. (Proper releases with download links on [velopopuli.com](https://velopopuli.com) are coming.)
+Download the installer for your system from the [latest release](https://github.com/pepperstm/velopopuli/releases). (Every change is also built automatically — the newest builds are under the repository's [Actions tab](https://github.com/pepperstm/velopopuli/actions).)
 
 ## macOS
 
@@ -18,7 +18,10 @@ For an ANT+ stick, Windows needs the generic WinUSB driver — see [[Connecting 
 
 ## Linux
 
-Install the `.deb` (Debian, Ubuntu, Mint…) or run the `.AppImage`. Bluetooth needs BlueZ running. The `.deb` installs the rule that lets you use an ANT+ stick without root; with the AppImage, add it yourself (see [[Connecting your trainer]]).
+- **Ubuntu, Debian, Mint, Pop!_OS…:** `sudo apt install ./VeloPopuli_<version>_amd64.deb`
+- **Arch, Manjaro, EndeavourOS…:** `sudo pacman -U velopopuli-bin-<version>-x86_64.pkg.tar.zst` (the `PKGBUILD` is attached to the release too)
+- **Anything else:** make the `.AppImage` executable and run it.
+ Bluetooth needs BlueZ running. The `.deb` installs the rule that lets you use an ANT+ stick without root; with the AppImage, add it yourself (see [[Connecting your trainer]]).
 
 > Windows and Linux builds are produced and tested automatically, but have had little real-world use yet. Reports are very welcome — see [[Reporting problems]].
 

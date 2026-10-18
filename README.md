@@ -111,7 +111,7 @@ Be aware of what has and has not been proven:
 
 ## Installing on a Mac
 
-Download `VeloPopuli_<version>_universal.dmg` (from the latest run on the repo's Actions tab, or build it with `npm run build:mac`), open it and drag **VeloPopuli** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
+Download `VeloPopuli_<version>_universal.dmg` from the [latest release](https://github.com/pepperstm/velopopuli/releases) (or build it with `npm run build:mac`), open it and drag **VeloPopuli** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
 
 The app isn't notarised by Apple (that needs a paid developer account), so the first time you open it macOS will refuse. Either:
 
@@ -218,6 +218,8 @@ The logs themselves live in the app's data folder under `logs/` (**Settings → 
 ## Documentation
 
 Guides for riders and developers are in the [wiki](https://github.com/pepperstm/velopopuli/wiki) (also in [`docs/wiki/`](docs/wiki)).
+
+**Want to help or take something on?** Start with [HANDOFF.md](HANDOFF.md): where the project stands, how it's built and tested, how releases work, what's next and why things are the way they are.
 
 ## Data and credits
 

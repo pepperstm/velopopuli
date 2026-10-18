@@ -25,6 +25,7 @@ VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open
 ## Help and contributing
 
 - [[Reporting problems]] — the diagnostics report and how to send it
+- [[Contributing]] — how to help, and the full project handoff notes
 - [[Building from source]] — developing, testing and the automated checks
 - [[Architecture]] — how the code is organised
 - [[FAQ]]

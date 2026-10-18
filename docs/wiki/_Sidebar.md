@@ -19,6 +19,7 @@
 - [[FAQ]]
 
 **Developers**
+- [[Contributing]]
 - [[Building from source]]
 - [[Architecture]]
 
