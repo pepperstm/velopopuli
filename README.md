@@ -105,7 +105,7 @@ Be aware of what has and has not been proven:
 | OpenStreetMap buildings | Verified against the live services on two Alpine routes and one across a city (about 5,900 buildings), through both data sources. Very long routes have not been tried. |
 | The surrounding road network | Verified against the live map tiles on the same three routes, from screenshots of the automated run: city streets, footways and tram lines, village junctions, forest tracks, and a suburb full of roundabouts and divided roads. Frame rate with a whole city's streets in view has not been measured (about 1.3 million extra vertices in the centre of Grenoble). |
 | Forests, water, bridges, tunnels, overpasses | Verified against the live map tiles on the same three routes: a valley town with a river, a reservoir road with a 1 km tunnel, and a city crossed by motorway and railway viaducts. Checked from screenshots of the automated run, not from a long ride. |
-| Bluetooth and ANT+ with **real hardware** | **Not yet tested.** Written to the published specifications, but no trainer, sensor or ANT+ stick has been connected to it — not even a scan has been run. Expect to find bugs; please report them with your device model. |
+| Bluetooth and ANT+ with **real hardware** | **Testing has begun.** The first real trainer (a Tacx Vortex Smart over Bluetooth) connected but dropped out and showed no power; a diagnostics log and report were added to track it down. Expect to find bugs; please send a report (see *Reporting problems*) with your device model. |
 | Strava connect and upload | **Not yet tested against the live API** (needs a personal API key). |
 | Windows and Linux | **Built** (installers: `.msi`/`.exe`, `.deb`/`.AppImage`) by GitHub Actions on every push, which also runs the tests on Linux. **Not yet run** on either. |
 
@@ -214,6 +214,10 @@ Group rides already go through a small relay anyone can run (`crates/relay`; CI 
 Something not working with your trainer or sensors? After the ride, press **Report a problem…** on the ride summary (or **Devices → Trouble connecting?**, or **Settings → Diagnostics**), say what happened, and save the report. It is one text file covering the last couple of days: every connection and drop-out, the raw data each sensor sent, what was sent to the trainer, and a ride line every second, with a summary at the top (drop-outs per device, longest silence, seconds pedalled with no power reading). It contains no account details, tokens or locations. **Report on GitHub…** saves the file, opens this project's new-issue page with the summary filled in and shows the file, so you just drag it onto the page and press *Create*. Mention your trainer model and how it was connected (Bluetooth or ANT+). Issues are public, so only send what you're happy to share.
 
 The logs themselves live in the app's data folder under `logs/` (**Settings → Diagnostics → Open logs folder**); the last 12 runs are kept.
+
+## Documentation
+
+Guides for riders and developers are in the [wiki](https://github.com/pepperstm/velopopuli/wiki) (also in [`docs/wiki/`](docs/wiki)).
 
 ## Data and credits
 
