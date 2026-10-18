@@ -41,7 +41,7 @@ pub fn init(data_dir: &Path) {
     let name = format!("diagnostics-{}.log", chrono::Local::now().format("%Y%m%d-%H%M%S"));
     let file = File::create(dir.join(name)).ok().map(BufWriter::new);
     if LOG.set(Log { dir, file: Mutex::new(file) }).is_ok() {
-        event("app", format!("Velo Populi {} on {} {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH));
+        event("app", format!("VeloPopuli {} on {} {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH));
     }
 }
 
@@ -166,13 +166,13 @@ pub fn build(settings: &serde_json::Value, devices: &serde_json::Value, note: &s
     }
 
     let mut out = String::new();
-    let _ = writeln!(out, "VELO POPULI DIAGNOSTICS REPORT");
-    let _ = writeln!(out, "Created {} · Velo Populi {} · {} {} ({})", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH);
+    let _ = writeln!(out, "VELOPOPULI DIAGNOSTICS REPORT");
+    let _ = writeln!(out, "Created {} · VeloPopuli {} · {} {} ({})", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH);
     let _ = writeln!(out, "Contains device names and the data they sent, ride numbers and settings. No account details, tokens or locations.\n");
     if !note.trim().is_empty() {
         let _ = writeln!(out, "== What happened (from the rider)\n{}\n", note.trim());
     }
-    let environment = format!("Velo Populi {} · {} {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH);
+    let environment = format!("VeloPopuli {} · {} {} ({})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH);
     let mut summary = format!("{environment}\n");
     for (name, text) in &texts {
         let _ = write!(summary, "\n-- {name}\n{}", summarise(text));

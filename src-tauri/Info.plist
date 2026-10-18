@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Velo Populi uses Bluetooth to connect to your trainer, power meter and heart-rate sensors.</string>
+  <string>VeloPopuli uses Bluetooth to connect to your trainer, power meter and heart-rate sensors.</string>
 </dict>
 </plist>

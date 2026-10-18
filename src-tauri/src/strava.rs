@@ -96,7 +96,7 @@ async fn await_callback(listener: TcpListener, state: &str) -> Result<String, St
         let code = param("code").filter(|_| param("state").as_deref() == Some(state));
         let granted = code.is_some() && param("scope").unwrap_or_default().contains("activity:write");
         let (title, detail) = if granted {
-            ("Velo Populi is connected to Strava", "You can close this tab.")
+            ("VeloPopuli is connected to Strava", "You can close this tab.")
         } else if code.is_some() {
             ("Strava authorization failed", "The \u{201c}Upload your activities\u{201d} permission is required.")
         } else {
@@ -210,7 +210,7 @@ async fn get_json(http: &reqwest::Client, token: &str, url: &str) -> Result<serd
     let json: serde_json::Value = res.json().await.unwrap_or_default();
     match status.as_u16() {
         200..=299 => Ok(json),
-        401 | 403 => Err("Strava refused: reconnect Strava in Settings so Velo Populi may read your activities and segments.".into()),
+        401 | 403 => Err("Strava refused: reconnect Strava in Settings so VeloPopuli may read your activities and segments.".into()),
         429 => Err("Strava's rate limit was reached — try again in 15 minutes.".into()),
         code => Err(format!("Strava request failed ({code}): {}", json["message"].as_str().unwrap_or("unknown error"))),
     }

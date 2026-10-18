@@ -1,5 +1,5 @@
 //! Prints a summary of a FIT file using an independent decoder — handy for
-//! checking what Velo Populi recorded.
+//! checking what VeloPopuli recorded.
 //!
 //!     cargo run -p velopopuli-core --example fitinfo -- path/to/ride.fit
 

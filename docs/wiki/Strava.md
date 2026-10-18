@@ -4,7 +4,7 @@ Strava gives every app its own key, and an open-source app can't ship a secret, 
 
 1. Go to <https://www.strava.com/settings/api> and create an application (any name and website).
 2. Set **Authorization Callback Domain** to `localhost`.
-3. In Velo Populi → **Settings → Strava**, paste the Client ID and Client Secret and press **Connect**, then approve in the browser.
+3. In VeloPopuli → **Settings → Strava**, paste the Client ID and Client Secret and press **Connect**, then approve in the browser.
 
 Then:
 

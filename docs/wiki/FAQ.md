@@ -7,7 +7,7 @@ Yes — free to use, open source (MIT), no subscription, no account.
 Bluetooth FTMS trainers (most made since about 2018), Tacx trainers using FE-C over Bluetooth, and any ANT+ FE-C trainer through a USB stick. Power meters, heart-rate straps and speed/cadence sensors too. Real-world testing is just beginning — see [[Connecting your trainer]].
 
 **Do I need a smart trainer?**
-No. With a power meter you ride normally (the trainer just doesn't change resistance). With only a speed sensor on a basic trainer, Velo Populi can estimate power. With nothing at all, try the demo rider.
+No. With a power meter you ride normally (the trainer just doesn't change resistance). With only a speed sensor on a basic trainer, VeloPopuli can estimate power. With nothing at all, try the demo rider.
 
 **Why is my speed different from my trainer's display?**
 Your speed comes from your power, weight and the virtual road, as it would outdoors — not from the flywheel.

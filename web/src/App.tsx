@@ -119,7 +119,9 @@ export function App(): React.JSX.Element | null {
               <path d="M3 8h8l7 18L29 8h5L20 32h-7z" fill="currentColor" />
               <path d="M15 8h8l-4 9z" fill="currentColor" />
             </svg>
-            Velo Populi
+            <span>
+              velo<span className="brand-populi">populi</span>
+            </span>
           </div>
           <nav>
             {TABS.map((t) => (

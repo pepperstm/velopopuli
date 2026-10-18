@@ -1,4 +1,4 @@
-//! Velo Populi group-ride relay.
+//! VeloPopuli group-ride relay.
 //!
 //!     velopopuli-relay [address]      (default 0.0.0.0:47800)
 
@@ -6,6 +6,6 @@
 async fn main() -> std::io::Result<()> {
     let addr = std::env::args().nth(1).unwrap_or_else(|| "0.0.0.0:47800".into());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    eprintln!("Velo Populi relay listening on ws://{addr}");
+    eprintln!("VeloPopuli relay listening on ws://{addr}");
     velopopuli_relay::serve(listener).await
 }

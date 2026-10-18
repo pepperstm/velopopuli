@@ -1,6 +1,6 @@
 # Fan and lights
 
-Velo Populi can drive a fan that speeds up as you go faster (or work harder), and a light coloured by your power zone. **Settings → Fan & lights**:
+VeloPopuli can drive a fan that speeds up as you go faster (or work harder), and a light coloured by your power zone. **Settings → Fan & lights**:
 
 | Choice | What you enter |
 |---|---|

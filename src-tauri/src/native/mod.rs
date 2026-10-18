@@ -548,7 +548,7 @@ impl Renderer {
             .request_adapter(&wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, compatible_surface: Some(&surface), force_fallback_adapter: false })
             .await
             .map_err(|e| e.to_string())?;
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor { label: Some("Velo Populi"), ..Default::default() }).await.map_err(|e| e.to_string())?;
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor { label: Some("VeloPopuli"), ..Default::default() }).await.map_err(|e| e.to_string())?;
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats.iter().copied().find(|f| f.is_srgb()).unwrap_or(caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {

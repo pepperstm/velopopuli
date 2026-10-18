@@ -20,8 +20,8 @@ export function StravaUpload({ ride, auto }: { ride: RideSummary; auto?: boolean
       const id = await api.strava.upload(
         ride.id,
         ride.filePath,
-        `${ride.routeName} — Velo Populi`,
-        `Virtual ride of ${ride.routeName}${ride.completed ? '' : ' (partial)'} on Velo Populi.`
+        `${ride.routeName} — VeloPopuli`,
+        `Virtual ride of ${ride.routeName}${ride.completed ? '' : ' (partial)'} on VeloPopuli.`
       )
       setActivityId(id)
       setState('idle')

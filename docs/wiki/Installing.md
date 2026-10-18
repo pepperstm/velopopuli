@@ -4,11 +4,11 @@ Installers for every platform are built automatically on each change: open the r
 
 ## macOS
 
-1. Open `Velo Populi_<version>_universal.dmg` and drag **Velo Populi** into **Applications**. It runs on Apple Silicon and Intel Macs, macOS 10.15 or later.
+1. Open `VeloPopuli_<version>_universal.dmg` and drag **VeloPopuli** into **Applications**. It runs on Apple Silicon and Intel Macs, macOS 10.15 or later.
 2. The app isn't notarised by Apple yet (that needs a paid developer account), so the first time you open it macOS refuses. Either:
-   - open **System Settings → Privacy & Security**, scroll to *"Velo Populi" was blocked* and click **Open Anyway**, or
-   - run `xattr -dr com.apple.quarantine "/Applications/Velo Populi.app"` once in Terminal.
-3. The first time you search for a Bluetooth sensor, macOS asks to let Velo Populi use Bluetooth — allow it.
+   - open **System Settings → Privacy & Security**, scroll to *"VeloPopuli" was blocked* and click **Open Anyway**, or
+   - run `xattr -dr com.apple.quarantine /Applications/VeloPopuli.app` once in Terminal.
+3. The first time you search for a Bluetooth sensor, macOS asks to let VeloPopuli use Bluetooth — allow it.
 
 ## Windows
 

@@ -31,7 +31,7 @@ export function bannerTexture(): THREE.CanvasTexture {
   ctx.font = '800 54px Manrope, "DM Sans", -apple-system, Helvetica, Arial, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('VELO POPULI', 318, 68)
+  ctx.fillText('VELOPOPULI', 318, 68)
   banner = new THREE.CanvasTexture(canvas)
   banner.colorSpace = THREE.SRGBColorSpace
   banner.anisotropy = 8

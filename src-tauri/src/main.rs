@@ -160,5 +160,5 @@ fn main() {
             commands::log,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Velo Populi");
+        .expect("error while running VeloPopuli");
 }

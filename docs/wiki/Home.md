@@ -1,10 +1,10 @@
-# Velo Populi
+# VeloPopuli
 
 *The people's indoor ride: open source, built by riders, for riders.* — [velopopuli.com](https://velopopuli.com)
 
-![Climbing Alpe d'Huez in Velo Populi](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/hero.gif)
+![Climbing Alpe d'Huez in VeloPopuli](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/hero.gif)
 
-Velo Populi turns any GPX route into a 3D world built from OpenStreetMap and open elevation data, drives your smart trainer from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, workouts and a season goal. It's free, open source (MIT) and runs on Windows, macOS and Linux.
+VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open elevation data, drives your smart trainer from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, workouts and a season goal. It's free, open source (MIT) and runs on Windows, macOS and Linux.
 
 ## Start here
 
@@ -29,4 +29,4 @@ Velo Populi turns any GPX route into a 3D world built from OpenStreetMap and ope
 - [[Architecture]] — how the code is organised
 - [[FAQ]]
 
-> **Status:** Velo Populi is young. The 3D world, physics, workouts and progress tracking are tested; real trainers and sensors are only now being tried. If something doesn't work with your hardware, a [[diagnostics report|Reporting problems]] is the quickest way to get it fixed.
+> **Status:** VeloPopuli is young. The 3D world, physics, workouts and progress tracking are tested; real trainers and sensors are only now being tried. If something doesn't work with your hardware, a [[diagnostics report|Reporting problems]] is the quickest way to get it fixed.

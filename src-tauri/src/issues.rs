@@ -33,7 +33,7 @@ fn body(note: &str, summary: &str) -> String {
     }
     b.push_str(&s);
     b.push_str("\n```\n\n");
-    b.push_str(&format!("_Sent from Velo Populi {} with the diagnostics reporter._\n", env!("CARGO_PKG_VERSION")));
+    b.push_str(&format!("_Sent from VeloPopuli {} with the diagnostics reporter._\n", env!("CARGO_PKG_VERSION")));
     b
 }
 

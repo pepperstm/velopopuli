@@ -1,10 +1,10 @@
-# Velo Populi
+# VeloPopuli
 
 *The people's indoor ride: open source, built by riders, for riders.* — **[velopopuli.com](https://velopopuli.com)**
 
-<p align="center"><img src="docs/images/hero.gif" alt="Climbing Alpe d'Huez on a closed road lined with Velo Populi barriers, with power, speed, heart rate and cadence on the HUD" width="680"></p>
+<p align="center"><img src="docs/images/hero.gif" alt="Climbing Alpe d'Huez on a closed road lined with VeloPopuli barriers, with power, speed, heart rate and cadence on the HUD" width="680"></p>
 
-Ride any GPX route on your indoor trainer. Velo Populi turns a route file into a 3D world, drives your smart trainer's resistance from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, XP and badges.
+Ride any GPX route on your indoor trainer. VeloPopuli turns a route file into a 3D world, drives your smart trainer's resistance from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, XP and badges.
 
 Open source (MIT) for **Windows, macOS and Linux**. Written in **Rust**, with a thin web layer for drawing. Not affiliated with icTrainer or any other commercial product.
 
@@ -111,14 +111,14 @@ Be aware of what has and has not been proven:
 
 ## Installing on a Mac
 
-Download `Velo Populi_<version>_universal.dmg` (from the latest run on the repo's Actions tab, or build it with `npm run build:mac`), open it and drag **Velo Populi** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
+Download `VeloPopuli_<version>_universal.dmg` (from the latest run on the repo's Actions tab, or build it with `npm run build:mac`), open it and drag **VeloPopuli** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
 
 The app isn't notarised by Apple (that needs a paid developer account), so the first time you open it macOS will refuse. Either:
 
-- open **System Settings → Privacy & Security**, scroll down to *"Velo Populi" was blocked* and click **Open Anyway**, or
-- run `xattr -dr com.apple.quarantine "/Applications/Velo Populi.app"` once in Terminal.
+- open **System Settings → Privacy & Security**, scroll down to *"VeloPopuli" was blocked* and click **Open Anyway**, or
+- run `xattr -dr com.apple.quarantine /Applications/VeloPopuli.app` once in Terminal.
 
-On first connecting to a sensor macOS asks to let Velo Populi use Bluetooth — allow it.
+On first connecting to a sensor macOS asks to let VeloPopuli use Bluetooth — allow it.
 
 ## Getting started
 
@@ -158,7 +158,7 @@ To inspect a recorded ride: `cargo run -p velopopuli-core --example fitinfo -- p
 
 ### ANT+
 
-Plug in an ANT+ USB stick (Garmin/Dynastream ANTUSB2 or ANTUSB-m) and press **Devices → Start ANT+ search**. Velo Populi listens for one device of each kind — trainer (FE-C), power meter, heart rate, speed, cadence, speed+cadence — and adds each as it is heard.
+Plug in an ANT+ USB stick (Garmin/Dynastream ANTUSB2 or ANTUSB-m) and press **Devices → Start ANT+ search**. VeloPopuli listens for one device of each kind — trainer (FE-C), power meter, heart rate, speed, cadence, speed+cadence — and adds each as it is heard.
 
 The stick is driven directly through libusb, with no vendor SDK:
 
@@ -174,7 +174,7 @@ Strava issues API keys per application, and a secret can't be shipped inside an 
 
 1. Go to <https://www.strava.com/settings/api> and create an application (any name/website).
 2. Set **Authorization Callback Domain** to `localhost`.
-3. In Velo Populi → **Settings → Strava**, paste the Client ID and Client Secret and press **Connect**.
+3. In VeloPopuli → **Settings → Strava**, paste the Client ID and Client Secret and press **Connect**.
 
 Your browser opens for approval. The key and tokens are stored in the system keychain on macOS and Windows; on Linux they are kept in a file in the app's data folder readable only by your user. Rides upload as Virtual Rides with the route map.
 

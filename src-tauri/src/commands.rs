@@ -153,7 +153,7 @@ pub async fn choose_dir(app: AppHandle) -> Res<Option<String>> {
 #[tauri::command]
 pub fn reveal_file(app: AppHandle, state: State<AppState>, path: String) -> Res<()> {
     if !state.store.owns_activity(Path::new(&path)) {
-        return Err("Not a Velo Populi activity file.".into());
+        return Err("Not a VeloPopuli activity file.".into());
     }
     app.opener().reveal_item_in_dir(path).map_err(|e| e.to_string())
 }
@@ -450,7 +450,7 @@ pub async fn strava_upload(state: State<'_, AppState>, ride_id: String, file_pat
     // Only files this app wrote are eligible — the UI can't use this to send arbitrary paths.
     let path = PathBuf::from(&file_path);
     if !state.store.owns_activity(&path) {
-        return Err("Not a Velo Populi activity file.".into());
+        return Err("Not a VeloPopuli activity file.".into());
     }
     let activity_id = strava::upload(state.store.dir(), &state.http, &path, &name, &description).await?;
     // Remember the link so the ride isn't uploaded twice.

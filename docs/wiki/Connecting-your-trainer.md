@@ -2,7 +2,7 @@
 
 ![The Devices page](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-devices.jpg)
 
-Open **Devices**. Velo Populi talks to trainers and sensors directly — over your computer's Bluetooth, or over an ANT+ USB stick — with no manufacturer software in between.
+Open **Devices**. VeloPopuli talks to trainers and sensors directly — over your computer's Bluetooth, or over an ANT+ USB stick — with no manufacturer software in between.
 
 ## Before you start
 
@@ -14,7 +14,7 @@ Open **Devices**. Velo Populi talks to trainers and sensors directly — over yo
 
 **Devices → Add Bluetooth device…** searches and lists what it hears; click one to connect.
 
-| Kind of device | How Velo Populi talks to it |
+| Kind of device | How VeloPopuli talks to it |
 |---|---|
 | Smart trainers made since about 2018 (Wahoo, Elite, Saris, Zwift, JetBlack and most others) | Bluetooth **FTMS**: gradient simulation and ERG |
 | Tacx smart trainers (Neo, Flux, Vortex, Bushido, Genius…) | **FE-C over Bluetooth** (Tacx's own channel) when the trainer has no FTMS |

@@ -164,12 +164,15 @@ textarea:focus {
   border-bottom: 1px solid var(--line);
 }
 .brand {
-  font-weight: 700;
-  font-size: 17px;
-  letter-spacing: 0.2px;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.8px;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.brand-populi {
+  font-weight: 500;
 }
 .brand-mark {
   width: 22px;

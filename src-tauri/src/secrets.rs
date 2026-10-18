@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+/// The keychain entry's name. Kept as first released (the app is now written "VeloPopuli")
+/// so that saved Strava and Home Assistant tokens are still found.
 const SERVICE: &str = "Velo Populi";
 
 pub fn load(dir: &Path) -> Option<String> {
