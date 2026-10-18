@@ -714,7 +714,7 @@ mod vector_tiles {
 
 mod scenery {
     use super::*;
-    use velopopuli_core::world::{barrier_model, highway_width, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, WAY_TAGS};
+    use velopopuli_core::world::{barrier_model, highway_marked, highway_width, UNMARKED, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, WAY_TAGS};
 
     /// Terrain tiles at a constant height, covering the route.
     fn level_ground(route: &Route, height: f64) -> Dem {
@@ -831,7 +831,7 @@ mod scenery {
         let runs = surface_runs(s);
         assert_eq!(runs.first().map(|r| (r.0, r.2)), Some((0, Surface::Cobbles)));
         assert_eq!(runs.last().map(|r| (r.1, r.2)), Some((route.n, Surface::Asphalt)));
-        assert_eq!(world.road().surfaces[(100.0 / route.step) as usize], Surface::Cobbles as u8);
+        assert_eq!(world.road().looks[(100.0 / route.step) as usize], Surface::Cobbles as u8);
     }
 
     #[test]
@@ -854,6 +854,11 @@ mod scenery {
         assert!(((edge - route.x[i]).abs() - 4.5).abs() < 0.15, "{edge}");
         let barrier = world.barriers().into_iter().find(|b| (b[4] - 2210.0).abs() < 1.3).unwrap();
         assert!(((barrier[0] as f64).abs() - 5.05).abs() < 0.15, "{}", barrier[0]);
+        // Centre lines on main roads only: none on the lane at 400 m, one on the main road at 2200 m.
+        let looks = road.looks;
+        assert_eq!(looks[(400.0 / route.step) as usize], UNMARKED);
+        assert_eq!(looks[(2200.0 / route.step) as usize], Surface::Asphalt as u8);
+        assert!(highway_marked("secondary") && highway_marked("primary_link") && !highway_marked("residential"));
         // Widths from tags: metres as written, else lanes, else the road class.
         assert_eq!(tagged_width(Some("5.5 m"), Some("2")), Some(5.5));
         assert_eq!(tagged_width(Some("abc"), Some("2")), Some(7.0));

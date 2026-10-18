@@ -20,7 +20,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use wgpu::util::DeviceExt;
 use velopopuli_core::ride::{RideEngine, RivalKind};
-use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, LAYOUT};
+use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, LAYOUT, UNMARKED};
 
 use host::HostView;
 
@@ -1331,17 +1331,17 @@ impl SceneMeshes {
                 idx.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
             }
         }
-        let surfaces: Vec<Surface> = road.surfaces.iter().map(|&s| Surface::ALL.get(s as usize).copied().unwrap_or_default()).collect();
         let per_sample = ((section - 1) * 6) as u32;
-        let road_runs = surface_runs(&surfaces)
+        let road_runs = surface_runs(&road.looks)
             .into_iter()
-            .map(|(from, to, s)| {
-                let texture = match s {
-                    Surface::Asphalt => "road",
-                    Surface::Concrete => "road_concrete",
-                    Surface::Cobbles => "road_cobbles",
-                    Surface::Gravel => "road_gravel",
-                    Surface::Dirt => "road_dirt",
+            .map(|(from, to, look)| {
+                let texture = match Surface::ALL.get(look as usize) {
+                    _ if look == UNMARKED => "road_lane",
+                    Some(Surface::Concrete) => "road_concrete",
+                    Some(Surface::Cobbles) => "road_cobbles",
+                    Some(Surface::Gravel) => "road_gravel",
+                    Some(Surface::Dirt) => "road_dirt",
+                    _ => "road",
                 };
                 (from as u32 * per_sample, (to.min(n - 1).saturating_sub(from)) as u32 * per_sample, texture)
             })

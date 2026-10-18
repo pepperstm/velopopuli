@@ -1,11 +1,11 @@
 import * as THREE from 'three'
 
 /**
- * Textures for the route's road, one per surface (`Surface as u8` in Rust: asphalt,
- * concrete, cobbles, gravel, dirt). Across: the gravel shoulder on the outer 20/256ths
+ * Textures for the route's road, one per look (`Surface as u8` in Rust: asphalt, concrete,
+ * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road). Across: the gravel shoulder on the outer 20/256ths
  * each side (stretched down the embankment), the surface between. Along: 12 m per repeat.
  */
-export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt'] as const
+export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane'] as const
 
 /** Deterministic noise, so both renderers get the same picture. */
 function random(seed: number): () => number {
@@ -39,7 +39,8 @@ function shoulders(ctx: CanvasRenderingContext2D, w: number, h: number, colour: 
 }
 
 function draw(surface: number): HTMLCanvasElement {
-  const rnd = random(17 + surface * 101)
+  // The same grain on tarmac with and without a centre line, so the change shows only in the paint.
+  const rnd = random(17 + (SURFACES[surface] === 'lane' ? 0 : surface) * 101)
   switch (SURFACES[surface] ?? 'asphalt') {
     case 'concrete': {
       // Pale slabs with a joint across every 4 m and one down the middle.
@@ -114,7 +115,7 @@ function draw(surface: number): HTMLCanvasElement {
       return c
     }
     default: {
-      // Tarmac with an edge line each side and a broken line down the middle.
+      // Tarmac with an edge line each side and, on a main road, a broken line down the middle.
       const [c, ctx] = canvas(256, 256)
       shoulders(ctx, 256, 256, '#6d6552')
       ctx.fillStyle = '#3d3f45'
@@ -124,7 +125,7 @@ function draw(surface: number): HTMLCanvasElement {
       ctx.fillStyle = '#e8e8e2'
       ctx.fillRect(25, 0, 4, 256)
       ctx.fillRect(227, 0, 4, 256)
-      ctx.fillRect(126, 0, 4, 128)
+      if (SURFACES[surface] !== 'lane') ctx.fillRect(126, 0, 4, 128)
       return c
     }
   }

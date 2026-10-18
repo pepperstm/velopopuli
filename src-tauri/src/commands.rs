@@ -261,14 +261,15 @@ pub fn ride_route_data(state: State<AppState>) -> Res<Response> {
     Ok(Response::new(out))
 }
 
-/// Road ribbon: positions (3 per vertex), UVs (2 per vertex), then the surface per sample, as f32;
+/// Road ribbon: positions (3 per vertex), UVs (2 per vertex), then how it looks per sample
+/// (`Surface as u8`, or 5 for tarmac without a centre line), as f32;
 /// `layout.roadSection` vertices per sample.
 #[tauri::command]
 pub async fn ride_road_mesh(state: State<'_, AppState>) -> Res<Response> {
     let world = state.current_session()?.world.clone();
     let mesh = tauri::async_runtime::spawn_blocking(move || world.road()).await.map_err(blocking_err)?;
-    let surfaces: Vec<f32> = mesh.surfaces.iter().map(|&s| s as f32).collect();
-    Ok(Response::new(f32_bytes(&[], &[&mesh.positions, &mesh.uvs, &surfaces])))
+    let looks: Vec<f32> = mesh.looks.iter().map(|&s| s as f32).collect();
+    Ok(Response::new(f32_bytes(&[], &[&mesh.positions, &mesh.uvs, &looks])))
 }
 
 /// Race barriers. Layout: `[sections, looks, then the vertex count of each look]` as u32, then as f32:

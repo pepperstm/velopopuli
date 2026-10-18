@@ -23,7 +23,7 @@ pub use landmarks::{landmarks, Landmark};
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
-pub use surface::{highway_width, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, WAY_TAGS};
+pub use surface::{highway_marked, UNMARKED, highway_width, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, WAY_TAGS};
 
 use std::sync::Arc;
 
@@ -92,8 +92,9 @@ pub struct RoadMesh {
     /// foot, tarmac edge, tarmac edge, embankment foot, wall base.
     pub positions: Vec<f32>,
     pub uvs: Vec<f32>,
-    /// The road surface per route sample (`Surface as u8`).
-    pub surfaces: Vec<u8>,
+    /// How the road is drawn per route sample: `Surface as u8`, or `UNMARKED` for tarmac
+    /// without a centre line.
+    pub looks: Vec<u8>,
 }
 
 pub struct World {
@@ -445,8 +446,14 @@ impl World {
         let kinds = self.field.kinds();
         // Texture columns: gravel shoulder on the outer 20/256ths, tarmac between.
         let us = [0.0f32, 0.0, 20.0 / 256.0, 236.0 / 256.0, 1.0, 1.0];
-        let surfaces = if self.scene.surfaces.len() == n { self.scene.surfaces.iter().map(|s| *s as u8).collect() } else { vec![0; n] };
-        let mut mesh = RoadMesh { positions: Vec::with_capacity(n * ROAD_SECTION * 3), uvs: Vec::with_capacity(n * ROAD_SECTION * 2), surfaces };
+        let looks = (0..n)
+            .map(|i| match self.scene.surfaces.get(i) {
+                Some(Surface::Asphalt) if !self.scene.marked.get(i).copied().unwrap_or(true) => UNMARKED,
+                Some(s) => *s as u8,
+                None => 0,
+            })
+            .collect();
+        let mut mesh = RoadMesh { positions: Vec::with_capacity(n * ROAD_SECTION * 3), uvs: Vec::with_capacity(n * ROAD_SECTION * 2), looks };
         for i in 0..n {
             let (a, b) = (i.saturating_sub(1), (i + 1).min(n - 1));
             let (mut tx, mut tz) = (r.x[b] - r.x[a], r.z[b] - r.z[a]);

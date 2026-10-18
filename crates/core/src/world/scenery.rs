@@ -338,6 +338,8 @@ pub struct Scene {
     pub surfaces: Vec<super::surface::Surface>,
     /// How wide the route's road is (the carriageway, in metres), per route sample.
     pub widths: Vec<f64>,
+    /// Whether the route's road is a main road with a centre line, per route sample.
+    pub marked: Vec<bool>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
     pub counts: SceneryCounts,
@@ -774,8 +776,10 @@ const EDGE_LINE: f64 = 0.18;
 
 /// The surface and width at every route sample: from the tags of the mapped road the route
 /// follows where the map has them, otherwise guessed from what kind of road it is.
-fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay]) -> (Vec<super::surface::Surface>, Vec<f64>) {
-    use super::surface::{highway_width, smooth_widths, tidy, Surface, MAX_WIDTH, MIN_RUN_M, MIN_WIDTH};
+fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay]) -> (Vec<super::surface::Surface>, Vec<f64>, Vec<bool>) {
+    use super::surface::{highway_marked, highway_width, smooth_widths, tidy, Surface, MAX_WIDTH, MIN_RUN_M, MIN_WIDTH};
+    // Main roads have a centre line; lanes, streets, tracks and paths don't. Off the map: as a main road.
+    let mut marked: Vec<bool> = kinds.iter().map(|k| k.is_none_or(|k| matches!(k, RoadKind::Main | RoadKind::Major))).collect();
     let mut surfaces: Vec<Surface> = kinds
         .iter()
         .map(|k| match k {
@@ -820,6 +824,7 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
                 if let Some(w) = width {
                     widths[i] = w;
                 }
+                marked[i] = highway_marked(&way.highway);
             }
         }
     }
@@ -828,7 +833,9 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
         *w = w.clamp(MIN_WIDTH, MAX_WIDTH);
     }
     smooth_widths(&mut widths, ((40.0 / route.step).round() as usize) | 1);
-    (surfaces, widths)
+    // Like surfaces, a change of markings for less than a short stretch is mapping noise.
+    tidy(&mut marked, (MIN_RUN_M / route.step).ceil() as usize);
+    (surfaces, widths, marked)
 }
 
 impl Scene {
@@ -910,7 +917,7 @@ impl Scene {
                 }
             }
         }
-        (scene.surfaces, scene.widths) = route_road(route, &beside, &nearest_kind, &scenery.ways);
+        (scene.surfaces, scene.widths, scene.marked) = route_road(route, &beside, &nearest_kind, &scenery.ways);
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }

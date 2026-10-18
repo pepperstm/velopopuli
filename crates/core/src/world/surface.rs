@@ -85,6 +85,15 @@ pub fn highway_width(highway: &str) -> Option<f64> {
     })
 }
 
+/// Whether a road of this OpenStreetMap `highway` class has a line painted down the middle.
+pub fn highway_marked(highway: &str) -> bool {
+    matches!(highway.trim_end_matches("_link"), "motorway" | "trunk" | "primary" | "secondary" | "tertiary")
+}
+
+/// How the route's road is drawn at each sample: `Surface as u8`, or `UNMARKED` for
+/// tarmac without a centre line (anything smaller than a main road).
+pub const UNMARKED: u8 = 5;
+
 /// Width in metres from a `width` tag ("5", "5.5 m", "6m") or, failing that, a `lanes` tag.
 pub fn tagged_width(width: Option<&str>, lanes: Option<&str>) -> Option<f64> {
     let metres = width.and_then(|w| w.trim().trim_end_matches('m').trim().replace(',', ".").parse::<f64>().ok()).filter(|w| (1.0..40.0).contains(w));
@@ -173,7 +182,7 @@ pub const MIN_RUN_M: f64 = 30.0;
 
 /// Merges runs of the same surface shorter than `min_samples` into what comes before them
 /// (or, at the very start, after them).
-pub fn tidy(surfaces: &mut [Surface], min_samples: usize) {
+pub fn tidy<T: Copy + PartialEq>(surfaces: &mut [T], min_samples: usize) {
     let n = surfaces.len();
     let mut i = 0;
     while i < n {
@@ -189,9 +198,9 @@ pub fn tidy(surfaces: &mut [Surface], min_samples: usize) {
     }
 }
 
-/// `(first sample, one past the last, surface)` for each stretch of one surface.
-pub fn runs(surfaces: &[Surface]) -> Vec<(usize, usize, Surface)> {
-    let mut out: Vec<(usize, usize, Surface)> = Vec::new();
+/// `(first sample, one past the last, value)` for each stretch of one surface (or look).
+pub fn runs<T: Copy + PartialEq>(surfaces: &[T]) -> Vec<(usize, usize, T)> {
+    let mut out: Vec<(usize, usize, T)> = Vec::new();
     for (i, &s) in surfaces.iter().enumerate() {
         match out.last_mut() {
             Some(last) if last.2 == s => last.1 = i + 1,
