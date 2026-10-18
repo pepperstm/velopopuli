@@ -121,11 +121,7 @@ pub fn apply_ride(profile: &mut Profile, ride: &RideFacts) -> (u64, Vec<String>)
     profile.total_distance += ride.distance_m;
     profile.total_ascent += ride.ascent_m;
     profile.segment_prs += ride.segment_prs as u64;
-    let new_badges: Vec<String> = BADGES
-        .iter()
-        .filter(|b| !profile.badges.iter().any(|id| id == b.id) && earned(b.id, ride, profile))
-        .map(|b| b.id.to_string())
-        .collect();
+    let new_badges: Vec<String> = BADGES.iter().filter(|b| !profile.badges.iter().any(|id| id == b.id) && earned(b.id, ride, profile)).map(|b| b.id.to_string()).collect();
     profile.badges.extend(new_badges.iter().cloned());
     (xp, new_badges)
 }

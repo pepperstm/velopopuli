@@ -88,11 +88,7 @@ function StravaCard(): React.JSX.Element {
           <p>
             Connected{status.athlete ? ` as ${status.athlete}` : ''}. Rides upload as <b>Virtual Rides</b> with power, heart rate and the route map.
           </p>
-          <Toggle
-            label="Upload every ride automatically"
-            value={settings.stravaAutoUpload}
-            onChange={(v) => update((s) => ({ ...s, stravaAutoUpload: v }))}
-          />
+          <Toggle label="Upload every ride automatically" value={settings.stravaAutoUpload} onChange={(v) => update((s) => ({ ...s, stravaAutoUpload: v }))} />
           <button disabled={busy} onClick={() => void run(api.strava.disconnect)}>
             Disconnect
           </button>
@@ -178,16 +174,32 @@ function FanCard(): React.JSX.Element {
             <input
               value={smart.url}
               onChange={(e) => set({ url: e.target.value.trim() })}
-              placeholder={smart.kind === 'homeassistant' ? 'http://homeassistant.local:8123' : smart.kind === 'webhook' ? 'http://…/fan?level={level}&zone={zone}' : '192.168.1.40'}
+              placeholder={
+                smart.kind === 'homeassistant'
+                  ? 'http://homeassistant.local:8123'
+                  : smart.kind === 'webhook'
+                    ? 'http://…/fan?level={level}&zone={zone}'
+                    : '192.168.1.40'
+              }
             />
-            {smart.kind === 'webhook' && <small>{'{level}'} (0–100), {'{zone}'} (1–7), {'{power}'}, {'{speed}'} and {'{hr}'} are filled in.</small>}
+            {smart.kind === 'webhook' && (
+              <small>
+                {'{level}'} (0–100), {'{zone}'} (1–7), {'{power}'}, {'{speed}'} and {'{hr}'} are filled in.
+              </small>
+            )}
           </label>
         )}
         {smart.kind === 'homeassistant' && (
           <>
             <label className="field">
               <span>Long-lived access token</span>
-              <input type="password" value={token} placeholder="kept in the system keychain" onChange={(e) => setToken(e.target.value)} onBlur={() => token && void api.smart.setToken(token).then(() => (setToken(''), setStatus('Token saved.')))} />
+              <input
+                type="password"
+                value={token}
+                placeholder="kept in the system keychain"
+                onChange={(e) => setToken(e.target.value)}
+                onBlur={() => token && void api.smart.setToken(token).then(() => (setToken(''), setStatus('Token saved.')))}
+              />
             </label>
             <label className="field">
               <span>Fan entity</span>
@@ -255,7 +267,15 @@ export function SettingsScreen(): React.JSX.Element {
           </label>
           <Num label="Weight" value={settings.rider.weightKg} min={30} max={200} step={0.1} suffix="kg" onChange={(v) => rider({ weightKg: v })} />
           <Num label="Bike weight" value={settings.rider.bikeKg} min={4} max={30} step={0.1} suffix="kg" onChange={(v) => rider({ bikeKg: v })} />
-          <Num label="FTP" value={settings.rider.ftp} min={50} max={600} suffix="W" hint="Sets power-zone colours and TSS." onChange={(v) => rider({ ftp: v })} />
+          <Num
+            label="FTP"
+            value={settings.rider.ftp}
+            min={50}
+            max={600}
+            suffix="W"
+            hint="Sets power-zone colours and TSS."
+            onChange={(v) => rider({ ftp: v })}
+          />
           <Num label="Max heart rate" value={settings.rider.maxHr} min={100} max={230} suffix="bpm" onChange={(v) => rider({ maxHr: v })} />
           <label className="field">
             <span>Units</span>
@@ -299,9 +319,34 @@ export function SettingsScreen(): React.JSX.Element {
             hint="Share of descents passed on, so you don't spin out on the way down."
             onChange={(v) => trainer({ downhill: v / 100 })}
           />
-          <Num label="Drag area (CdA)" value={settings.physics.cda} min={0.15} max={0.7} step={0.01} suffix="m²" hint="≈0.32 on the hoods, 0.25 in an aero tuck." onChange={(v) => physics({ cda: v })} />
-          <Num label="Rolling resistance (Crr)" value={settings.physics.crr} min={0.002} max={0.02} step={0.0005} hint="0.004 road tyres on tarmac, 0.008 gravel." onChange={(v) => physics({ crr: v })} />
-          <Num label="Descent speed limit" value={settings.physics.maxSpeedKph} min={30} max={120} suffix="km/h" hint="Stands in for braking into corners." onChange={(v) => physics({ maxSpeedKph: v })} />
+          <Num
+            label="Drag area (CdA)"
+            value={settings.physics.cda}
+            min={0.15}
+            max={0.7}
+            step={0.01}
+            suffix="m²"
+            hint="≈0.32 on the hoods, 0.25 in an aero tuck."
+            onChange={(v) => physics({ cda: v })}
+          />
+          <Num
+            label="Rolling resistance (Crr)"
+            value={settings.physics.crr}
+            min={0.002}
+            max={0.02}
+            step={0.0005}
+            hint="0.004 road tyres on tarmac, 0.008 gravel."
+            onChange={(v) => physics({ crr: v })}
+          />
+          <Num
+            label="Descent speed limit"
+            value={settings.physics.maxSpeedKph}
+            min={30}
+            max={120}
+            suffix="km/h"
+            hint="Stands in for braking into corners."
+            onChange={(v) => physics({ maxSpeedKph: v })}
+          />
         </div>
         <Toggle
           label="Estimate power from a speed sensor"
@@ -435,13 +480,17 @@ export function SettingsScreen(): React.JSX.Element {
       <section className="card">
         <h2>Group rides</h2>
         <p className="muted">
-          Riding together goes through a small relay server that passes everyone's position around. Anyone can run one: it is the{' '}
-          <code>velopopuli-relay</code> program in this app's source (<code>cargo run --release -p velopopuli-relay</code>), and needs port 47800 open. Everyone in the group
-          enters the same address here.
+          Riding together goes through a small relay server that passes everyone's position around. Anyone can run one: it is the <code>velopopuli-relay</code>{' '}
+          program in this app's source (<code>cargo run --release -p velopopuli-relay</code>), and needs port 47800 open. Everyone in the group enters the same
+          address here.
         </p>
         <label className="field">
           <span>Relay address</span>
-          <input value={settings.group.relayUrl} onChange={(e) => update((s) => ({ ...s, group: { relayUrl: e.target.value.trim() } }))} placeholder="ws://relay.example.org:47800" />
+          <input
+            value={settings.group.relayUrl}
+            onChange={(e) => update((s) => ({ ...s, group: { relayUrl: e.target.value.trim() } }))}
+            placeholder="ws://relay.example.org:47800"
+          />
         </label>
       </section>
 
@@ -450,8 +499,8 @@ export function SettingsScreen(): React.JSX.Element {
       <section className="card">
         <h2>Diagnostics</h2>
         <p className="muted small">
-          If something misbehaves (a trainer dropping out, power reading zero, resistance not changing), save a report and attach it to your bug
-          report. It covers the last couple of days: connections, drop-outs, the data each sensor sent and what was sent to the trainer.
+          If something misbehaves (a trainer dropping out, power reading zero, resistance not changing), save a report and attach it to your bug report. It
+          covers the last couple of days: connections, drop-outs, the data each sensor sent and what was sent to the trainer.
         </p>
         <Toggle
           label="Detailed diagnostics"
@@ -470,8 +519,8 @@ export function SettingsScreen(): React.JSX.Element {
       <section className="card">
         <h2>Ride files</h2>
         <p className="muted">
-          Every ride is saved as a .FIT file. Optionally copy each one to a second folder — for example iCloud Drive or Dropbox, so it is on your
-          phone straight away.
+          Every ride is saved as a .FIT file. Optionally copy each one to a second folder — for example iCloud Drive or Dropbox, so it is on your phone straight
+          away.
         </p>
         <div className="row wrap">
           <code>{settings.exportDir || 'No extra export folder'}</code>

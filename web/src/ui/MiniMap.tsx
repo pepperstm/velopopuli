@@ -10,7 +10,14 @@ export function MiniMap({ route, lat, lon }: { route: Route; lat: number; lon: n
   const marker = useRef<L.CircleMarker | null>(null)
 
   useEffect(() => {
-    const m = L.map(el.current!, { zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, keyboard: false })
+    const m = L.map(el.current!, {
+      zoomControl: false,
+      attributionControl: true,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      keyboard: false
+    })
     m.attributionControl.setPrefix(false)
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(m)
     const line: [number, number][] = []

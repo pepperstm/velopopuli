@@ -102,11 +102,7 @@ impl World {
             let len = tx.hypot(tz).max(1e-9);
             tx /= len;
             tz /= len;
-            let curvature = if i > 0 && i + 1 < r.n {
-                ((r.x[i + 1] - 2.0 * r.x[i] + r.x[i - 1]) * tz - (r.z[i + 1] - 2.0 * r.z[i] + r.z[i - 1]) * tx) / (r.step * r.step)
-            } else {
-                0.0
-            };
+            let curvature = if i > 0 && i + 1 < r.n { ((r.x[i + 1] - 2.0 * r.x[i] + r.x[i - 1]) * tz - (r.z[i + 1] - 2.0 * r.z[i] + r.z[i - 1]) * tx) / (r.step * r.step) } else { 0.0 };
             let p = r.sample_at(d);
             let offset = self.half_width(i) + SET_BACK;
             let heading = tx.atan2(tz);

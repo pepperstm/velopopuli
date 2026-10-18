@@ -52,10 +52,17 @@ pub struct Readings {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TrainerCommand {
     /// Simulate a road: gradient as a fraction, rolling resistance, wind coefficient in kg/m.
-    Simulation { grade: f64, crr: f64, cw: f64 },
+    Simulation {
+        grade: f64,
+        crr: f64,
+        cw: f64,
+    },
     /// ERG mode: hold this many watts.
     TargetPower(f64),
-    UserConfig { rider_kg: f64, bike_kg: f64 },
+    UserConfig {
+        rider_kg: f64,
+        bike_kg: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -177,13 +184,8 @@ impl Hub {
         self.devices
             .iter()
             .map(|d| {
-                let fresh = |m: Metric| {
-                    self.latest.get(&d.id).and_then(|l| l.values[m as usize]).filter(|(_, t)| now_ms.saturating_sub(*t) < STALE_MS).map(|(v, _)| v)
-                };
-                DeviceInfo {
-                    readings: Readings { power: fresh(Metric::Power), cadence: fresh(Metric::Cadence), hr: fresh(Metric::Hr), wheel_speed: fresh(Metric::WheelSpeed) },
-                    ..d.clone()
-                }
+                let fresh = |m: Metric| self.latest.get(&d.id).and_then(|l| l.values[m as usize]).filter(|(_, t)| now_ms.saturating_sub(*t) < STALE_MS).map(|(v, _)| v);
+                DeviceInfo { readings: Readings { power: fresh(Metric::Power), cadence: fresh(Metric::Cadence), hr: fresh(Metric::Hr), wheel_speed: fresh(Metric::WheelSpeed) }, ..d.clone() }
             })
             .collect()
     }

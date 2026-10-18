@@ -78,7 +78,8 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
           <>
             <WorkoutShape shape={chosen.shape} height={40} />
             <p className="muted small">
-              {chosen.description} {settings.trainer.workoutErg ? 'The trainer holds each target (ERG).' : 'Targets are shown; the trainer follows the gradient.'}
+              {chosen.description}{' '}
+              {settings.trainer.workoutErg ? 'The trainer holds each target (ERG).' : 'Targets are shown; the trainer follows the gradient.'}
             </p>
           </>
         )}
@@ -89,12 +90,21 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
             {ghosts.length === 0 && <p className="muted small">Import someone's recorded ride of this road (GPX or FIT, or from Strava) to race it.</p>}
             {ghosts.map((g) => (
               <label key={g.id} className="field toggle ghost-row">
-                <input type="checkbox" checked={ghostIds.includes(g.id)} onChange={(e) => setGhostIds((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((i) => i !== g.id)))} />
+                <input
+                  type="checkbox"
+                  checked={ghostIds.includes(g.id)}
+                  onChange={(e) => setGhostIds((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((i) => i !== g.id)))}
+                />
                 <i style={{ background: hex(g.color) }} />
                 <span>
-                  {g.name} <em className="muted small">{fmtDist(g.distance, u)} in {fmtTime(g.timeS)}</em>
+                  {g.name}{' '}
+                  <em className="muted small">
+                    {fmtDist(g.distance, u)} in {fmtTime(g.timeS)}
+                  </em>
                 </span>
-                <button className="ghost small" onClick={(e) => {
+                <button
+                  className="ghost small"
+                  onClick={(e) => {
                     e.preventDefault()
                     void api.ghosts.remove(route.id, g.id).then(() => setGhosts((all) => all.filter((x) => x.id !== g.id)))
                   }}
@@ -136,7 +146,13 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
 
             <h3>Segments</h3>
             <p className="muted small">
-              The route's climbs are always timed. {segments.length ? `${segments.length} Strava segment${segments.length === 1 ? '' : 's'} on this route: ${segments.slice(0, 4).map((s) => s.name).join(', ')}${segments.length > 4 ? '…' : ''}` : 'Strava segments along the route can be timed too.'}
+              The route's climbs are always timed.{' '}
+              {segments.length
+                ? `${segments.length} Strava segment${segments.length === 1 ? '' : 's'} on this route: ${segments
+                    .slice(0, 4)
+                    .map((s) => s.name)
+                    .join(', ')}${segments.length > 4 ? '…' : ''}`
+                : 'Strava segments along the route can be timed too.'}
             </p>
             {stravaConnected ? (
               <button disabled={!!busy} onClick={() => void task('Looking for Strava segments…', async () => setSegments(await api.segments.fetch(route.id)))}>
@@ -157,14 +173,28 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
         {group && (
           <label className="field">
             <span>Room code</span>
-            <input value={room} onChange={(e) => setRoom(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32))} />
+            <input
+              value={room}
+              onChange={(e) =>
+                setRoom(
+                  e.target.value
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9-]/g, '')
+                    .slice(0, 32)
+                )
+              }
+            />
           </label>
         )}
 
         {busy && <div className="muted">{busy}</div>}
         {error && <div className="error">{error}</div>}
         <div className="row">
-          <button className="primary" disabled={!!busy || (group && !room)} onClick={() => props.onStart({ routeId: route.id, workoutId: workoutId || null, ghostIds, groupRoom: group ? room : null })}>
+          <button
+            className="primary"
+            disabled={!!busy || (group && !room)}
+            onClick={() => props.onStart({ routeId: route.id, workoutId: workoutId || null, ghostIds, groupRoom: group ? room : null })}
+          >
             Start riding
           </button>
           <button onClick={props.onCancel}>Cancel</button>

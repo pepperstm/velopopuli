@@ -7,8 +7,8 @@
 use std::f64::consts::PI;
 
 use super::buildings::Footprint;
-use super::scenery::{Area, AreaKind, Crossing, Road, RoadKind, Waterway, WaterwayKind};
 use super::height::hash2;
+use super::scenery::{Area, AreaKind, Crossing, Road, RoadKind, Waterway, WaterwayKind};
 use crate::gpx::Route;
 
 /// The zoom level at which the tiles include every building.
@@ -234,11 +234,7 @@ impl<'a> Layer<'a> {
     }
 
     fn attr(&self, f: &Feature, name: &str) -> Value<'a> {
-        f.tags
-            .chunks_exact(2)
-            .find(|t| self.keys.get(t[0] as usize) == Some(&name))
-            .and_then(|t| self.values.get(t[1] as usize).copied())
-            .unwrap_or(Value::Other)
+        f.tags.chunks_exact(2).find(|t| self.keys.get(t[0] as usize) == Some(&name)).and_then(|t| self.values.get(t[1] as usize).copied()).unwrap_or(Value::Other)
     }
 
     fn text(&self, f: &Feature, name: &str) -> &'a str {
@@ -395,12 +391,8 @@ pub fn parse_tile(bytes: &[u8], zoom: u32, tx: u32, ty: u32) -> Option<MapTile> 
                         _ => continue,
                     };
                     // Clearings and islands arrive as extra rings; the area is whatever an odd number of rings encloses.
-                    let outlines: Vec<Vec<[f64; 2]>> = rings(f.geometry)?
-                        .iter()
-                        .map(|ring| thin(&float(ring), 4.0 / unit_m))
-                        .filter(|ring| ring.len() >= 3)
-                        .map(|ring| ring.into_iter().map(to_lat_lon).collect())
-                        .collect();
+                    let outlines: Vec<Vec<[f64; 2]>> =
+                        rings(f.geometry)?.iter().map(|ring| thin(&float(ring), 4.0 / unit_m)).filter(|ring| ring.len() >= 3).map(|ring| ring.into_iter().map(to_lat_lon).collect()).collect();
                     if !outlines.is_empty() {
                         found.areas.push(Area { kind, rings: outlines });
                     }

@@ -215,11 +215,8 @@ pub fn parse_erg(text: &str, id: &str, fallback_name: &str, ftp: f64) -> Result<
         return Err("Set your FTP before importing a workout in watts.".into());
     }
     let frac = |v: f64| if percent { v / 100.0 } else { v / ftp };
-    let steps: Vec<Step> = points
-        .windows(2)
-        .filter(|w| w[1].0 > w[0].0)
-        .map(|w| Step { kind: StepKind::Power, duration_s: w[1].0 - w[0].0, from: frac(w[0].1), to: frac(w[1].1), cadence: None })
-        .collect();
+    let steps: Vec<Step> =
+        points.windows(2).filter(|w| w[1].0 > w[0].0).map(|w| Step { kind: StepKind::Power, duration_s: w[1].0 - w[0].0, from: frac(w[0].1), to: frac(w[1].1), cadence: None }).collect();
     if steps.is_empty() {
         return Err("This workout has no steps.".into());
     }
@@ -284,7 +281,11 @@ pub fn builtin_workouts() -> Vec<Workout> {
             id: "builtin-ramp-test".into(),
             name: "FTP ramp test".into(),
             description: "Warm up, then the target climbs every minute until you can't hold it. Your FTP is estimated as 75% of your best one-minute power.".into(),
-            steps: [vec![steady(5.0, 0.4)], (0..28).map(|i| Step { kind: StepKind::Power, duration_s: RAMP_RUNG_S, from: 0.4 + 0.0625 * i as f64, to: 0.4 + 0.0625 * i as f64, cadence: None }).collect()].concat(),
+            steps: [
+                vec![steady(5.0, 0.4)],
+                (0..28).map(|i| Step { kind: StepKind::Power, duration_s: RAMP_RUNG_S, from: 0.4 + 0.0625 * i as f64, to: 0.4 + 0.0625 * i as f64, cadence: None }).collect(),
+            ]
+            .concat(),
             cues: vec![Cue { at_s: 300.0, text: "The ramp begins. Ride until you can't hold the target, then end the ride.".into() }],
         },
     ]

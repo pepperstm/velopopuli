@@ -167,7 +167,15 @@ pub fn build(settings: &serde_json::Value, devices: &serde_json::Value, note: &s
 
     let mut out = String::new();
     let _ = writeln!(out, "VELOPOPULI DIAGNOSTICS REPORT");
-    let _ = writeln!(out, "Created {} · VeloPopuli {} · {} {} ({})", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), env!("CARGO_PKG_VERSION"), std::env::consts::OS, os_version(), std::env::consts::ARCH);
+    let _ = writeln!(
+        out,
+        "Created {} · VeloPopuli {} · {} {} ({})",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        os_version(),
+        std::env::consts::ARCH
+    );
     let _ = writeln!(out, "Contains device names and the data they sent, ride numbers and settings. No account details, tokens or locations.\n");
     if !note.trim().is_empty() {
         let _ = writeln!(out, "== What happened (from the rider)\n{}\n", note.trim());
@@ -358,7 +366,17 @@ fn summarise(text: &str) -> String {
     }
     for (i, r) in rides.iter().enumerate() {
         let avg = if r.seconds > 0 { r.power_sum / r.seconds as f64 } else { 0.0 };
-        let _ = writeln!(out, "Ride {}: {} s, pedalling {} s, of which {} s with no power reading; average {:.0} W, max {:.0} W; {} trainer commands", i + 1, r.seconds, r.pedalling, r.pedalling_no_power, avg, r.power_max, r.cmds);
+        let _ = writeln!(
+            out,
+            "Ride {}: {} s, pedalling {} s, of which {} s with no power reading; average {:.0} W, max {:.0} W; {} trainer commands",
+            i + 1,
+            r.seconds,
+            r.pedalling,
+            r.pedalling_no_power,
+            avg,
+            r.power_max,
+            r.cmds
+        );
     }
     for e in &other_errors {
         let _ = writeln!(out, "! {e}");

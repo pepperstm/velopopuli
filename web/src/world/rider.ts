@@ -148,7 +148,10 @@ function wheelGeometry(): THREE.BufferGeometry {
   parts.add(new THREE.TorusGeometry(WHEEL_R - 0.046, 0.02, 6, 36).scale(1, 1, 0.55).rotateY(Math.PI / 2), COLOURS.rim)
   const spokes = 14
   for (let i = 0; i < spokes; i++) {
-    parts.add(new THREE.BoxGeometry(0.003, WHEEL_R - 0.05, 0.003).translate(i % 2 ? 0.012 : -0.012, (WHEEL_R - 0.05) / 2, 0).rotateX((i / spokes) * Math.PI * 2), COLOURS.metal)
+    parts.add(
+      new THREE.BoxGeometry(0.003, WHEEL_R - 0.05, 0.003).translate(i % 2 ? 0.012 : -0.012, (WHEEL_R - 0.05) / 2, 0).rotateX((i / spokes) * Math.PI * 2),
+      COLOURS.metal
+    )
   }
   parts.add(new THREE.CylinderGeometry(0.019, 0.019, 0.1, 8).rotateZ(Math.PI / 2), COLOURS.metal)
   return parts.bake()
@@ -253,7 +256,11 @@ function bikeAndBody(parts: Parts, jersey: number): void {
   parts.ball(v(HEAD.y - 0.065, HEAD.z + 0.04), 1, C.skin, new THREE.Vector3(0.062, 0.05, 0.062)) // jaw
   parts.ball(v(HEAD.y - 0.022, HEAD.z + 0.1), 0.015, C.skin) // nose
   parts.add(new THREE.BoxGeometry(0.164, 0.04, 0.05).translate(0, HEAD.y + 0.006, HEAD.z + 0.076), C.glasses)
-  const helmet = new THREE.Matrix4().compose(v(HEAD.y + 0.036, HEAD.z - 0.012), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.1), new THREE.Vector3(0.96, 0.9, 1.26))
+  const helmet = new THREE.Matrix4().compose(
+    v(HEAD.y + 0.036, HEAD.z - 0.012),
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.1),
+    new THREE.Vector3(0.96, 0.9, 1.26)
+  )
   parts.add(new THREE.SphereGeometry(0.108, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), C.helmet, helmet)
   parts.add(new THREE.CylinderGeometry(0.108, 0.104, 0.012, 14), C.glasses, helmet) // the shell's rim
 }
@@ -295,7 +302,9 @@ export class RiderModel {
 
   constructor(jersey: number, ghost = false) {
     // A ghost is the same figure in translucent white.
-    const material = ghost ? new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.38, depthWrite: false }) : new THREE.MeshLambertMaterial({ vertexColors: true })
+    const material = ghost
+      ? new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.38, depthWrite: false })
+      : new THREE.MeshLambertMaterial({ vertexColors: true })
     this.materials.push(material)
     const mesh = (g: THREE.BufferGeometry): THREE.Mesh => {
       this.geometries.push(g)
@@ -318,8 +327,14 @@ export class RiderModel {
     this.crankset.position.copy(BB)
 
     // Legs: shorts to just above the knee, a sock above the shoe.
-    const thigh = new Parts().add(taper(0.082, 0.054, 0, 0.8, 12), COLOURS.shorts).add(taper(0.082, 0.054, 0.8, 1, 12), COLOURS.skin).bake()
-    const shin = new Parts().add(taper(0.052, 0.033, 0, 0.72, 12), COLOURS.skin).add(taper(0.052, 0.033, 0.72, 1, 12), COLOURS.sock).bake()
+    const thigh = new Parts()
+      .add(taper(0.082, 0.054, 0, 0.8, 12), COLOURS.shorts)
+      .add(taper(0.082, 0.054, 0.8, 1, 12), COLOURS.skin)
+      .bake()
+    const shin = new Parts()
+      .add(taper(0.052, 0.033, 0, 0.72, 12), COLOURS.skin)
+      .add(taper(0.052, 0.033, 0.72, 1, 12), COLOURS.sock)
+      .bake()
     const knee = paint(new THREE.SphereGeometry(0.054, 12, 9), COLOURS.skin)
     for (const side of [-1, 1]) {
       this.legs.push({ side, thigh: mesh(thigh), knee: mesh(knee), shin: mesh(shin), foot: mesh(footGeometry(side)) })
@@ -327,7 +342,16 @@ export class RiderModel {
 
     if (!ghost) {
       // A soft shadow on the road, which is most of what makes the bike look planted on it.
-      const shade = new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: softDisc(), transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })
+      const shade = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        alphaMap: softDisc(),
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -4
+      })
       this.materials.push(shade)
       const shadow = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2).scale(0.34, 1, 0.95), shade)
       this.geometries.push(shadow.geometry)
@@ -361,7 +385,11 @@ export class RiderModel {
       const pitch = 0.22 - 0.12 * Math.cos(phase - 0.5)
       leg.foot.position.set(leg.side * FOOT_X, pedalY, pedalZ)
       leg.foot.rotation.x = pitch
-      ankle.set(leg.side * FOOT_X, pedalY + ANKLE.up * Math.cos(pitch) + ANKLE.back * Math.sin(pitch), pedalZ + ANKLE.up * Math.sin(pitch) - ANKLE.back * Math.cos(pitch))
+      ankle.set(
+        leg.side * FOOT_X,
+        pedalY + ANKLE.up * Math.cos(pitch) + ANKLE.back * Math.sin(pitch),
+        pedalZ + ANKLE.up * Math.sin(pitch) - ANKLE.back * Math.cos(pitch)
+      )
       hip.set(leg.side * HIP_X, HIP.y, HIP.z)
       joint(hip, ankle, THIGH, SHIN, 1, knee)
       place(leg.thigh, hip, knee)

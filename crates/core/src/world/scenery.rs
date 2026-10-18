@@ -569,7 +569,13 @@ impl<'a> Beside<'a> {
         if road.kind.is_rail() {
             return vec![None; n];
         }
-        let reach = if road.oneway { SAME_ONEWAY_M } else if matches!(road.kind, RoadKind::Path | RoadKind::Footway) { SAME_PATH_M } else { SAME_ROAD_M };
+        let reach = if road.oneway {
+            SAME_ONEWAY_M
+        } else if matches!(road.kind, RoadKind::Path | RoadKind::Footway) {
+            SAME_PATH_M
+        } else {
+            SAME_ROAD_M
+        };
         let mut found: Vec<Option<(usize, f64)>> = (0..n)
             .map(|k| {
                 let (a, b) = (points[k], points[k + 1]);
@@ -596,7 +602,9 @@ impl<'a> Beside<'a> {
         let (ca, cb) = (Self::cell(a.0, a.1), Self::cell(b.0, b.1));
         (ca.0.min(cb.0) - 1..=ca.0.max(cb.0) + 1).any(|ix| {
             (ca.1.min(cb.1) - 1..=ca.1.max(cb.1) + 1).any(|iz| {
-                self.cells.get(&(ix, iz)).is_some_and(|list| list.iter().any(|&i| (i as usize) + 1 < r.n && crossing(a, b, (r.x[i as usize], r.z[i as usize]), (r.x[i as usize + 1], r.z[i as usize + 1])).is_some()))
+                self.cells
+                    .get(&(ix, iz))
+                    .is_some_and(|list| list.iter().any(|&i| (i as usize) + 1 < r.n && crossing(a, b, (r.x[i as usize], r.z[i as usize]), (r.x[i as usize + 1], r.z[i as usize + 1])).is_some()))
             })
         })
     }
@@ -887,12 +895,7 @@ impl Scene {
             let len = tx.hypot(tz).max(1e-9);
             let (rx, rz) = (tz / len * 9.0, -tx / len * 9.0);
             let top = route.ele[from..=to].iter().cloned().fold(f32::MIN, f32::max) as f64;
-            scene.overbridges.push(Overbridge {
-                line: vec![(route.x[mid] - rx, route.z[mid] - rz), (route.x[mid] + rx, route.z[mid] + rz)],
-                width: span.max(8.0),
-                deck: top + HEADROOM,
-                rail: false,
-            });
+            scene.overbridges.push(Overbridge { line: vec![(route.x[mid] - rx, route.z[mid] - rz), (route.x[mid] + rx, route.z[mid] + rz)], width: span.max(8.0), deck: top + HEADROOM, rail: false });
         }
 
         let spare = scene.add_overbridges(route, scenery.crossings.iter().filter(|c| !c.tunnel && c.line.len() >= 2).map(|c| (c.clone(), local(&c.line))).collect());
@@ -991,8 +994,20 @@ impl Scene {
         };
         // Direction of travel into and out of each point.
         let headings = |i: usize| {
-            let before = if i > 0 { Some(i - 1) } else if closed { Some(n - 2) } else { None };
-            let after = if i + 1 < n { Some(i + 1) } else if closed { Some(1) } else { None };
+            let before = if i > 0 {
+                Some(i - 1)
+            } else if closed {
+                Some(n - 2)
+            } else {
+                None
+            };
+            let after = if i + 1 < n {
+                Some(i + 1)
+            } else if closed {
+                Some(1)
+            } else {
+                None
+            };
             let (u, v) = (before.map(|k| unit(points[k], points[i])), after.map(|k| unit(points[i], points[k])));
             (u.or(v).unwrap(), v.or(u).unwrap())
         };

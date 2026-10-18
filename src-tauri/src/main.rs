@@ -1,16 +1,16 @@
 // No console window alongside the app on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod mapdata;
-mod native;
-mod photos;
 mod commands;
 mod devices;
 mod diag;
 mod geo;
-mod issues;
 mod group;
+mod issues;
 mod library;
+mod mapdata;
+mod native;
+mod photos;
 mod secrets;
 mod session;
 mod smart;

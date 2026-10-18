@@ -3,8 +3,8 @@
 //! the ground however that folds, rather than floating over dips or cutting
 //! through rises.
 
-use super::mesh::TriMesh;
 use super::height::smoothstep;
+use super::mesh::TriMesh;
 use super::scenery::{Kerb, RoadStrip};
 use super::{CELLS, ROAD_LIFT};
 
@@ -70,15 +70,27 @@ impl Ground<'_> {
     /// Adds the part of `strip` that lies in this chunk to `mesh`.
     pub fn lay(&self, mesh: &mut TriMesh, strip: &RoadStrip) {
         let marked = strip.kind.marked() && !strip.casing && !strip.cap;
-        let surface = if strip.steel { STEEL } else if strip.casing { PAINT } else { strip.kind.colour() }.map(|v| v.powf(2.2) as f32);
+        let surface = if strip.steel {
+            STEEL
+        } else if strip.casing {
+            PAINT
+        } else {
+            strip.kind.colour()
+        }
+        .map(|v| v.powf(2.2) as f32);
         // A marked road's colour comes from the texture; everything else samples a blank part of it.
         let (colour, left, right) = if marked { ([1.0; 3], 0.0, MARKED_SPAN) } else { (surface, BLANK, BLANK) };
         let c = &strip.corners;
         let between = |a: (f64, f64), b: (f64, f64), t: f64| (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
         let along = |t: f64| if strip.oneway { NO_DASH } else { (strip.along.0 + (strip.along.1 - strip.along.0) * t) / DASH_PERIOD };
         let piece = |start: f64, end: f64| -> [Point; 4] {
-            [(between(c[0], c[3], start), left, along(start)), (between(c[1], c[2], start), right, along(start)), (between(c[1], c[2], end), right, along(end)), (between(c[0], c[3], end), left, along(end))]
-                .map(|(p, s, t)| [p.0, p.1, s, t])
+            [
+                (between(c[0], c[3], start), left, along(start)),
+                (between(c[1], c[2], start), right, along(start)),
+                (between(c[1], c[2], end), right, along(end)),
+                (between(c[0], c[3], end), left, along(end)),
+            ]
+            .map(|(p, s, t)| [p.0, p.1, s, t])
         };
         if strip.cap {
             let round: Vec<Point> = (0..CAP_SIDES)

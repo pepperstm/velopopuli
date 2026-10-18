@@ -20,7 +20,9 @@ export function WorkoutShape({ shape, height = 56, at }: { shape: [number, numbe
   return (
     <svg className="workout-shape" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="none" style={{ height }}>
       {blocks}
-      {at !== undefined && <line x1={(at / total) * 1000} x2={(at / total) * 1000} y1={0} y2={height} stroke="#fff" strokeWidth={3} vectorEffect="non-scaling-stroke" />}
+      {at !== undefined && (
+        <line x1={(at / total) * 1000} x2={(at / total) * 1000} y1={0} y2={height} stroke="#fff" strokeWidth={3} vectorEffect="non-scaling-stroke" />
+      )}
     </svg>
   )
 }

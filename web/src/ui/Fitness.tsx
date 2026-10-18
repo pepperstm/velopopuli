@@ -53,7 +53,9 @@ function LoadChart({ data }: { data: FitnessOverview }): React.JSX.Element {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="chart">
       <line x1={10} x2={W - 10} y1={y(0)} y2={y(0)} className="axis" />
-      {days.map((d, i) => (d.tss > 0 ? <rect key={i} x={x(i) - 1.5} width={3} y={y(Math.min(d.tss, top))} height={y(0) - y(Math.min(d.tss, top))} className="bar-tss" /> : null))}
+      {days.map((d, i) =>
+        d.tss > 0 ? <rect key={i} x={x(i) - 1.5} width={3} y={y(Math.min(d.tss, top))} height={y(0) - y(Math.min(d.tss, top))} className="bar-tss" /> : null
+      )}
       <path d={line('fitness')} className="series fitness" />
       <path d={line('fatigue')} className="series fatigue" />
       <path d={line('form')} className="series form" />
@@ -105,7 +107,10 @@ export function Fitness(): React.JSX.Element | null {
         </div>
         <div className="weeks">
           {data.weeks.map((w) => (
-            <div key={w.day} title={`${new Date(w.day * 86400000).toLocaleDateString()}: ${fmtDist(w.km * 1000, u)} · ${w.hours.toFixed(1)} h · ${Math.round(w.tss)} TSS`}>
+            <div
+              key={w.day}
+              title={`${new Date(w.day * 86400000).toLocaleDateString()}: ${fmtDist(w.km * 1000, u)} · ${w.hours.toFixed(1)} h · ${Math.round(w.tss)} TSS`}
+            >
               <i style={{ height: `${(w.km / topWeek) * 100}%` }} />
             </div>
           ))}

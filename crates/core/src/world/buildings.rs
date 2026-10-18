@@ -262,9 +262,11 @@ impl Buildings {
     pub fn covers(&self, x: f64, z: f64) -> bool {
         let (cx, cz) = chunk_of(x, z);
         // A building belongs to the chunk holding its centre but may reach into a neighbour.
-        (cx - 1..=cx + 1).flat_map(|ix| (cz - 1..=cz + 1).map(move |iz| (ix, iz))).filter_map(|key| self.by_chunk.get(&key)).flatten().any(|b| {
-            (x - b.centre.0).hypot(z - b.centre.1) <= b.radius + 1.5 && inside(&b.ring, x, z)
-        })
+        (cx - 1..=cx + 1)
+            .flat_map(|ix| (cz - 1..=cz + 1).map(move |iz| (ix, iz)))
+            .filter_map(|key| self.by_chunk.get(&key))
+            .flatten()
+            .any(|b| (x - b.centre.0).hypot(z - b.centre.1) <= b.radius + 1.5 && inside(&b.ring, x, z))
     }
 
     /// Extrudes the buildings whose centre lies in chunk `(cx, cz)`.

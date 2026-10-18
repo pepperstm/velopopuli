@@ -34,14 +34,7 @@ mod gpx {
         </trkseg></trk></gpx>"#;
         let (name, points) = parse_gpx(gpx).unwrap();
         assert_eq!(name, "Col & Back");
-        assert_eq!(
-            points,
-            vec![
-                RawPoint { lat: 45.0, lon: 7.0, ele: Some(100.5) },
-                RawPoint { lat: 45.001, lon: 7.001, ele: Some(110.0) },
-                RawPoint { lat: 45.002, lon: 7.002, ele: None },
-            ]
-        );
+        assert_eq!(points, vec![RawPoint { lat: 45.0, lon: 7.0, ele: Some(100.5) }, RawPoint { lat: 45.001, lon: 7.001, ele: Some(110.0) }, RawPoint { lat: 45.002, lon: 7.002, ele: None },]);
     }
 
     #[test]
@@ -303,7 +296,8 @@ mod gamify {
 
     #[test]
     fn awards_xp_levels_and_badges_once() {
-        let ride = RideFacts { distance_m: 40_000.0, ascent_m: 600.0, duration_s: 5400.0, completed: true, beat_pb: false, np: 150.0, ftp: 200.0, climb_categories: vec!["3".into()], ..Default::default() };
+        let ride =
+            RideFacts { distance_m: 40_000.0, ascent_m: 600.0, duration_s: 5400.0, completed: true, beat_pb: false, np: 150.0, ftp: 200.0, climb_categories: vec!["3".into()], ..Default::default() };
         let mut profile = Profile::default();
         let (xp, mut badges) = apply_ride(&mut profile, &ride);
         assert_eq!(xp, 400 + 120 + 50);
@@ -660,7 +654,12 @@ mod vector_tiles {
         // streets: keys [kind, bridge, tunnel, rail], values [primary, rail, true, false]
         let across: &[(i64, i64)] = &[(3900, 2000), (4300, 2000)];
         let (bridge, tunnel, plain, railway) = ([0, 0, 1, 2, 2, 3, 3, 3], [0, 0, 1, 3, 2, 2, 3, 3], [0, 0, 1, 3, 2, 3, 3, 3], [0, 1, 1, 2, 2, 3, 3, 2]);
-        tile.extend(layer_with("streets", &["kind", "bridge", "tunnel", "rail"], &["primary", "rail", "true", "false"], &[line(across, &bridge), line(brook, &tunnel), line(brook, &plain), line(brook, &railway)]));
+        tile.extend(layer_with(
+            "streets",
+            &["kind", "bridge", "tunnel", "rail"],
+            &["primary", "rail", "true", "false"],
+            &[line(across, &bridge), line(brook, &tunnel), line(brook, &plain), line(brook, &railway)],
+        ));
 
         let found = parse_tile(&tile, MAP_ZOOM, 8466, 5890).unwrap();
         assert!(found.footprints.is_empty());
@@ -714,7 +713,10 @@ mod vector_tiles {
 
 mod scenery {
     use super::*;
-    use velopopuli_core::world::{barrier_model, highway_marked, highway_width, UNMARKED, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, WAY_TAGS};
+    use velopopuli_core::world::{
+        barrier_model, highway_marked, highway_width, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery, Surface, Waterway,
+        WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
+    };
 
     /// Terrain tiles at a constant height, covering the route.
     fn level_ground(route: &Route, height: f64) -> Dem {
@@ -1137,7 +1139,14 @@ mod scenery {
             let mut px = vec![0u8; TILE * TILE * 3];
             for y in 0..TILE {
                 let along = (start_row - (key.1 as f64 * TILE as f64 + y as f64)) * m_per_row;
-                let h = 1000.0 + if (1000.0..1400.0).contains(&along) { 100.0 } else if (2000.0..2200.0).contains(&along) { -60.0 } else { 0.0 };
+                let h = 1000.0
+                    + if (1000.0..1400.0).contains(&along) {
+                        100.0
+                    } else if (2000.0..2200.0).contains(&along) {
+                        -60.0
+                    } else {
+                        0.0
+                    };
                 let v = (h + 32768.0) as u32;
                 for x in 0..TILE {
                     px[(y * TILE + x) * 3] = (v / 256) as u8;
@@ -1146,10 +1155,7 @@ mod scenery {
             }
             assert!(dem.insert_rgb(*key, &px, 3));
         }
-        let scenery = Scenery {
-            crossings: vec![road(&route, true, false, &[(0.0, 950.0), (0.0, 1450.0)]), road(&route, false, false, &[(0.0, 1950.0), (0.0, 2250.0)])],
-            ..Default::default()
-        };
+        let scenery = Scenery { crossings: vec![road(&route, true, false, &[(0.0, 950.0), (0.0, 1450.0)]), road(&route, false, false, &[(0.0, 1950.0), (0.0, 2250.0)])], ..Default::default() };
         // Without knowing about them, the road goes over the ridge and down into the valley.
         let mut naive = route.clone();
         align_dem(&mut naive, &dem);

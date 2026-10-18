@@ -80,8 +80,8 @@ export function Devices(): React.JSX.Element {
         <div>
           <h1>Devices</h1>
           <p className="muted">
-            Connect a smart trainer for automatic gradient resistance, plus any power meter, heart-rate strap or cadence sensor. When several
-            devices report the same thing, the most direct measurement is used.
+            Connect a smart trainer for automatic gradient resistance, plus any power meter, heart-rate strap or cadence sensor. When several devices report the
+            same thing, the most direct measurement is used.
           </p>
         </div>
       </div>
@@ -105,8 +105,8 @@ export function Devices(): React.JSX.Element {
       {ant.state === 'opening' && <div className="notice">Opening ANT+ stick…</div>}
       {ant.state === 'scanning' && (
         <div className="notice">
-          ANT+ stick active — {antDevices ? `${antDevices} sensor${antDevices > 1 ? 's' : ''} found, still ` : ''}listening for trainers, power
-          meters, heart-rate, speed and cadence sensors. Wake your sensors (spin the cranks, wear the strap) and they will appear below.
+          ANT+ stick active — {antDevices ? `${antDevices} sensor${antDevices > 1 ? 's' : ''} found, still ` : ''}listening for trainers, power meters,
+          heart-rate, speed and cadence sensors. Wake your sensors (spin the cranks, wear the strap) and they will appear below.
         </div>
       )}
       {ant.state === 'error' && (

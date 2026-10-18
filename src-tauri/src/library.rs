@@ -101,7 +101,10 @@ const GHOST_COLORS: [u32; 6] = [0x9ad7ff, 0xffe08a, 0xc9a6ff, 0xa6ffcf, 0xffb0c8
 
 pub fn list_ghosts(store: &Store, route_id: &str) -> Vec<GhostMeta> {
     let ghosts: Vec<StoredGhost> = store.get(&format!("ghosts-{route_id}")).unwrap_or_default();
-    ghosts.iter().map(|g| GhostMeta { id: g.id.clone(), name: g.name.clone(), color: g.color, distance: g.trace.last().copied().unwrap_or(0.0), time_s: g.trace.len().saturating_sub(1) as f64 }).collect()
+    ghosts
+        .iter()
+        .map(|g| GhostMeta { id: g.id.clone(), name: g.name.clone(), color: g.color, distance: g.trace.last().copied().unwrap_or(0.0), time_s: g.trace.len().saturating_sub(1) as f64 })
+        .collect()
 }
 
 /// Puts a timed track onto the route and keeps it as a ghost.

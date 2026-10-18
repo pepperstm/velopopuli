@@ -59,11 +59,7 @@ impl Dem {
         if channels < 3 || pixels.len() < TILE * TILE * channels {
             return false;
         }
-        let heights = pixels
-            .chunks_exact(channels)
-            .take(TILE * TILE)
-            .map(|p| p[0] as f32 * 256.0 + p[1] as f32 + p[2] as f32 / 256.0 - 32768.0)
-            .collect();
+        let heights = pixels.chunks_exact(channels).take(TILE * TILE).map(|p| p[0] as f32 * 256.0 + p[1] as f32 + p[2] as f32 / 256.0 - 32768.0).collect();
         self.tiles.insert(key, heights);
         true
     }

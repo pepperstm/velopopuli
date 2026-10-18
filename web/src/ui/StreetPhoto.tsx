@@ -44,9 +44,7 @@ export function StreetPhoto({ distance }: { distance: number }): React.JSX.Eleme
   return (
     <div className="street-photo">
       <img src={shown.src} alt="Street-level photo of the road here" />
-      <span>
-        Mapillary · {new Date(shown.capturedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
-      </span>
+      <span>Mapillary · {new Date(shown.capturedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}</span>
     </div>
   )
 }

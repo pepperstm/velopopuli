@@ -124,7 +124,14 @@ pub async fn connect(dir: &Path, http: &reqwest::Client, open_browser: impl FnOn
     let redirect = format!("http://localhost:{PORT}/callback");
     let auth = reqwest::Url::parse_with_params(
         "https://www.strava.com/oauth/authorize",
-        &[("client_id", creds.client_id.as_str()), ("response_type", "code"), ("redirect_uri", &redirect), ("approval_prompt", "auto"), ("scope", "read,activity:read_all,activity:write"), ("state", &state)],
+        &[
+            ("client_id", creds.client_id.as_str()),
+            ("response_type", "code"),
+            ("redirect_uri", &redirect),
+            ("approval_prompt", "auto"),
+            ("scope", "read,activity:read_all,activity:write"),
+            ("state", &state),
+        ],
     )
     .map_err(|e| e.to_string())?;
     open_browser(auth.as_str());
@@ -297,10 +304,6 @@ pub async fn activity_track(dir: &Path, http: &reqwest::Client, id: u64) -> Resu
     let (Some(ll), Some(tt)) = (streams["latlng"]["data"].as_array(), streams["time"]["data"].as_array()) else {
         return Err("That activity has no GPS track.".into());
     };
-    let track = ll
-        .iter()
-        .zip(tt)
-        .filter_map(|(p, t)| Some((start + t.as_f64()?, p[0].as_f64()?, p[1].as_f64()?)))
-        .collect();
+    let track = ll.iter().zip(tt).filter_map(|(p, t)| Some((start + t.as_f64()?, p[0].as_f64()?, p[1].as_f64()?))).collect();
     Ok((info["name"].as_str().unwrap_or("Strava ride").to_string(), track))
 }

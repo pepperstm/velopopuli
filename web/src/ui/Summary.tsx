@@ -44,9 +44,7 @@ export function StravaUpload({ ride, auto }: { ride: RideSummary; auto?: boolean
 
   if (!status) return null
   if (activityId) {
-    return (
-      <button onClick={() => void api.openExternal(`https://www.strava.com/activities/${activityId}`)}>View on Strava ↗</button>
-    )
+    return <button onClick={() => void api.openExternal(`https://www.strava.com/activities/${activityId}`)}>View on Strava ↗</button>
   }
   if (!status.connected) return <span className="muted small">Connect Strava in Settings to upload rides.</span>
   return (
@@ -90,7 +88,11 @@ export function Summary({ ride, onDone }: { ride: RideSummary; onDone: () => voi
         {stat('TSS', ride.tss.toFixed(0))}
       </div>
       {ride.workout && <div className="pb-banner dim">Workout: {ride.workout}</div>}
-      {ride.segmentPrs.length > 0 && <div className="pb-banner">⏱ New segment best{ride.segmentPrs.length > 1 ? 's' : ''}: {ride.segmentPrs.join(', ')}</div>}
+      {ride.segmentPrs.length > 0 && (
+        <div className="pb-banner">
+          ⏱ New segment best{ride.segmentPrs.length > 1 ? 's' : ''}: {ride.segmentPrs.join(', ')}
+        </div>
+      )}
       {est && (
         <div className="pb-banner">
           This ride suggests an FTP of <b>{est.watts} W</b> ({est.method}).{' '}

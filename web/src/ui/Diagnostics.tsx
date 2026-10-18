@@ -3,7 +3,15 @@ import { errorText } from '../bridge'
 import { api } from '../state'
 
 /** A button that saves a diagnostics report, after asking what went wrong. */
-export function ReportButton({ label = 'Report a problem…', className = 'ghost', prompt = '' }: { label?: string; className?: string; prompt?: string }): React.JSX.Element {
+export function ReportButton({
+  label = 'Report a problem…',
+  className = 'ghost',
+  prompt = ''
+}: {
+  label?: string
+  className?: string
+  prompt?: string
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState(prompt)
   const [busy, setBusy] = useState(false)
@@ -36,12 +44,17 @@ export function ReportButton({ label = 'Report a problem…', className = 'ghost
           <div className="modal">
             <h2>Save a diagnostics report</h2>
             <p className="muted small">
-              One text file with what your sensors and trainer did over the last couple of days: connections, drop-outs, the data they sent and
-              what was sent to them, plus a summary at the top. It has no account details, tokens or locations.
+              One text file with what your sensors and trainer did over the last couple of days: connections, drop-outs, the data they sent and what was sent to
+              them, plus a summary at the top. It has no account details, tokens or locations.
             </p>
             <label className="field stack">
               <span>What happened? (optional, but it helps)</span>
-              <textarea rows={4} value={note} placeholder="e.g. Tacx Vortex over Bluetooth: power dropped to 0 every few minutes while I kept pedalling." onChange={(e) => setNote(e.target.value)} />
+              <textarea
+                rows={4}
+                value={note}
+                placeholder="e.g. Tacx Vortex over Bluetooth: power dropped to 0 every few minutes while I kept pedalling."
+                onChange={(e) => setNote(e.target.value)}
+              />
             </label>
             <p className="muted small">GitHub issues are public: anyone can read the summary and the attached file.</p>
             {result && <p className="small">{result}</p>}

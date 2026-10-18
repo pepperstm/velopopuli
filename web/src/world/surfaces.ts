@@ -24,7 +24,17 @@ function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContex
 }
 
 /** Speckle of `count` dots in shades `[lo, lo + spread]` over the surface between the shoulders. */
-function speckle(ctx: CanvasRenderingContext2D, w: number, h: number, rnd: () => number, count: number, rgb: [number, number, number], spread: number, alpha: number, size: number): void {
+function speckle(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  rnd: () => number,
+  count: number,
+  rgb: [number, number, number],
+  spread: number,
+  alpha: number,
+  size: number
+): void {
   const edge = (w * 20) / 256
   for (let i = 0; i < count; i++) {
     const k = rnd() * spread - spread / 2

@@ -44,7 +44,13 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.45 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font:
+    14px/1.45 'DM Sans',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   overflow: hidden;

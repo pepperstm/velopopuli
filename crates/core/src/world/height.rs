@@ -198,8 +198,7 @@ impl HeightField {
         }
         let (lx, lz) = (cell(x, CHUNK), cell(z, CHUNK));
         let (u, v) = (x / CHUNK - lx as f64, z / CHUNK - lz as f64);
-        let base = (self.regional(lx, lz) * (1.0 - u) + self.regional(lx + 1, lz) * u) * (1.0 - v)
-            + (self.regional(lx, lz + 1) * (1.0 - u) + self.regional(lx + 1, lz + 1) * u) * v;
+        let base = (self.regional(lx, lz) * (1.0 - u) + self.regional(lx + 1, lz) * u) * (1.0 - v) + (self.regional(lx, lz + 1) * (1.0 - u) + self.regional(lx + 1, lz + 1) * u) * v;
         base + fbm(x / 420.0, z / 420.0) * 70.0 + fbm(x / 90.0 + 40.0, z / 90.0) * 12.0 + rough * 1.5
     }
 
@@ -274,7 +273,13 @@ impl HeightField {
             around = around.max(level(TUNNEL) + COVER * (1.0 - smoothstep(30.0, 60.0, tunnel.0)));
         }
         // What the ground does here is decided by the stretch of road nearest to it.
-        let nearest = if tunnel.0 < road { TUNNEL } else if bridge.0 < open.0 { BRIDGE } else { OPEN };
+        let nearest = if tunnel.0 < road {
+            TUNNEL
+        } else if bridge.0 < open.0 {
+            BRIDGE
+        } else {
+            OPEN
+        };
         if tunnel.1 == usize::MAX && bridge.1 == usize::MAX && open.1 == usize::MAX {
             return Probe { ground: around, surface: around, road, open: open.0, trench: false };
         }

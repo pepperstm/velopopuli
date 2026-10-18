@@ -152,7 +152,14 @@ export class Terrain {
   // Roads lie on the ground and are painted over it, lesser ways first: they are drawn after
   // everything solid and leave the depth buffer alone, so they can't flicker against the
   // ground or against each other where they meet.
-  private roadMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: waysTexture(), depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })
+  private roadMaterial = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    map: waysTexture(),
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4
+  })
   private far: THREE.Mesh
   private farAt = ''
   private farBusy = false
@@ -301,7 +308,11 @@ export class Terrain {
       const data = decodeGrid(await api.ride.far(cx, cz))
       if (this.disposed) return
       const geo = this.far.geometry
-      for (const [name, values] of [['position', data.positions], ['normal', data.normals], ['color', data.colors]] as const) {
+      for (const [name, values] of [
+        ['position', data.positions],
+        ['normal', data.normals],
+        ['color', data.colors]
+      ] as const) {
         const attr = geo.getAttribute(name) as THREE.BufferAttribute
         ;(attr.array as Float32Array).set(values)
         attr.needsUpdate = true

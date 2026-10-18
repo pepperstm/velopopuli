@@ -106,7 +106,15 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         // The banners on the barriers are lettered in the website's typeface; make sure it is loaded first.
         await document.fonts.load('800 60px Manrope').catch(() => undefined)
         if (disposed) return
-        const world = new World(canvas, loaded, started.layout, started.covered, (i) => `${i} ${imperial ? 'mi' : 'km'}`, imperial ? 1609.344 : 1000, started.landmarks)
+        const world = new World(
+          canvas,
+          loaded,
+          started.layout,
+          started.covered,
+          (i) => `${i} ${imperial ? 'mi' : 'km'}`,
+          imperial ? 1609.344 : 1000,
+          started.landmarks
+        )
         worldRef.current = world
         const native = settingsRef.current.nativeRenderer && (await api.native.available())
         if (!native) await world.load()
@@ -136,7 +144,14 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         observer.observe(canvas)
         world.resize(canvas.clientWidth, canvas.clientHeight)
         smokeHooks.capture = () => world.capture()
-        smokeHooks.world = { realTerrain: started.realTerrain, buildings: started.buildings, scenery: started.scenery, covered: started.covered, native: nativeRef.current, frames: () => frames }
+        smokeHooks.world = {
+          realTerrain: started.realTerrain,
+          buildings: started.buildings,
+          scenery: started.scenery,
+          covered: started.covered,
+          native: nativeRef.current,
+          frames: () => frames
+        }
         smokeHooks.native = nativeRef.current
         const smoke = await api.smoke.config()
         for (let i = 0; i < (smoke?.camera ?? 0); i++) cycleCamera()
@@ -371,7 +386,13 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                         if (!next) return <span>last step</span>
                         return (
                           <>
-                            <b>{next.kind === 'power' ? `${Math.round(next.from * settings.rider.ftp * hud.intensity)} W` : next.kind === 'max' ? 'All out' : 'Free'}</b>
+                            <b>
+                              {next.kind === 'power'
+                                ? `${Math.round(next.from * settings.rider.ftp * hud.intensity)} W`
+                                : next.kind === 'max'
+                                  ? 'All out'
+                                  : 'Free'}
+                            </b>
                             <span>next · {fmtTime(next.durationS)}</span>
                           </>
                         )
@@ -419,7 +440,11 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                   <div key={r.id} className={r.me ? 'me' : ''}>
                     <i style={{ background: r.color }} />
                     <span>{r.name}</span>
-                    <em>{r.me ? '' : `${r.delta >= 0 ? '+' : '−'}${Math.abs(r.delta) >= 1000 ? `${distValue(Math.abs(r.delta), units).toFixed(1)} ${distUnit(units)}` : `${Math.round(Math.abs(r.delta))} m`}`}</em>
+                    <em>
+                      {r.me
+                        ? ''
+                        : `${r.delta >= 0 ? '+' : '−'}${Math.abs(r.delta) >= 1000 ? `${distValue(Math.abs(r.delta), units).toFixed(1)} ${distUnit(units)}` : `${Math.round(Math.abs(r.delta))} m`}`}
+                    </em>
                   </div>
                 ))}
               </div>
@@ -527,14 +552,16 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             <div className="controls">
               <button onClick={togglePause}>{hud.paused ? 'Resume' : 'Pause'}</button>
               <button onClick={() => cycleCamera()}>Camera</button>
-              {init.workout && hud.workout ? null : <div className="seg">
-                <button className={mode === 'sim' ? 'on' : ''} onClick={() => setTrainer({ mode: 'sim' })} title="Trainer resistance follows the gradient">
-                  Gradient
-                </button>
-                <button className={mode === 'erg' ? 'on' : ''} onClick={() => setTrainer({ mode: 'erg' })} title="Trainer holds a fixed power">
-                  ERG
-                </button>
-              </div>}
+              {init.workout && hud.workout ? null : (
+                <div className="seg">
+                  <button className={mode === 'sim' ? 'on' : ''} onClick={() => setTrainer({ mode: 'sim' })} title="Trainer resistance follows the gradient">
+                    Gradient
+                  </button>
+                  <button className={mode === 'erg' ? 'on' : ''} onClick={() => setTrainer({ mode: 'erg' })} title="Trainer holds a fixed power">
+                    ERG
+                  </button>
+                </div>
+              )}
               {init.workout && hud.workout ? null : mode === 'erg' ? (
                 <div className="stepper">
                   <button onClick={() => nudge(-10)}>−</button>
@@ -574,7 +601,11 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                 <label>Next {fmtDist(1350, units, 1)}</label>
               </div>
               <div className="profile-all">
-                <ProfileChart route={route} distance={hud.distance} markers={standings.filter((r) => !r.me).map((r) => ({ distance: hud.distance + r.delta, color: r.color }))} />
+                <ProfileChart
+                  route={route}
+                  distance={hud.distance}
+                  markers={standings.filter((r) => !r.me).map((r) => ({ distance: hud.distance + r.delta, color: r.color }))}
+                />
               </div>
             </div>
           </div>

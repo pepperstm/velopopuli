@@ -10,8 +10,8 @@ use crate::fitness::power_curve;
 use crate::gpx::{Climb, Route, RoutePos};
 use crate::physics::{step_speed, wind_coefficient, PhysicsParams};
 use crate::segments::{Segment, SegmentBest, SegmentSource, SPLIT_M};
-use crate::workout::{StepKind, Workout, WorkoutPos};
 use crate::types::{PersonalBest, Settings, TrainerSettings};
+use crate::workout::{StepKind, Workout, WorkoutPos};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RideInput {
@@ -173,12 +173,7 @@ impl RideEngine {
     }
 
     pub fn with_options(route: Arc<Route>, settings: &Settings, pb: Option<PersonalBest>, options: RideOptions) -> Self {
-        let params = PhysicsParams {
-            mass: settings.rider.weight_kg + settings.rider.bike_kg,
-            crr: settings.physics.crr,
-            cda: settings.physics.cda,
-            max_speed: settings.physics.max_speed_kph / 3.6,
-        };
+        let params = PhysicsParams { mass: settings.rider.weight_kg + settings.rider.bike_kg, crr: settings.physics.crr, cda: settings.physics.cda, max_speed: settings.physics.max_speed_kph / 3.6 };
         let mut rivals = Vec::new();
         if pb.as_ref().is_some_and(|p| p.trace.len() > 1) {
             let trace = Arc::new(pb.as_ref().unwrap().trace.clone());
@@ -336,12 +331,7 @@ impl RideEngine {
             if self.distance >= c.end {
                 let time_s = self.elapsed - self.climb_entered_at;
                 self.climb_times.insert(i, time_s);
-                self.last_climb_result = Some(ClimbResult {
-                    index: i,
-                    climb: c.clone(),
-                    time_s,
-                    previous_best: self.pb.as_ref().and_then(|p| p.climbs.get(&i).copied()),
-                });
+                self.last_climb_result = Some(ClimbResult { index: i, climb: c.clone(), time_s, previous_best: self.pb.as_ref().and_then(|p| p.climbs.get(&i).copied()) });
                 self.climb_index = None;
             }
             return;
@@ -360,17 +350,7 @@ impl RideEngine {
         let time = (self.last_sample_time + 1000).max(wall_ms / 1000 * 1000);
         self.last_sample_time = time;
         let power = self.power.round();
-        self.samples.push(FitSample {
-            time,
-            lat: self.pos.lat,
-            lon: self.pos.lon,
-            ele: self.pos.ele,
-            dist: self.distance,
-            speed: self.speed,
-            power,
-            hr: self.hr,
-            cadence: self.cadence,
-        });
+        self.samples.push(FitSample { time, lat: self.pos.lat, lon: self.pos.lon, ele: self.pos.ele, dist: self.distance, speed: self.speed, power, hr: self.hr, cadence: self.cadence });
         self.trace.push(self.distance);
         self.n += 1;
         self.sum_power += power;

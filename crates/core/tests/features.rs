@@ -65,7 +65,8 @@ fn reads_zwift_workouts() {
 
 #[test]
 fn reads_erg_and_mrc_workouts() {
-    let erg = "[COURSE HEADER]\nVERSION = 2\nUNITS = ENGLISH\nFILE NAME = Over unders\nMINUTES WATTS\n[END COURSE HEADER]\n[COURSE DATA]\n0.00\t100\n5.00\t200\n5.00\t250\n10.00\t250\n[END COURSE DATA]\n";
+    let erg =
+        "[COURSE HEADER]\nVERSION = 2\nUNITS = ENGLISH\nFILE NAME = Over unders\nMINUTES WATTS\n[END COURSE HEADER]\n[COURSE DATA]\n0.00\t100\n5.00\t200\n5.00\t250\n10.00\t250\n[END COURSE DATA]\n";
     let w = parse_erg(erg, "e", "file", 250.0).unwrap();
     assert_eq!(w.name, "Over unders");
     assert_eq!(w.steps.len(), 2);
@@ -216,7 +217,12 @@ fn ghosts_from_recorded_rides() {
     assert!(close(trace[100], 800.0, 20.0), "{}", trace[100]);
     assert!(trace.windows(2).all(|w| w[1] >= w[0]));
 
-    let mut engine = RideEngine::with_options(route.clone(), &Settings::default(), None, RideOptions { ghosts: vec![GhostTrace { id: "g".into(), name: "Friend".into(), color: 1, trace: Arc::new(trace) }], ..Default::default() });
+    let mut engine = RideEngine::with_options(
+        route.clone(),
+        &Settings::default(),
+        None,
+        RideOptions { ghosts: vec![GhostTrace { id: "g".into(), name: "Friend".into(), color: 1, trace: Arc::new(trace) }], ..Default::default() },
+    );
     for i in 0..(60 * 10) {
         engine.tick(0.1, RideInput { power: 200.0, ..Default::default() }, 1_700_000_000_000 + i * 100);
     }
@@ -256,10 +262,7 @@ fn reads_gpx_times() {
     assert_eq!(parse_iso_time("1970-01-01T00:00:00Z"), Some(0.0));
     assert_eq!(parse_iso_time("2024-03-01T12:30:15Z"), Some(1_709_296_215.0));
     assert_eq!(parse_iso_time("2024-03-01T13:30:15.500+01:00"), Some(1_709_296_215.5));
-    let gpx = format!(
-        "<gpx><trk><trkseg>{}</trkseg></trk></gpx>",
-        (0..12).map(|i| format!("<trkpt lat=\"45.{i:02}\" lon=\"6\"><time>2024-03-01T12:00:{i:02}Z</time></trkpt>")).collect::<String>()
-    );
+    let gpx = format!("<gpx><trk><trkseg>{}</trkseg></trk></gpx>", (0..12).map(|i| format!("<trkpt lat=\"45.{i:02}\" lon=\"6\"><time>2024-03-01T12:00:{i:02}Z</time></trkpt>")).collect::<String>());
     let pts = parse_gpx_track_times(&gpx).unwrap();
     assert_eq!(pts.len(), 12);
     assert!(close(pts[11].0 - pts[0].0, 11.0, 1e-9));
@@ -303,11 +306,7 @@ fn picks_photos_facing_along_the_route() {
     let p = |d: f64| route.sample_at(d);
     let c = |id: &str, d: f64, bearing: f64, t: u64| (id.to_string(), p(d).lat, p(d).lon, bearing, format!("https://x/{id}"), t);
     // The first leg heads north (bearing 0), the second east (90).
-    let photos = pick_photos(
-        &route,
-        &[c("a", 100.0, 5.0, 1), c("b", 110.0, 355.0, 2), c("back", 300.0, 180.0, 3), c("c", 1500.0, 92.0, 4), c("north-on-east-leg", 1600.0, 0.0, 5)],
-        30.0,
-    );
+    let photos = pick_photos(&route, &[c("a", 100.0, 5.0, 1), c("b", 110.0, 355.0, 2), c("back", 300.0, 180.0, 3), c("c", 1500.0, 92.0, 4), c("north-on-east-leg", 1600.0, 0.0, 5)], 30.0);
     let ids: Vec<&str> = photos.iter().map(|p| p.id.as_str()).collect();
     // Same 30 m slot: the newer one wins. Looking backwards or sideways: dropped.
     assert_eq!(ids, ["b", "c"]);

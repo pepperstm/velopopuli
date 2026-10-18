@@ -49,15 +49,7 @@ pub struct PageDecoder {
 
 impl PageDecoder {
     pub fn new(profile: ProfileId) -> Self {
-        Self {
-            profile,
-            crank: RevCounter::new(65536, 1024.0),
-            wheel: RevCounter::new(65536, 1024.0),
-            last_event: None,
-            last_event_at: 0,
-            torque: None,
-            last_power_page_at: None,
-        }
+        Self { profile, crank: RevCounter::new(65536, 1024.0), wheel: RevCounter::new(65536, 1024.0), last_event: None, last_event_at: 0, torque: None, last_power_page_at: None }
     }
 
     pub fn decode(&mut self, p: &[u8; 8], now_ms: u64) -> Option<Readings> {
@@ -73,10 +65,7 @@ impl PageDecoder {
             }),
             // Single-function sensors put the event time/count in the last four bytes of every page.
             ProfileId::Cadence => Some(Readings { cadence: Some(self.crank.update(u16_at(p, 6) as u64, u16_at(p, 4) as u64, now_ms)), ..Default::default() }),
-            ProfileId::Speed => Some(Readings {
-                wheel_speed: Some(self.wheel.update(u16_at(p, 6) as u64, u16_at(p, 4) as u64, now_ms) / 60.0 * WHEEL_CIRCUMFERENCE),
-                ..Default::default()
-            }),
+            ProfileId::Speed => Some(Readings { wheel_speed: Some(self.wheel.update(u16_at(p, 6) as u64, u16_at(p, 4) as u64, now_ms) / 60.0 * WHEEL_CIRCUMFERENCE), ..Default::default() }),
         }
     }
 
@@ -125,11 +114,7 @@ pub fn decode_fec(p: &[u8; 8]) -> Option<Readings> {
         // General FE data
         0x10 => {
             let speed = u16_at(p, 4);
-            Some(Readings {
-                wheel_speed: (speed != 0xffff).then_some(speed as f64 * 0.001),
-                hr: (p[6] != 0xff && p[6] != 0).then_some(p[6] as f64),
-                ..Default::default()
-            })
+            Some(Readings { wheel_speed: (speed != 0xffff).then_some(speed as f64 * 0.001), hr: (p[6] != 0xff && p[6] != 0).then_some(p[6] as f64), ..Default::default() })
         }
         // Specific trainer data
         0x19 => {

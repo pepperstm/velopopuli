@@ -17,16 +17,16 @@ use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
 use velopopuli_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
-use velopopuli_core::workout::{Workout, WorkoutPos};
 use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
+use velopopuli_core::workout::{Workout, WorkoutPos};
 use velopopuli_core::world::{align_dem_with, landmarks, route_structures, Landmark, SceneryCounts, World, WorldLayout, LAYOUT};
 
 use crate::devices::sim::DemoRider;
 use crate::devices::Devices;
-use crate::store::Store;
 use crate::group::GroupLink;
 use crate::library;
 use crate::smart::SmartLink;
+use crate::store::Store;
 use crate::{mapdata, now_ms, terrain};
 
 pub const DEMO_ROUTE_ID: &str = "demo";
@@ -154,14 +154,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub async fn start(
-        app: &AppHandle,
-        store: &Store,
-        http: &reqwest::Client,
-        devices: Arc<Devices>,
-        demo: Arc<DemoRider>,
-        req: &RideRequest,
-    ) -> Result<(Arc<Session>, RideInit), String> {
+    pub async fn start(app: &AppHandle, store: &Store, http: &reqwest::Client, devices: Arc<Devices>, demo: Arc<DemoRider>, req: &RideRequest) -> Result<(Arc<Session>, RideInit), String> {
         let route_id = req.route_id.as_str();
         let settings: Settings = store.get("settings").unwrap_or_default();
         let mut route = load_route(store, route_id)?;
@@ -194,7 +187,12 @@ impl Session {
         let real_terrain = dem.is_some();
         let mut world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints);
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
-        if let Some(s) = std::env::var("VP_SMOKE_SURFACE").ok().filter(|_| std::env::var_os("VP_SMOKE").is_some()).and_then(|v| v.parse::<usize>().ok()).and_then(|i| velopopuli_core::world::Surface::ALL.get(i).copied()) {
+        if let Some(s) = std::env::var("VP_SMOKE_SURFACE")
+            .ok()
+            .filter(|_| std::env::var_os("VP_SMOKE").is_some())
+            .and_then(|v| v.parse::<usize>().ok())
+            .and_then(|i| velopopuli_core::world::Surface::ALL.get(i).copied())
+        {
             world.scene.surfaces = vec![s; route.n];
         }
         let world = Arc::new(world);
@@ -285,8 +283,15 @@ impl Session {
             pb_climbs: pb.map(|p| p.climbs).unwrap_or_default(),
             workout,
             segments,
-            centre: { let m = route.sample_at(route.total / 2.0); [m.lat, m.lon] },
-            hour: { use chrono::Timelike; let t = Local::now(); t.hour() as f64 + t.minute() as f64 / 60.0 },
+            centre: {
+                let m = route.sample_at(route.total / 2.0);
+                [m.lat, m.lon]
+            },
+            hour: {
+                use chrono::Timelike;
+                let t = Local::now();
+                t.hour() as f64 + t.minute() as f64 / 60.0
+            },
             landmarks: if settings.look.landmarks { landmarks(&route, map.scenery.as_ref()) } else { Vec::new() },
         };
         if std::env::var_os("VP_SMOKE").is_some() {
@@ -298,7 +303,7 @@ impl Session {
         crate::diag::event(
             "ride",
             format!(
-"surfaces {} widths {}",
+                "surfaces {} widths {}",
                 velopopuli_core::world::surface_runs(&world.scene.surfaces)
                     .iter()
                     .map(|(a, b, s)| format!("{}:{:.0}-{:.0}m", s.name(), *a as f64 * route.step, *b as f64 * route.step))
@@ -440,7 +445,10 @@ impl Session {
         let workout_done = engine.workout.is_some() && engine.workout_pos().is_none();
         let curve = power_curve(&engine.samples.iter().map(|s| s.power).collect::<Vec<_>>());
         let ftp_estimate = estimate_ftp(&curve, ramp_test).filter(|e| e.watts > settings.rider.ftp + 2.0 || (ramp_test && workout_done));
-        let hour = { use chrono::Timelike; Local.timestamp_millis_opt(session.start_time as i64).single().map_or(12, |t| t.hour()) };
+        let hour = {
+            use chrono::Timelike;
+            Local.timestamp_millis_opt(session.start_time as i64).single().map_or(12, |t| t.hour())
+        };
         let beat_other_ghost = completed && engine.rivals.iter().any(|r| r.kind == RivalKind::Ghost && self.imported_ghosts.contains(&r.id) && r.distance < engine.route.total);
         let facts = RideFacts {
             distance_m: engine.distance,
@@ -510,7 +518,16 @@ impl Drop for Session {
 
 /// The simulation loop: 50 Hz physics, 20 Hz state to the UI, 1 Hz commands to the trainer.
 #[allow(clippy::too_many_arguments)]
-fn run(engine: Arc<Mutex<RideEngine>>, settings: Arc<Mutex<Settings>>, stop: Arc<AtomicBool>, app: AppHandle, devices: Arc<Devices>, demo: Arc<DemoRider>, group: Option<Arc<GroupLink>>, smart: Option<SmartLink>) {
+fn run(
+    engine: Arc<Mutex<RideEngine>>,
+    settings: Arc<Mutex<Settings>>,
+    stop: Arc<AtomicBool>,
+    app: AppHandle,
+    devices: Arc<Devices>,
+    demo: Arc<DemoRider>,
+    group: Option<Arc<GroupLink>>,
+    smart: Option<SmartLink>,
+) {
     let mut last = Instant::now();
     let mut emitted = last;
     let mut commanded = last - Duration::from_secs(2);
@@ -524,7 +541,10 @@ fn run(engine: Arc<Mutex<RideEngine>>, settings: Arc<Mutex<Settings>>, stop: Arc
         let now = Instant::now();
         let dt = (now - last).as_secs_f64();
         last = now;
-        let (trainer, rider_ftp) = { let s = settings.lock().unwrap(); (s.trainer.clone(), s.rider.ftp) };
+        let (trainer, rider_ftp) = {
+            let s = settings.lock().unwrap();
+            (s.trainer.clone(), s.rider.ftp)
+        };
         let tel = devices.telemetry(trainer.virtual_power);
 
         let mut engine = engine.lock().unwrap();
@@ -544,12 +564,7 @@ fn run(engine: Arc<Mutex<RideEngine>>, settings: Arc<Mutex<Settings>>, stop: Arc
             devices.command_trainer(cmd);
             // One line a second: what the ride used, what was sent, and what each device said.
             let f = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v:.0}"));
-            let per_device: Vec<String> = devices
-                .snapshot()
-                .devices
-                .iter()
-                .map(|d| format!("{}:{:?}:{}", d.id, d.status, crate::diag::readings(&d.readings).replace(' ', ",")))
-                .collect();
+            let per_device: Vec<String> = devices.snapshot().devices.iter().map(|d| format!("{}:{:?}:{}", d.id, d.status, crate::diag::readings(&d.readings).replace(' ', ","))).collect();
             crate::diag::event(
                 "ride",
                 format!(

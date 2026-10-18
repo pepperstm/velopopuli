@@ -84,12 +84,7 @@ pub fn parse_gpx(text: &str) -> Result<(String, Vec<RawPoint>), String> {
                 if !lat.is_finite() || !lon.is_finite() || lat.abs() > 90.0 || lon.abs() > 180.0 {
                     return None;
                 }
-                let ele = n
-                    .children()
-                    .find(|c| c.is_element() && c.tag_name().name() == "ele")
-                    .and_then(|c| c.text())
-                    .and_then(|t| t.trim().parse::<f64>().ok())
-                    .filter(|e| e.is_finite());
+                let ele = n.children().find(|c| c.is_element() && c.tag_name().name() == "ele").and_then(|c| c.text()).and_then(|t| t.trim().parse::<f64>().ok()).filter(|e| e.is_finite());
                 Some(RawPoint { lat, lon, ele })
             })
             .collect()
@@ -229,14 +224,7 @@ fn detect_climbs(route: &Route) -> Vec<Climb> {
         let length = (peak - start) as f64 * step;
         if gain >= 30.0 && length >= 400.0 && gain / length >= 0.03 {
             let avg_grade = gain / length;
-            climbs.push(Climb {
-                start: start as f64 * step,
-                end: peak as f64 * step,
-                gain,
-                length,
-                avg_grade,
-                category: categorise(length, avg_grade).to_string(),
-            });
+            climbs.push(Climb { start: start as f64 * step, end: peak as f64 * step, gain, length, avg_grade, category: categorise(length, avg_grade).to_string() });
         }
         i = peak.max(i + 1);
     }

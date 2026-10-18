@@ -59,11 +59,10 @@ export function History({ profile }: { profile: Profile }): React.JSX.Element {
           <div className="card ride-row" key={r.id}>
             <div>
               <h3>
-                {r.routeName} {r.isPb && <span className="tag">PB</span>} {!r.completed && <span className="tag dim">partial</span>} {r.workout && <span className="tag dim">{r.workout}</span>} {r.group && <span className="tag dim">group</span>}
+                {r.routeName} {r.isPb && <span className="tag">PB</span>} {!r.completed && <span className="tag dim">partial</span>}{' '}
+                {r.workout && <span className="tag dim">{r.workout}</span>} {r.group && <span className="tag dim">group</span>}
               </h3>
-              <div className="muted small">
-                {new Date(r.startedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-              </div>
+              <div className="muted small">{new Date(r.startedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</div>
             </div>
             <div className="readings">
               <span>{fmtDist(r.distanceM, u)}</span>

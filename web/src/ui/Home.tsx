@@ -114,7 +114,15 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
         </div>
         <div className="row">
           <button onClick={() => setJoining(true)}>Join a group ride</button>
-          <button className="primary" onClick={() => void api.routes.importDialog().then((r) => add(r.added, r.problems), (err) => setError(errorText(err)))}>
+          <button
+            className="primary"
+            onClick={() =>
+              void api.routes.importDialog().then(
+                (r) => add(r.added, r.problems),
+                (err) => setError(errorText(err))
+              )
+            }
+          >
             Import GPX…
           </button>
         </div>
@@ -123,7 +131,18 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
         <div className="card join">
           <label className="field">
             <span>Room code from the host</span>
-            <input value={room} autoFocus onChange={(e) => setRoom(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32))} />
+            <input
+              value={room}
+              autoFocus
+              onChange={(e) =>
+                setRoom(
+                  e.target.value
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9-]/g, '')
+                    .slice(0, 32)
+                )
+              }
+            />
           </label>
           <div className="row">
             <button

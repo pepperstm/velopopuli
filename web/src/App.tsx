@@ -34,20 +34,30 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
     const routes = await api.kv.get<RouteMeta[]>('routes')
     await api.devices.demoAdd()
     setScreen({ name: 'ride', request: { routeId: routes?.[0]?.id ?? 'demo', workoutId: smoke.workout, groupRoom: smoke.room, ghostIds: smoke.ghosts ?? [] } })
-  } else if (smoke.screen === 'devices' || smoke.screen === 'history' || smoke.screen === 'settings' || smoke.screen === 'workouts' || smoke.screen === 'home' || smoke.screen === 'explore') {
+  } else if (
+    smoke.screen === 'devices' ||
+    smoke.screen === 'history' ||
+    smoke.screen === 'settings' ||
+    smoke.screen === 'workouts' ||
+    smoke.screen === 'home' ||
+    smoke.screen === 'explore'
+  ) {
     if (smoke.screen === 'devices') await api.devices.demoAdd()
     setScreen({ name: smoke.screen })
   }
   // Demo clips: window frames at 15 a second over the last `clip` seconds.
   if (smoke.clip) {
     const count = Math.round(smoke.clip * 15)
-    setTimeout(() => {
-      let i = 0
-      const timer = window.setInterval(() => {
-        void api.smoke.frame(i++)
-        if (i >= count) window.clearInterval(timer)
-      }, 1000 / 15)
-    }, Math.max(0, smoke.ms - smoke.clip * 1000 - 300))
+    setTimeout(
+      () => {
+        let i = 0
+        const timer = window.setInterval(() => {
+          void api.smoke.frame(i++)
+          if (i >= count) window.clearInterval(timer)
+        }, 1000 / 15)
+      },
+      Math.max(0, smoke.ms - smoke.clip * 1000 - 300)
+    )
   }
   setTimeout(async () => {
     // The native renderer saves its own picture of the next frame.

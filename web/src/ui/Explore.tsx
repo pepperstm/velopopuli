@@ -147,7 +147,10 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
   const save = async (): Promise<void> => {
     if (!planned) return
     try {
-      const meta = await api.routes.importText(name.trim() || 'Planned route', planned.gpx.replace(/<name>[^<]*<\/name>/, `<name>${escapeXml(name.trim() || 'Planned route')}</name>`))
+      const meta = await api.routes.importText(
+        name.trim() || 'Planned route',
+        planned.gpx.replace(/<name>[^<]*<\/name>/, `<name>${escapeXml(name.trim() || 'Planned route')}</name>`)
+      )
       const routes = (await api.kv.get<RouteMeta[]>('routes')) ?? []
       await api.kv.set('routes', [meta, ...routes])
       setSaved(meta.name)
@@ -161,9 +164,16 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
     <div className="explore">
       <div className="explore-side">
         <h1>Find a route</h1>
-        <p className="muted small">Click the map to add waypoints from start to finish; drag one to move it, click it to remove it. Routing by BRouter, with real elevation.</p>
+        <p className="muted small">
+          Click the map to add waypoints from start to finish; drag one to move it, click it to remove it. Routing by BRouter, with real elevation.
+        </p>
         <div className="row">
-          <input value={query} placeholder="Search for a place" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void search()} />
+          <input
+            value={query}
+            placeholder="Search for a place"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void search()}
+          />
           <button onClick={() => void search()}>Search</button>
         </div>
         {places.length > 0 && (

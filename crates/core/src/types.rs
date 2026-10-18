@@ -294,4 +294,3 @@ pub struct RideSummary {
     #[serde(default)]
     pub group: bool,
 }
-

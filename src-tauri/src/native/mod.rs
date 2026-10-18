@@ -18,9 +18,9 @@ use std::time::{Duration, Instant};
 use bytemuck::{Pod, Zeroable};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager};
-use wgpu::util::DeviceExt;
 use velopopuli_core::ride::{RideEngine, RivalKind};
 use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, LAYOUT, UNMARKED};
+use wgpu::util::DeviceExt;
 
 use host::HostView;
 
@@ -230,7 +230,8 @@ impl Native {
                 let size = host.size();
                 let (display, handle) = host.handles();
                 // SAFETY: the view outlives the surface: it is removed only after the render thread ends.
-                let surface = unsafe { made_instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle { raw_display_handle: display, raw_window_handle: handle }) }.map_err(|e| e.to_string())?;
+                let surface =
+                    unsafe { made_instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle { raw_display_handle: display, raw_window_handle: handle }) }.map_err(|e| e.to_string())?;
                 Ok::<_, String>((host, surface, size))
             })();
             let _ = tx.send(made);
@@ -372,12 +373,7 @@ fn look_at(forward: [f64; 3]) -> (Mat, [f64; 3], [f64; 3]) {
     let f = norm(forward);
     let r = norm(cross(f, [0.0, 1.0, 0.0]));
     let u = cross(r, f);
-    let m = [
-        [r[0] as f32, u[0] as f32, -f[0] as f32, 0.0],
-        [r[1] as f32, u[1] as f32, -f[1] as f32, 0.0],
-        [r[2] as f32, u[2] as f32, -f[2] as f32, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
+    let m = [[r[0] as f32, u[0] as f32, -f[0] as f32, 0.0], [r[1] as f32, u[1] as f32, -f[1] as f32, 0.0], [r[2] as f32, u[2] as f32, -f[2] as f32, 0.0], [0.0, 0.0, 0.0, 1.0]];
     (m, r, u)
 }
 
@@ -418,7 +414,6 @@ fn model(t: [f32; 3], yaw: f32, pitch: f32) -> Mat {
     [[cy, 0.0, -sy, 0.0], [sy * sp, cp, cy * sp, 0.0], [sy * cp, -sp, cy * cp, 0.0], [t[0], t[1], t[2], 1.0]]
 }
 
-
 // ── GPU resources ───────────────────────────────────────────────────────────
 
 struct Mesh {
@@ -433,7 +428,9 @@ impl Mesh {
             return None;
         }
         let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(verts), usage: wgpu::BufferUsages::VERTEX });
-        let indices = indices.filter(|i| !i.is_empty()).map(|i| (device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(i), usage: wgpu::BufferUsages::INDEX }), i.len() as u32));
+        let indices = indices
+            .filter(|i| !i.is_empty())
+            .map(|i| (device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(i), usage: wgpu::BufferUsages::INDEX }), i.len() as u32));
         Some(Mesh { vertices, count: verts.len() as u32, indices })
     }
 
@@ -602,30 +599,35 @@ impl Renderer {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x2, 3 => Float32x2],
         };
-        let pipeline_of = |vs: &str, fs: &str, buffers: &[wgpu::VertexBufferLayout], blend: bool, depth_write: bool, compare: wgpu::CompareFunction, bias: (i32, f32), topology: wgpu::PrimitiveTopology| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(vs),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState { module: &shader, entry_point: Some(vs), buffers, compilation_options: Default::default() },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(fs),
-                    targets: &[Some(wgpu::ColorTargetState { format, blend: Some(if blend { wgpu::BlendState::ALPHA_BLENDING } else { wgpu::BlendState::REPLACE }), write_mask: wgpu::ColorWrites::ALL })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState { topology, cull_mode: None, ..Default::default() },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: DEPTH,
-                    depth_write_enabled: depth_write,
-                    depth_compare: compare,
-                    stencil: Default::default(),
-                    bias: wgpu::DepthBiasState { constant: bias.0, slope_scale: bias.1, clamp: 0.0 },
-                }),
-                multisample: wgpu::MultisampleState { count: SAMPLES, mask: !0, alpha_to_coverage_enabled: false },
-                multiview: None,
-                cache: None,
-            })
-        };
+        let pipeline_of =
+            |vs: &str, fs: &str, buffers: &[wgpu::VertexBufferLayout], blend: bool, depth_write: bool, compare: wgpu::CompareFunction, bias: (i32, f32), topology: wgpu::PrimitiveTopology| {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(vs),
+                    layout: Some(&layout),
+                    vertex: wgpu::VertexState { module: &shader, entry_point: Some(vs), buffers, compilation_options: Default::default() },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some(fs),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(if blend { wgpu::BlendState::ALPHA_BLENDING } else { wgpu::BlendState::REPLACE }),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: Default::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState { topology, cull_mode: None, ..Default::default() },
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: DEPTH,
+                        depth_write_enabled: depth_write,
+                        depth_compare: compare,
+                        stencil: Default::default(),
+                        bias: wgpu::DepthBiasState { constant: bias.0, slope_scale: bias.1, clamp: 0.0 },
+                    }),
+                    multisample: wgpu::MultisampleState { count: SAMPLES, mask: !0, alpha_to_coverage_enabled: false },
+                    multiview: None,
+                    cache: None,
+                })
+            };
         let pipeline = |vs: &str, fs: &str, buffers: &[wgpu::VertexBufferLayout], blend: bool, depth_write: bool, compare: wgpu::CompareFunction, bias: (i32, f32)| {
             pipeline_of(vs, fs, buffers, blend, depth_write, compare, bias, wgpu::PrimitiveTopology::TriangleList)
         };
@@ -642,13 +644,23 @@ impl Renderer {
             snow: pipeline("vs_snow", "fs_snow", &[], true, false, Less, (0, 0.0)),
         };
 
-        let globals = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: std::mem::size_of::<Globals>() as u64, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
-        let globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: None, layout: &globals_layout, entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() }] });
-        let draws = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: DRAW_STRIDE * MAX_DRAWS, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+        let globals = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: std::mem::size_of::<Globals>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let globals_bg =
+            device.create_bind_group(&wgpu::BindGroupDescriptor { label: None, layout: &globals_layout, entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() }] });
+        let draws =
+            device.create_buffer(&wgpu::BufferDescriptor { label: None, size: DRAW_STRIDE * MAX_DRAWS, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
         let draws_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &draw_layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &draws, offset: 0, size: NonZeroU64::new(std::mem::size_of::<Draw>() as u64) }) }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &draws, offset: 0, size: NonZeroU64::new(std::mem::size_of::<Draw>() as u64) }),
+            }],
         });
 
         let mut textures = HashMap::new();
@@ -688,7 +700,10 @@ impl Renderer {
             let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
                 layout: &tex_layout,
-                entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) }],
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
+                ],
             });
             textures.insert(name.to_string(), bg);
         };
@@ -880,7 +895,10 @@ impl Renderer {
                 }
                 for (slot, list) in barrier_instances.iter_mut().zip(per_look) {
                     *slot = (!list.is_empty()).then(|| {
-                        (self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("barriers"), contents: bytemuck::cast_slice(&list), usage: wgpu::BufferUsages::VERTEX }), (list.len() / 6) as u32)
+                        (
+                            self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("barriers"), contents: bytemuck::cast_slice(&list), usage: wgpu::BufferUsages::VERTEX }),
+                            (list.len() / 6) as u32,
+                        )
                     });
                 }
             }
@@ -1004,7 +1022,8 @@ impl Renderer {
                 }
                 push_quad(&mut quads, centre, l.size, l.uv);
             }
-            let label_buf = (!quads.is_empty()).then(|| self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&quads), usage: wgpu::BufferUsages::VERTEX }));
+            let label_buf = (!quads.is_empty())
+                .then(|| self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&quads), usage: wgpu::BufferUsages::VERTEX }));
 
             let frame = match self.surface.get_current_texture() {
                 Ok(f) => f,
@@ -1176,7 +1195,12 @@ impl Renderer {
             let readback = capture_tex.as_ref().map(|t| {
                 let (w, h) = (self.config.width, self.config.height);
                 let row = (w * 4).next_multiple_of(256);
-                let buf = self.device.create_buffer(&wgpu::BufferDescriptor { label: None, size: (row * h) as u64, usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ, mapped_at_creation: false });
+                let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: (row * h) as u64,
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                });
                 encoder.copy_texture_to_buffer(
                     wgpu::TexelCopyTextureInfo { texture: t, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
                     wgpu::TexelCopyBufferInfo { buffer: &buf, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row), rows_per_image: Some(h) } },

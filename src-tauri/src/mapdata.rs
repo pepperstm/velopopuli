@@ -183,8 +183,7 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
     let need_buildings = want_buildings && !fresh(&cached, |c| c.fetched_at, |c| if c.detailed { MAX_AGE_MS } else { MAX_AGE_OUTLINES_MS });
     let need_scenery = want_scenery && !fresh(&cached_scenery, |c| c.fetched_at, |_| MAX_AGE_MS);
     // Road tags come from Overpass, which is often down: asked again on later rides until it answers.
-    let need_surfaces = want_scenery
-        && (need_scenery || cached_scenery.as_ref().is_some_and(|c| c.scenery.way_tags != WAY_TAGS && now_ms().saturating_sub(c.surfaces_tried_at) > SURFACE_RETRY_MS));
+    let need_surfaces = want_scenery && (need_scenery || cached_scenery.as_ref().is_some_and(|c| c.scenery.way_tags != WAY_TAGS && now_ms().saturating_sub(c.surfaces_tried_at) > SURFACE_RETRY_MS));
     let surfaces_tried_at = if need_surfaces { now_ms() } else { cached_scenery.as_ref().map_or(0, |c| c.surfaces_tried_at) };
     let cached_fetched_at = cached_scenery.as_ref().map_or(0, |c| c.fetched_at);
 
@@ -222,7 +221,11 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
             for ((x, y), tile) in &mut tiles {
                 tile.roads.retain(|road| {
                     let middle = road.line[road.line.len() / 2];
-                    if matches!(road.kind, RoadKind::Path | RoadKind::Footway) { near_paths(middle[0], middle[1]) } else { near_roads(middle[0], middle[1]) }
+                    if matches!(road.kind, RoadKind::Path | RoadKind::Footway) {
+                        near_paths(middle[0], middle[1])
+                    } else {
+                        near_roads(middle[0], middle[1])
+                    }
                 });
                 footprints.append(&mut tile.footprints);
                 scenery.add(*x, *y, tile);

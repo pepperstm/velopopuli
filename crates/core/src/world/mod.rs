@@ -18,12 +18,12 @@ pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTIO
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
-pub use mesh::TriMesh;
 pub use landmarks::{landmarks, Landmark};
+pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
-pub use surface::{highway_marked, UNMARKED, highway_width, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, WAY_TAGS};
+pub use surface::{highway_marked, highway_width, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, UNMARKED, WAY_TAGS};
 
 use std::sync::Arc;
 
@@ -203,7 +203,9 @@ impl World {
         let mut roughness = vec![1.0f64; pad * pad];
         for strip in scene.roads_in(cx, cz) {
             let reach = strip.half + scenery::CALM_TO;
-            let span = |a: f64, b: f64, origin: f64| ((((a.min(b) - reach - origin) / cell).ceil() + m as f64).max(0.0) as usize, ((((a.max(b) + reach - origin) / cell).floor() + m as f64 + 1.0).max(0.0) as usize).min(pad));
+            let span = |a: f64, b: f64, origin: f64| {
+                ((((a.min(b) - reach - origin) / cell).ceil() + m as f64).max(0.0) as usize, ((((a.max(b) + reach - origin) / cell).floor() + m as f64 + 1.0).max(0.0) as usize).min(pad))
+            };
             let ((i0, i1), (j0, j1)) = (span(strip.a.0, strip.b.0, x0), span(strip.a.1, strip.b.1, z0));
             for j in j0..j1 {
                 for i in i0..i1 {
@@ -463,17 +465,17 @@ impl World {
             // Signed curvature (1/m), positive when the bend's centre is on the +offset side.
             // On the inside of a hairpin tighter than the road is wide, the edge would
             // cross over itself, so it is pulled in to just short of the bend's centre.
-            let curvature = if i > 0 && i + 1 < n {
-                ((r.x[i + 1] - 2.0 * r.x[i] + r.x[i - 1]) * tz - (r.z[i + 1] - 2.0 * r.z[i] + r.z[i - 1]) * tx) / (r.step * r.step)
-            } else {
-                0.0
-            };
+            let curvature = if i > 0 && i + 1 < n { ((r.x[i + 1] - 2.0 * r.x[i] + r.x[i - 1]) * tz - (r.z[i + 1] - 2.0 * r.z[i] + r.z[i - 1]) * tx) / (r.step * r.step) } else { 0.0 };
             let inside = if curvature.abs() > 1e-6 { 0.8 / curvature.abs() } else { f64::INFINITY };
             let (edge, foot) = (self.half_width(i), self.half_width(i) + 2.6);
             let offsets = [-foot - 0.4, -foot, -edge, edge, foot, foot + 0.4];
             for k in 0..ROAD_SECTION {
                 let offset = if offsets[k] * curvature > 0.0 { offsets[k].signum() * offsets[k].abs().min(inside) } else { offsets[k] };
-                mesh.positions.extend_from_slice(&[(r.x[i] + tz * offset) as f32, (r.ele[i] as f64 + ROAD_LIFT + if kinds[i] == BRIDGE { deck[k] } else { drops[k] }) as f32, (r.z[i] - tx * offset) as f32]);
+                mesh.positions.extend_from_slice(&[
+                    (r.x[i] + tz * offset) as f32,
+                    (r.ele[i] as f64 + ROAD_LIFT + if kinds[i] == BRIDGE { deck[k] } else { drops[k] }) as f32,
+                    (r.z[i] - tx * offset) as f32,
+                ]);
                 mesh.uvs.extend_from_slice(&[us[k], (i as f64 * r.step / 12.0) as f32]);
             }
         }

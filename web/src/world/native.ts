@@ -168,7 +168,12 @@ export function nativeLook(l: Look, lampScale = 14): Record<string, unknown> {
   }
 }
 
-export function packNative(scene: THREE.Scene, skip: (o: THREE.Object3D) => boolean, riderSprites: { sprite: THREE.Sprite; rider: string }[], look: Look): Uint8Array {
+export function packNative(
+  scene: THREE.Scene,
+  skip: (o: THREE.Object3D) => boolean,
+  riderSprites: { sprite: THREE.Sprite; rider: string }[],
+  look: Look
+): Uint8Array {
   const sprites: { sprite: THREE.Sprite; rider: string | null }[] = []
   scene.traverse((o) => {
     if ((o as THREE.Sprite).isSprite && !skip(o)) sprites.push({ sprite: o as THREE.Sprite, rider: null })
@@ -195,7 +200,11 @@ export function packNative(scene: THREE.Scene, skip: (o: THREE.Object3D) => bool
       look: nativeLook(look)
     })
   )
-  const blocks: Uint8Array[] = [...textures.map((t) => pixels(t.canvas, t.flip)), new Uint8Array(new Float32Array(props).buffer), ...poses.map((p) => new Uint8Array(new Float32Array(p).buffer))]
+  const blocks: Uint8Array[] = [
+    ...textures.map((t) => pixels(t.canvas, t.flip)),
+    new Uint8Array(new Float32Array(props).buffer),
+    ...poses.map((p) => new Uint8Array(new Float32Array(p).buffer))
+  ]
   const pad = (n: number): number => (n + 3) & ~3
   let total = pad(4 + header.length)
   for (const b of blocks) total += pad(b.length)

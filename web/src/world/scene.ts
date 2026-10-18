@@ -234,7 +234,12 @@ export class World {
   /** Fetches the road and the landscape around the start; resolves when the first frame can be drawn. */
   async load(): Promise<void> {
     const start = sampleAt(this.route, 0)
-    const [road, structures, barriers] = await Promise.all([api.ride.roadMesh(), api.ride.structures(), api.ride.barriers(), this.terrain.prime(start.x, start.z)])
+    const [road, structures, barriers] = await Promise.all([
+      api.ride.roadMesh(),
+      api.ride.structures(),
+      api.ride.barriers(),
+      this.terrain.prime(start.x, start.z)
+    ])
     this.barriers = new Barriers(barriers)
     this.scene.add(this.barriers.group)
     for (let k = 0; k < SURFACES.length; k++) surfaceTexture(k).anisotropy = this.renderer.capabilities.getMaxAnisotropy()
@@ -308,11 +313,7 @@ export class World {
     const route = this.route
     const count = Math.min(400, Math.floor(route.total / spacing))
     if (count > 0) {
-      const posts = new THREE.InstancedMesh(
-        new THREE.CylinderGeometry(0.06, 0.06, 2.2, 6),
-        new THREE.MeshLambertMaterial({ color: 0xe9e9e9 }),
-        count
-      )
+      const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 6), new THREE.MeshLambertMaterial({ color: 0xe9e9e9 }), count)
       const holder = new THREE.Object3D()
       for (let i = 1; i <= count; i++) {
         this.sideOfRoad(i * spacing, halfWidthAt(route, i * spacing) + 1.6, 1.0, holder)
@@ -329,14 +330,14 @@ export class World {
     }
 
     route.climbs.forEach((c, i) => {
-      const foot = textSprite(
-        `▲ Climb ${i + 1} · ${(c.length / 1000).toFixed(1)} km · ${(c.avgGrade * 100).toFixed(1)}%`,
-        'rgba(200,60,40,0.92)'
-      )
+      const foot = textSprite(`▲ Climb ${i + 1} · ${(c.length / 1000).toFixed(1)} km · ${(c.avgGrade * 100).toFixed(1)}%`, 'rgba(200,60,40,0.92)')
       this.sideOfRoad(c.start, -halfWidthAt(route, c.start) - 2, 3.4, foot)
       foot.scale.set(1.3 * foot.userData.aspect, 1.3, 1)
       const named = this.landmarks.find((m) => m.kind === 'summit' && Math.abs(m.distance - c.end) < 1)
-      const top = textSprite(`${named && !named.name.startsWith('Climb ') ? named.name : 'Summit'} · ${Math.round(route.ele[Math.round(c.end / route.step)])} m`, 'rgba(40,150,90,0.92)')
+      const top = textSprite(
+        `${named && !named.name.startsWith('Climb ') ? named.name : 'Summit'} · ${Math.round(route.ele[Math.round(c.end / route.step)])} m`,
+        'rgba(40,150,90,0.92)'
+      )
       this.sideOfRoad(c.end, -halfWidthAt(route, c.end) - 2, 3.4, top)
       top.scale.set(1.3 * top.userData.aspect, 1.3, 1)
       this.scene.add(foot, top)

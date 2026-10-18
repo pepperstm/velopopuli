@@ -76,8 +76,7 @@ export const api = {
     setApp: (clientId: string, clientSecret: string) => invoke<StravaStatus>('strava_set_app', { clientId, clientSecret }),
     connect: () => invoke<StravaStatus>('strava_connect'),
     disconnect: () => invoke<StravaStatus>('strava_disconnect'),
-    upload: (rideId: string, filePath: string, name: string, description: string) =>
-      invoke<number>('strava_upload', { rideId, filePath, name, description })
+    upload: (rideId: string, filePath: string, name: string, description: string) => invoke<number>('strava_upload', { rideId, filePath, name, description })
   },
   workouts: {
     list: () => invoke<WorkoutMeta[]>('workouts_list'),
@@ -113,7 +112,10 @@ export const api = {
   geo: {
     search: (query: string) => invoke<{ name: string; detail: string; lat: number; lon: number }[]>('geo_search', { query }),
     plan: (points: [number, number][], profile: string) =>
-      invoke<{ gpx: string; distance: number; ascent: number; climbs: number; line: [number, number][]; profile: [number, number][] }>('geo_plan', { points, profile }),
+      invoke<{ gpx: string; distance: number; ascent: number; climbs: number; line: [number, number][]; profile: [number, number][] }>('geo_plan', {
+        points,
+        profile
+      }),
     classics: () => invoke<{ name: string; region: string; points: [number, number][] }[]>('geo_classics')
   },
   group: {
@@ -124,7 +126,10 @@ export const api = {
     test: () => invoke<void>('smart_test')
   },
   smoke: {
-    config: () => invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null; clip: number | null } | null>('smoke_config'),
+    config: () =>
+      invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null; clip: number | null } | null>(
+        'smoke_config'
+      ),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })
   },

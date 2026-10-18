@@ -16,7 +16,15 @@ export interface Settings {
   exportDir: string
   goal: { name: string; distanceKm: number; deadline: string; from: string }
   look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string }
-  smart: { kind: 'none' | 'homeassistant' | 'shelly' | 'tasmota' | 'webhook'; url: string; fanEntity: string; lightEntity: string; fanBy: 'speed' | 'power' | 'hr'; fanFrom: number; fanFull: number }
+  smart: {
+    kind: 'none' | 'homeassistant' | 'shelly' | 'tasmota' | 'webhook'
+    url: string
+    fanEntity: string
+    lightEntity: string
+    fanBy: 'speed' | 'power' | 'hr'
+    fanFrom: number
+    fanFull: number
+  }
   group: { relayUrl: string }
   /** Draw the 3D world with the GPU directly instead of in the page (macOS, experimental). */
   nativeRenderer: boolean

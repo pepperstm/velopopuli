@@ -89,9 +89,9 @@ impl Stick {
             .ok_or("No ANT+ USB stick found (or it could not be opened). Plug one in and try again.")?;
         // On Linux a serial driver may have grabbed the stick; ask libusb to move it aside.
         let _ = handle.set_auto_detach_kernel_driver(true);
-        handle.claim_interface(0).map_err(|e| {
-            format!("Could not open the ANT+ stick — another app (Garmin Express, Zwift…) may be using it, or the driver/permissions need setting up (see README). [{e}]")
-        })?;
+        handle
+            .claim_interface(0)
+            .map_err(|e| format!("Could not open the ANT+ stick — another app (Garmin Express, Zwift…) may be using it, or the driver/permissions need setting up (see README). [{e}]"))?;
         // Bulk endpoints are 0x81/0x01 on every stick in the wild, but read them from the descriptor anyway.
         let (mut ep_in, mut ep_out) = (0x81, 0x01);
         if let Ok(config) = handle.device().active_config_descriptor() {

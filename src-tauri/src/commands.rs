@@ -112,9 +112,8 @@ pub struct ImportResult {
 
 #[tauri::command]
 pub async fn routes_import_dialog(app: AppHandle, state: State<'_, AppState>) -> Res<ImportResult> {
-    let picked = tauri::async_runtime::spawn_blocking(move || app.dialog().file().set_title("Import GPX routes").add_filter("GPX routes", &["gpx"]).blocking_pick_files())
-        .await
-        .map_err(blocking_err)?;
+    let picked =
+        tauri::async_runtime::spawn_blocking(move || app.dialog().file().set_title("Import GPX routes").add_filter("GPX routes", &["gpx"]).blocking_pick_files()).await.map_err(blocking_err)?;
     let mut result = ImportResult { added: Vec::new(), problems: Vec::new() };
     for file in picked.unwrap_or_default() {
         let Ok(path) = file.into_path() else { continue };
@@ -300,10 +299,7 @@ pub async fn ride_barriers(state: State<'_, AppState>) -> Res<Response> {
 pub async fn ride_structures(state: State<'_, AppState>) -> Res<Response> {
     let world = state.current_session()?.world.clone();
     let s = tauri::async_runtime::spawn_blocking(move || world.structures()).await.map_err(blocking_err)?;
-    Ok(Response::new(f32_bytes(
-        &[s.lit.vertices() as u32, s.unlit.vertices() as u32],
-        &[&s.lit.positions, &s.lit.normals, &s.lit.colors, &s.unlit.positions, &s.unlit.colors],
-    )))
+    Ok(Response::new(f32_bytes(&[s.lit.vertices() as u32, s.unlit.vertices() as u32], &[&s.lit.positions, &s.lit.normals, &s.lit.colors, &s.unlit.positions, &s.unlit.colors])))
 }
 
 #[tauri::command]

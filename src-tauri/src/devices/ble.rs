@@ -81,7 +81,16 @@ impl Ble {
                     // Everything heard once per scan, cycling sensor or not: shows what the radio could see.
                     if seen.insert(p.id().to_string()) {
                         let services: Vec<String> = props.services.iter().map(short_uuid).collect();
-                        diag::event("ble", format!("heard id={} name={:?} rssi={} services=[{}]", p.id(), props.local_name.clone().unwrap_or_default(), props.rssi.map_or("-".into(), |r| r.to_string()), services.join(",")));
+                        diag::event(
+                            "ble",
+                            format!(
+                                "heard id={} name={:?} rssi={} services=[{}]",
+                                p.id(),
+                                props.local_name.clone().unwrap_or_default(),
+                                props.rssi.map_or("-".into(), |r| r.to_string()),
+                                services.join(",")
+                            ),
+                        );
                     }
                     if !props.services.iter().any(|s| wanted.contains(s)) || devices.contains(&format!("ble:{}", p.id())) {
                         continue;
@@ -107,13 +116,7 @@ impl Ble {
     /// Connects to a scanned peripheral and keeps it connected until it is removed.
     pub async fn connect(&self, devices: Arc<Devices>, peripheral_id: &str) -> Result<(), String> {
         let adapter = self.adapter().await?;
-        let peripheral = adapter
-            .peripherals()
-            .await
-            .map_err(err)?
-            .into_iter()
-            .find(|p| p.id().to_string() == peripheral_id)
-            .ok_or("That sensor is no longer in range.")?;
+        let peripheral = adapter.peripherals().await.map_err(err)?.into_iter().find(|p| p.id().to_string() == peripheral_id).ok_or("That sensor is no longer in range.")?;
         let name = peripheral.properties().await.ok().flatten().and_then(|p| p.local_name).filter(|n| !n.is_empty()).unwrap_or_else(|| "Bluetooth sensor".into());
         let id = format!("ble:{peripheral_id}");
         diag::event("dev", format!("dev={id} name={name:?} connecting"));
@@ -247,23 +250,24 @@ impl Link {
 
         let notifications = p.notifications().await.map_err(err)?;
         let controllable = control.is_some();
-        diag::event("ble", format!("dev={id} ready in {} ms, control={}", started.elapsed().as_millis(), match &control {
-            Some((c, Dialect::Ftms)) => format!("ftms via {}", short_uuid(&c.uuid)),
-            Some((c, Dialect::TacxFec)) => format!("tacx-fec via {}", short_uuid(&c.uuid)),
-            None => "none".into(),
-        }));
+        diag::event(
+            "ble",
+            format!(
+                "dev={id} ready in {} ms, control={}",
+                started.elapsed().as_millis(),
+                match &control {
+                    Some((c, Dialect::Ftms)) => format!("ftms via {}", short_uuid(&c.uuid)),
+                    Some((c, Dialect::TacxFec)) => format!("tacx-fec via {}", short_uuid(&c.uuid)),
+                    None => "none".into(),
+                }
+            ),
+        );
         self.devices.update(&self.id, |d| {
             d.kind = kind;
             d.controllable = controllable;
             d.status = DeviceStatus::Connected;
         });
-        Ok(Session {
-            notifications,
-            control,
-            crank: RevCounter::new(65536, 1024.0),
-            wheel: RevCounter::new(1 << 32, 1024.0),
-            power_wheel: RevCounter::new(1 << 32, 2048.0),
-        })
+        Ok(Session { notifications, control, crank: RevCounter::new(65536, 1024.0), wheel: RevCounter::new(1 << 32, 1024.0), power_wheel: RevCounter::new(1 << 32, 2048.0) })
     }
 
     /// Pumps one connection until it drops, then keeps reconnecting until the device is removed.

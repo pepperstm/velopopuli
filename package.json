@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "cargo test -p velopopuli-core",
     "tauri": "tauri",
-    "build:mac": "tauri build --target universal-apple-darwin --bundles app,dmg"
+    "build:mac": "tauri build --target universal-apple-darwin --bundles app,dmg",
+    "format": "cargo fmt --all && prettier --write \"web/src/**/*.{ts,tsx,css}\"",
+    "check": "cargo fmt --all --check && prettier --check \"web/src/**/*.{ts,tsx,css}\" && tsc --noEmit && cargo clippy --workspace -- -D clippy::correctness && cargo test --workspace"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.2",
@@ -23,6 +25,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^5.2.0",
     "leaflet": "^1.9.4",
+    "prettier": "^3.3.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.186.1",
