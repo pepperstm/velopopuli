@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p wintermiles-core -p wintermiles-relay
       - uses: actions/setup-node@v4
@@ -28,14 +30,15 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            name: macOS (Apple silicon)
-            bundles: app,dmg
+            name: macOS (Apple silicon + Intel)
+            args: --target universal-apple-darwin --bundles app,dmg
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
           - os: windows-latest
             name: Windows
-            bundles: msi,nsis
+            args: --bundles msi,nsis
           - os: ubuntu-22.04
             name: Linux
-            bundles: deb,appimage
+            args: --bundles deb,appimage
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -52,14 +55,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tauri build --bundles ${{ matrix.bundles }}
+      - run: npx tauri build ${{ matrix.args }}
       - name: Relay server
         run: cargo build --release -p wintermiles-relay
       - uses: actions/upload-artifact@v4
         with:
           name: WinterMiles-${{ runner.os }}
           path: |
-            target/release/bundle/**/*.dmg
+            target/universal-apple-darwin/release/bundle/**/*.dmg
             target/release/bundle/**/*.msi
             target/release/bundle/**/*-setup.exe
             target/release/bundle/**/*.deb

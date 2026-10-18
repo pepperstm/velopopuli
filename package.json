@@ -11,7 +11,8 @@
     "build:web": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "cargo test -p wintermiles-core",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:mac": "tauri build --target universal-apple-darwin --bundles app,dmg"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.2",

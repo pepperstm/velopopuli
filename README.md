@@ -87,6 +87,17 @@ Be aware of what has and has not been proven:
 | Apple Health import | Scanner unit-tested; not yet run on a real multi-GB export. |
 | Windows and Linux | **Built** (installers: `.msi`/`.exe`, `.deb`/`.AppImage`) by GitHub Actions on every push, which also runs the tests on Linux. **Not yet run** on either. |
 
+## Installing on a Mac
+
+Download `WinterMiles_<version>_universal.dmg` (from the latest run on the repo's Actions tab, or build it with `npm run build:mac`), open it and drag **WinterMiles** into **Applications**. It runs on Apple Silicon and Intel Macs with macOS 10.15 or later.
+
+The app isn't notarised by Apple (that needs a paid developer account), so the first time you open it macOS will refuse. Either:
+
+- open **System Settings → Privacy & Security**, scroll down to *"WinterMiles" was blocked* and click **Open Anyway**, or
+- run `xattr -dr com.apple.quarantine /Applications/WinterMiles.app` once in Terminal.
+
+On first connecting to a sensor macOS asks to let WinterMiles use Bluetooth — allow it.
+
 ## Getting started
 
 You need [Rust](https://rustup.rs) (stable) and [Node.js](https://nodejs.org) 20+.
@@ -99,6 +110,7 @@ npm install
 npm run dev        # run with hot reload
 npm test           # Rust unit tests
 npm run build      # optimised app + installer for this platform (target/release/bundle/)
+npm run build:mac  # macOS: one installer for Apple Silicon and Intel (target/universal-apple-darwin/release/bundle/dmg/)
 ```
 
 Then: **Routes → Import GPX…**, **Devices → connect your trainer**, and press **Ride**. No hardware handy? Press Ride on the built-in Demo Loop and choose **Use demo rider** (↑/↓ change its effort).
