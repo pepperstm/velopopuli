@@ -1,0 +1,21 @@
+name: Feature or improvement
+description: Suggest something new or better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve for riders?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How it could work. Mockups or examples from elsewhere welcome.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Taking it on
+      options:
+        - label: I'd like to work on this myself

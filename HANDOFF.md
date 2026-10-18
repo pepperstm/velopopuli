@@ -92,6 +92,10 @@ Notes from experience:
 - Windows builds are unsigned (SmartScreen warns).
 - The Linux binary is built on Ubuntu 22.04 (glibc 2.35); it runs on newer systems, including Arch.
 
+## 5a. How changes reach `main`
+
+The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branch (`fix/…`, `feature/…`, `docs/…`) → one logical change with tests and docs → pull request from the template → CI green → maintainer review → **squash merge**. `main` is protected: changes from contributors arrive only through pull requests with passing checks. `npm run format` formats everything (rustfmt.toml, .prettierrc.json); `npm run check` runs what CI runs. After merging, sync `docs/wiki/` to the wiki repository and tag releases as below.
+
 ## 6. Testing
 
 - `cargo test --workspace` — 73 tests (core, app, relay); `npx tsc --noEmit` for the page.

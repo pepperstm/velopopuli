@@ -1,0 +1,39 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If it involves a trainer or sensor, the quickest way is the app's **Report a problem → Report on GitHub** after a ride: it fills this in and gives you a diagnostics file to attach.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: VeloPopuli version
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options: [macOS, Windows, Ubuntu / Debian, Arch, Other Linux]
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Trainer and sensors (if relevant)
+      placeholder: "Tacx Vortex Smart over Bluetooth"
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report or screenshots
+      description: Drag the diagnostics file (Settings → Diagnostics → Save diagnostics report) or screenshots here.
