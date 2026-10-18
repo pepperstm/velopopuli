@@ -11,7 +11,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
 
-use crate::now_ms;
+use crate::{diag, now_ms};
 
 /// How the registry reaches the task or thread that owns a device.
 pub struct Handle {
@@ -55,6 +55,7 @@ impl Devices {
 
     pub fn add(&self, info: DeviceInfo, handle: Handle) -> bool {
         let id = info.id.clone();
+        diag::event("dev", format!("dev={id} name={:?} transport={:?} kind={:?} status={:?} added", info.name, info.transport, info.kind, info.status));
         if !self.hub.lock().unwrap().add(info) {
             return false;
         }
@@ -71,6 +72,7 @@ impl Devices {
     pub fn remove(&self, id: &str) {
         // Take the handle out before calling it: `stop` may call back into the registry.
         let handle = self.handles.lock().unwrap().remove(id);
+        diag::event("dev", format!("dev={id} removed"));
         if let Some(h) = handle {
             (h.stop)();
         }
@@ -85,6 +87,7 @@ impl Devices {
 
     pub fn set_status(&self, id: &str, status: DeviceStatus) {
         if self.hub.lock().unwrap().set_status(id, status) {
+            diag::event("dev", format!("dev={id} status={status:?}"));
             self.changed();
         }
     }
@@ -93,6 +96,7 @@ impl Devices {
     pub fn update(&self, id: &str, f: impl FnOnce(&mut DeviceInfo)) {
         if let Some(d) = self.hub.lock().unwrap().get_mut(id) {
             f(d);
+            diag::event("dev", format!("dev={id} kind={:?} controllable={} status={:?}", d.kind, d.controllable, d.status));
         }
         self.changed();
     }
@@ -111,14 +115,19 @@ impl Devices {
 
     /// Sends a command to the connected controllable trainer, if there is one.
     pub fn command_trainer(&self, cmd: TrainerCommand) {
-        let Some(id) = self.hub.lock().unwrap().trainer().map(str::to_string) else { return };
+        let Some(id) = self.hub.lock().unwrap().trainer().map(str::to_string) else {
+            diag::raw("cmd", format!("no controllable trainer connected; not sent: {cmd:?}"));
+            return;
+        };
         if let Some(control) = self.handles.lock().unwrap().get(&id).and_then(|h| h.control.as_ref()) {
             control(cmd);
         }
     }
 
     pub fn set_ant_status(&self, state: &'static str, message: impl Into<String>) {
-        *self.ant_status.lock().unwrap() = AntStatus { state, message: message.into() };
+        let message = message.into();
+        diag::event("ant", format!("stick state={state} {message}"));
+        *self.ant_status.lock().unwrap() = AntStatus { state, message };
         self.changed();
     }
 

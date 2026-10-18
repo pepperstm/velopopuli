@@ -290,6 +290,19 @@ impl Session {
             }
         }
         let group = req.group_room.as_ref().filter(|r| !r.trim().is_empty()).map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
+        crate::diag::event(
+            "ride",
+            format!(
+                "start route_km={:.1} ascent_m={:.0} mode={:?} virtual_power={} workout={} group={} devices={}",
+                route.total / 1000.0,
+                route.ascent,
+                settings.trainer.mode,
+                settings.trainer.virtual_power,
+                req.workout_id.as_deref().unwrap_or("-"),
+                group.is_some(),
+                devices.snapshot().devices.iter().map(|d| format!("{}({:?},{:?},control={})", d.id, d.kind, d.status, d.controllable)).collect::<Vec<_>>().join(" ")
+            ),
+        );
         devices.command_trainer(TrainerCommand::UserConfig { rider_kg: settings.rider.weight_kg, bike_kg: settings.rider.bike_kg });
 
         let session = Arc::new(Session {
@@ -503,14 +516,42 @@ fn run(engine: Arc<Mutex<RideEngine>>, settings: Arc<Mutex<Settings>>, stop: Arc
         if now - commanded >= Duration::from_secs(1) {
             commanded = now;
             let workout_target = engine.workout_target().filter(|_| trainer.workout_erg && !engine.user_paused);
-            devices.command_trainer(match (workout_target, trainer.mode) {
+            let cmd = match (workout_target, trainer.mode) {
                 (Some(w), _) => TrainerCommand::TargetPower(w),
                 (None, TrainerMode::Erg) if engine.workout.is_none() => TrainerCommand::TargetPower(trainer.erg_watts),
                 _ => {
                     let crr = settings.lock().unwrap().physics.crr;
                     TrainerCommand::Simulation { grade: engine.trainer_grade(&trainer), crr, cw: engine.wind_coefficient() }
                 }
-            });
+            };
+            devices.command_trainer(cmd);
+            // One line a second: what the ride used, what was sent, and what each device said.
+            let f = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v:.0}"));
+            let per_device: Vec<String> = devices
+                .snapshot()
+                .devices
+                .iter()
+                .map(|d| format!("{}:{:?}:{}", d.id, d.status, crate::diag::readings(&d.readings).replace(' ', ",")))
+                .collect();
+            crate::diag::event(
+                "ride",
+                format!(
+                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} has_power={} cmd={} devices={}",
+                    engine.elapsed,
+                    if tel.has_power { format!("{:.0}", tel.power) } else { "-".into() },
+                    f(tel.cadence),
+                    engine.speed * 3.6,
+                    engine.distance,
+                    engine.pos.grade * 100.0,
+                    tel.has_power,
+                    match cmd {
+                        TrainerCommand::Simulation { grade, .. } => format!("sim:{:.1}%", grade * 100.0),
+                        TrainerCommand::TargetPower(w) => format!("erg:{w:.0}W"),
+                        TrainerCommand::UserConfig { .. } => "config".into(),
+                    },
+                    per_device.join(" ")
+                ),
+            );
             if let Some(smart) = &smart {
                 smart.update(engine.speed * 3.6, tel.power, tel.hr, rider_ftp);
             }
@@ -579,6 +620,10 @@ fn run(engine: Arc<Mutex<RideEngine>>, settings: Arc<Mutex<Settings>>, stop: Arc
             };
             let _ = app.emit("ride:state", &state);
         }
+    }
+    {
+        let e = engine.lock().unwrap();
+        crate::diag::event("ride", format!("end distance_m={:.0} elapsed_s={:.0}", e.distance, e.elapsed));
     }
     // Leave the trainer on a flat road rather than stuck on the last gradient.
     devices.command_trainer(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.2 });

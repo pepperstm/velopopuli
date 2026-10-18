@@ -71,7 +71,7 @@ impl Store {
         if !export_dir.is_empty() {
             let copied = fs::create_dir_all(export_dir).and_then(|()| fs::copy(&path, Path::new(export_dir).join(file_name)));
             if let Err(e) = copied {
-                eprintln!("Could not copy the activity to the export folder: {e}");
+                crate::diag::event("store", format!("copy to export folder failed: {e}"));
             }
         }
         Ok(path)

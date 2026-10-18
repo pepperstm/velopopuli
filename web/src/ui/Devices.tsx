@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { errorText, platform } from '../bridge'
 import { api, refreshDevices, useDevices } from '../state'
 import type { BtCandidate, DeviceInfo } from '../types'
+import { ReportButton } from './Diagnostics'
 
 const KIND_LABEL: Record<DeviceInfo['kind'], string> = {
   trainer: 'Smart trainer',
@@ -97,6 +98,7 @@ export function Devices(): React.JSX.Element {
           <button onClick={() => void api.devices.antStop()}>Stop ANT+</button>
         )}
         <button onClick={() => void api.devices.demoAdd()}>Add demo rider</button>
+        <ReportButton label="Trouble connecting? Save a diagnostics report…" />
       </div>
 
       {error && <div className="error">{error}</div>}

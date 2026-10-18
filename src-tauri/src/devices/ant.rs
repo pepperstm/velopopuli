@@ -12,7 +12,7 @@ use velopopuli_core::devices::profiles::{fec_pages, AntProfile, PageDecoder, Pro
 use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Readings, TrainerCommand, Transport};
 
 use super::{Devices, Handle};
-use crate::now_ms;
+use crate::{diag, now_ms};
 
 const VENDOR: u16 = 0x0fcf;
 /// ANTUSB2, ANTUSB-m, ANTUSB1
@@ -79,7 +79,13 @@ impl Stick {
     fn open() -> Result<Self, String> {
         let handle = PRODUCTS
             .iter()
-            .find_map(|pid| rusb::open_device_with_vid_pid(VENDOR, *pid))
+            .find_map(|pid| {
+                let h = rusb::open_device_with_vid_pid(VENDOR, *pid);
+                if h.is_some() {
+                    diag::event("ant", format!("stick found: {VENDOR:04x}:{pid:04x}"));
+                }
+                h
+            })
             .ok_or("No ANT+ USB stick found (or it could not be opened). Plug one in and try again.")?;
         // On Linux a serial driver may have grabbed the stick; ask libusb to move it aside.
         let _ = handle.set_auto_detach_kernel_driver(true);
@@ -162,6 +168,7 @@ impl Runner {
         self.parser = AntParser::default();
 
         self.command(msg::NETWORK_KEY, &[&[0u8][..], &ANT_PLUS_NETWORK_KEY[..]].concat())?;
+        diag::event("ant", "network key accepted");
         // Ask for the transmitting device's ID to be appended to every broadcast.
         let _ = self.command(msg::LIB_CONFIG, &[0, 0x80]);
 
@@ -178,6 +185,7 @@ impl Runner {
             let _ = self.command(msg::SEARCH_TIMEOUT, &[ch, 0]);
             let _ = self.command(msg::LOW_PRIORITY_SEARCH_TIMEOUT, &[ch, 255]);
             self.command(msg::OPEN_CHANNEL, &[ch])?;
+            diag::event("ant", format!("channel {ch} open: {} (device type {})", profile.label, profile.device_type));
         }
         Ok(())
     }
@@ -224,7 +232,11 @@ impl Runner {
         }
         let page = ch.ack_queue.remove(0);
         ch.ack_sent_at = Some(Instant::now());
-        let _ = self.usb.write(msg::ACKNOWLEDGED_DATA, &[&[n as u8][..], &page[..]].concat());
+        let dev = ch.device_id.clone().unwrap_or_default();
+        match self.usb.write(msg::ACKNOWLEDGED_DATA, &[&[n as u8][..], &page[..]].concat()) {
+            Ok(()) => diag::raw("ant:tx", format!("dev={dev} ch={n} page={:02x} hex={}", page[0], diag::hex(&page))),
+            Err(e) => diag::event("ant:tx", format!("dev={dev} ch={n} page={:02x} hex={} failed: {e}", page[0], diag::hex(&page))),
+        }
     }
 
     fn on_message(&mut self, m: AntMessage) {
@@ -250,7 +262,11 @@ impl Runner {
                 let Some(id) = &ch.device_id else { return };
                 self.devices.set_status(id, DeviceStatus::Connected);
                 let page: [u8; 8] = d[1..9].try_into().unwrap();
-                if let Some(readings) = ch.decoder.decode(&page, now_ms()) {
+                let readings = ch.decoder.decode(&page, now_ms());
+                if diag::detailed() {
+                    diag::raw("ant:rx", format!("dev={id} ch={n} page={:02x} hex={} {}", page[0], diag::hex(&page), readings.as_ref().map_or_else(|| "undecoded".to_string(), diag::readings)));
+                }
+                if let Some(readings) = readings {
                     self.devices.report(id, readings);
                 }
             }
@@ -294,6 +310,15 @@ impl Runner {
 
     fn on_event(&mut self, n: usize, code: u8) {
         let Some(ch) = self.channels.get_mut(n) else { return };
+        let dev = ch.device_id.clone().unwrap_or_default();
+        match code {
+            event::TRANSFER_TX_COMPLETED => diag::raw("ant:tx", format!("dev={dev} ch={n} delivered")),
+            event::TRANSFER_TX_FAILED => diag::event("ant:tx", format!("dev={dev} ch={n} delivery failed (trainer did not acknowledge)")),
+            0x02 => diag::raw("ant", format!("dev={dev} ch={n} missed a message")),
+            // Routine events: too frequent or meaningless to log.
+            0x01 | 0x03 => {}
+            _ => diag::event("ant", format!("dev={dev} ch={n} event {code:#04x} ({})", event_name(code))),
+        }
         match code {
             event::TRANSFER_TX_COMPLETED | event::TRANSFER_TX_FAILED => ch.ack_sent_at = None,
             event::RX_FAIL_GO_TO_SEARCH => {
@@ -318,5 +343,21 @@ impl Runner {
         }
         let _ = self.usb.write(msg::RESET, &[0]);
         let _ = self.usb.handle.release_interface(0);
+    }
+}
+
+fn event_name(code: u8) -> &'static str {
+    match code {
+        0x01 => "search timeout",
+        0x02 => "rx failed",
+        0x03 => "tx",
+        0x04 => "transfer rx failed",
+        0x05 => "transfer tx completed",
+        0x06 => "transfer tx failed",
+        0x07 => "channel closed",
+        0x08 => "rx failed, back to search",
+        0x09 => "channel collision",
+        0x0a => "transfer tx start",
+        _ => "other",
     }
 }

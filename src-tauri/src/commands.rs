@@ -38,7 +38,37 @@ pub fn kv_get(state: State<AppState>, name: String) -> Option<Value> {
 
 #[tauri::command]
 pub fn kv_set(state: State<AppState>, name: String, value: Value) -> Res<()> {
+    if name == "settings" {
+        crate::diag::set_detailed(value.get("diagnostics").and_then(Value::as_bool).unwrap_or(true));
+    }
     state.store.set(&name, &value)
+}
+
+// ── Diagnostics ────────────────────────────────────────────────────────────
+
+/// The saved settings, or the defaults if none have been saved yet.
+fn settings_json(state: &AppState) -> Value {
+    state.store.get("settings").unwrap_or_else(|| serde_json::to_value(Settings::default()).unwrap_or(Value::Null))
+}
+
+/// Asks where to save a diagnostics report, writes it there and shows it; returns its path.
+#[tauri::command]
+pub async fn diag_report(app: AppHandle, state: State<'_, AppState>, note: String) -> Res<Option<String>> {
+    let settings = settings_json(&state);
+    let devices = serde_json::to_value(state.devices.snapshot().devices).unwrap_or(Value::Null);
+    let name = format!("velopopuli-diagnostics-{}.txt", chrono::Local::now().format("%Y%m%d-%H%M"));
+    let dialog = app.dialog().file().set_title("Save diagnostics report").set_file_name(&name).add_filter("Text", &["txt"]);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file()).await.map_err(blocking_err)?;
+    let Some(path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
+    crate::diag::report(&path, &settings, &devices, &note)?;
+    let _ = app.opener().reveal_item_in_dir(&path);
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+pub fn diag_open_folder(app: AppHandle) -> Res<()> {
+    let dir = crate::diag::dir().ok_or("Diagnostics are not running.")?;
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -737,8 +767,16 @@ pub fn smoke_config() -> Option<SmokeConfig> {
 
 /// Receives the automated check's screenshot (a PNG data URL) and notes, writes them out and quits.
 #[tauri::command]
-pub fn smoke_done(app: AppHandle, png: Option<String>, info: String) {
+pub fn smoke_done(app: AppHandle, state: State<AppState>, png: Option<String>, info: String) {
     if let Some(path) = std::env::var_os("VP_SMOKE").map(PathBuf::from) {
+        // VP_SMOKE_REPORT=<path> also saves a diagnostics report there, without the save dialog.
+        if let Some(report) = std::env::var_os("VP_SMOKE_REPORT").map(PathBuf::from) {
+            let settings = settings_json(&state);
+            let devices = serde_json::to_value(state.devices.snapshot().devices).unwrap_or(Value::Null);
+            if let Err(e) = crate::diag::report(&report, &settings, &devices, "automated check") {
+                eprintln!("diagnostics report failed: {e}");
+            }
+        }
         if let Some(bytes) = png.as_deref().and_then(|p| p.split(',').nth(1)).and_then(|b| base64::engine::general_purpose::STANDARD.decode(b).ok()) {
             let _ = std::fs::write(&path, bytes);
         }
@@ -750,5 +788,6 @@ pub fn smoke_done(app: AppHandle, png: Option<String>, info: String) {
 /// Lets the UI surface its errors in the terminal the app was started from.
 #[tauri::command]
 pub fn log(message: String) {
+    crate::diag::event("ui", &message);
     eprintln!("[ui] {message}");
 }

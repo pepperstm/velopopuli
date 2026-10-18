@@ -184,6 +184,12 @@ Group rides already go through a small relay anyone can run (`crates/relay`; CI 
 - Persistent club features on the server: scheduled rides, shared routes and leaderboards
 - Simple admin: who is connected, room limits, and kicking riders
 
+## Reporting problems
+
+Something not working with your trainer or sensors? After the ride, press **Report a problem…** on the ride summary (or **Devices → Trouble connecting?**, or **Settings → Diagnostics**), say what happened, and save the report. It is one text file covering the last couple of days: every connection and drop-out, the raw data each sensor sent, what was sent to the trainer, and a ride line every second, with a summary at the top (drop-outs per device, longest silence, seconds pedalled with no power reading). It contains no account details, tokens or locations. Attach it to an issue on GitHub along with your trainer model and how it was connected (Bluetooth or ANT+).
+
+The logs themselves live in the app's data folder under `logs/` (**Settings → Diagnostics → Open logs folder**); the last 12 runs are kept.
+
 ## Data and credits
 
 - Map tiles, building and scenery data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL), via the OSM tile servers, the public [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) instances and [vector.openstreetmap.org](https://vector.openstreetmap.org). Heavy users should configure their own servers, per the OSM usage policies.

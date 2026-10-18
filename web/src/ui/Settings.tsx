@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { api, useSettings } from '../state'
 import type { Settings, StravaStatus } from '../types'
+import { ReportButton } from './Diagnostics'
 
 function Num(props: {
   label: string
@@ -445,6 +446,26 @@ export function SettingsScreen(): React.JSX.Element {
       </section>
 
       <StravaCard />
+
+      <section className="card">
+        <h2>Diagnostics</h2>
+        <p className="muted small">
+          If something misbehaves (a trainer dropping out, power reading zero, resistance not changing), save a report and attach it to your bug
+          report. It covers the last couple of days: connections, drop-outs, the data each sensor sent and what was sent to the trainer.
+        </p>
+        <Toggle
+          label="Detailed diagnostics"
+          hint="Also log every message the sensors send (about 3 MB an hour of riding; the last 12 app runs are kept)."
+          value={settings.diagnostics}
+          onChange={(v) => update((s) => ({ ...s, diagnostics: v }))}
+        />
+        <div className="row">
+          <ReportButton label="Save diagnostics report…" className="" />
+          <button className="ghost" onClick={() => void api.diag.openFolder()}>
+            Open logs folder
+          </button>
+        </div>
+      </section>
 
       <section className="card">
         <h2>Ride files</h2>

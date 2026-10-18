@@ -19,7 +19,7 @@ use velopopuli_core::devices::profiles::{decode_fec, fec_pages};
 use velopopuli_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Readings, RevCounter, TrainerCommand, Transport, WHEEL_CIRCUMFERENCE};
 
 use super::{Devices, Handle};
-use crate::now_ms;
+use crate::{diag, now_ms};
 
 #[derive(Serialize, Clone, PartialEq)]
 pub struct Candidate {
@@ -46,7 +46,12 @@ impl Ble {
         self.adapter
             .get_or_try_init(|| async {
                 let manager = Manager::new().await.map_err(err)?;
-                manager.adapters().await.map_err(err)?.into_iter().next().ok_or_else(|| "No Bluetooth adapter found on this computer.".to_string())
+                let adapter = manager.adapters().await.map_err(err)?.into_iter().next().ok_or_else(|| "No Bluetooth adapter found on this computer.".to_string());
+                match &adapter {
+                    Ok(a) => diag::event("ble", format!("adapter {}", a.adapter_info().await.unwrap_or_default())),
+                    Err(e) => diag::event("ble", format!("adapter error: {e}")),
+                }
+                adapter
             })
             .await
     }
@@ -56,7 +61,11 @@ impl Ble {
         let adapter = self.adapter().await?.clone();
         // No service filter at the radio level: platforms disagree on whether several
         // services mean "any" or "all". Advertised services are matched below instead.
-        adapter.start_scan(ScanFilter::default()).await.map_err(|e| format!("Could not start a Bluetooth scan: {e}. Is Bluetooth switched on and allowed for this app?"))?;
+        if let Err(e) = adapter.start_scan(ScanFilter::default()).await {
+            diag::event("ble", format!("scan start failed: {e}"));
+            return Err(format!("Could not start a Bluetooth scan: {e}. Is Bluetooth switched on and allowed for this app?"));
+        }
+        diag::event("ble", "scan started");
         if self.scanning.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
@@ -64,10 +73,16 @@ impl Ble {
         tauri::async_runtime::spawn(async move {
             let wanted = sensor_services();
             let mut sent: Vec<Candidate> = Vec::new();
+            let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
             while scanning.load(Ordering::SeqCst) {
                 let mut found = Vec::new();
                 for p in adapter.peripherals().await.unwrap_or_default() {
                     let Ok(Some(props)) = p.properties().await else { continue };
+                    // Everything heard once per scan, cycling sensor or not: shows what the radio could see.
+                    if seen.insert(p.id().to_string()) {
+                        let services: Vec<String> = props.services.iter().map(short_uuid).collect();
+                        diag::event("ble", format!("heard id={} name={:?} rssi={} services=[{}]", p.id(), props.local_name.clone().unwrap_or_default(), props.rssi.map_or("-".into(), |r| r.to_string()), services.join(",")));
+                    }
                     if !props.services.iter().any(|s| wanted.contains(s)) || devices.contains(&format!("ble:{}", p.id())) {
                         continue;
                     }
@@ -80,6 +95,7 @@ impl Ble {
                 tokio::time::sleep(Duration::from_millis(600)).await;
             }
             let _ = adapter.stop_scan().await;
+            diag::event("ble", "scan stopped");
         });
         Ok(())
     }
@@ -100,6 +116,7 @@ impl Ble {
             .ok_or("That sensor is no longer in range.")?;
         let name = peripheral.properties().await.ok().flatten().and_then(|p| p.local_name).filter(|n| !n.is_empty()).unwrap_or_else(|| "Bluetooth sensor".into());
         let id = format!("ble:{peripheral_id}");
+        diag::event("dev", format!("dev={id} name={name:?} connecting"));
 
         let (control_tx, control_rx) = mpsc::unbounded_channel::<TrainerCommand>();
         let (stop_tx, stop_rx) = watch::channel(false);
@@ -120,11 +137,13 @@ impl Ble {
         let first = match tokio::time::timeout(Duration::from_secs(25), link.open()).await {
             Ok(Ok(session)) => session,
             Ok(Err(e)) => {
+                diag::event("dev", format!("dev={id} first connection failed: {e}"));
                 devices.remove(&id);
                 let _ = link.peripheral.disconnect().await;
                 return Err(e);
             }
             Err(_) => {
+                diag::event("dev", format!("dev={id} first connection failed: timed out after 25 s"));
                 devices.remove(&id);
                 let _ = link.peripheral.disconnect().await;
                 return Err("Timed out connecting to the sensor.".into());
@@ -163,11 +182,18 @@ impl Link {
     /// Connects, discovers what the device is, and subscribes to its measurements.
     async fn open(&mut self) -> Result<Session, String> {
         let p = &self.peripheral;
+        let id = self.id.clone();
+        let started = std::time::Instant::now();
         if !p.is_connected().await.unwrap_or(false) {
             p.connect().await.map_err(|e| format!("Could not connect: {e}"))?;
         }
+        diag::event("ble", format!("dev={id} link up after {} ms", started.elapsed().as_millis()));
         p.discover_services().await.map_err(err)?;
         let chars = p.characteristics();
+        for s in p.services() {
+            let list: Vec<String> = s.characteristics.iter().map(|c| format!("{}({})", short_uuid(&c.uuid), props(c.properties))).collect();
+            diag::event("ble", format!("dev={id} service {} chars=[{}]", short_uuid(&s.uuid), list.join(" ")));
+        }
         let find = |service: Uuid, characteristic: Uuid| chars.iter().find(|c| c.service_uuid == service && c.uuid == characteristic).cloned();
 
         let ibd = find(uuid_from_u16(SVC_FTMS), uuid_from_u16(CHR_INDOOR_BIKE_DATA));
@@ -192,8 +218,12 @@ impl Link {
             return Err("This device has no cycling sensors.".into());
         };
 
+        diag::event("ble", format!("dev={id} kind={kind:?} using ftms={} tacx_fec={} power={} hr={} csc={}", ibd.is_some(), tacx_rx.is_some(), power.is_some(), hr.is_some(), csc.is_some()));
         for c in [&ibd, &tacx_rx, &power, &hr, &csc].into_iter().flatten() {
-            p.subscribe(c).await.map_err(|e| format!("Could not subscribe to measurements: {e}"))?;
+            if let Err(e) = p.subscribe(c).await {
+                diag::event("ble", format!("dev={id} subscribe chr={} failed: {e}", short_uuid(&c.uuid)));
+                return Err(format!("Could not subscribe to measurements: {e}"));
+            }
         }
 
         let mut control = None;
@@ -209,7 +239,7 @@ impl Link {
             match ready.await {
                 Ok(()) => control = Some((cp.clone(), Dialect::Ftms)),
                 // Read-only FTMS (some spin bikes): still useful as a power/cadence source.
-                Err(e) => eprintln!("{}: no FTMS control ({e})", self.id),
+                Err(e) => diag::event("ble", format!("dev={id} FTMS control failed: {e}")),
             }
         } else if let (Some(tx), true) = (&tacx_tx, tacx_rx.is_some()) {
             control = Some((tx.clone(), Dialect::TacxFec));
@@ -217,6 +247,11 @@ impl Link {
 
         let notifications = p.notifications().await.map_err(err)?;
         let controllable = control.is_some();
+        diag::event("ble", format!("dev={id} ready in {} ms, control={}", started.elapsed().as_millis(), match &control {
+            Some((c, Dialect::Ftms)) => format!("ftms via {}", short_uuid(&c.uuid)),
+            Some((c, Dialect::TacxFec)) => format!("tacx-fec via {}", short_uuid(&c.uuid)),
+            None => "none".into(),
+        }));
         self.devices.update(&self.id, |d| {
             d.kind = kind;
             d.controllable = controllable;
@@ -246,9 +281,15 @@ impl Link {
                 _ = tokio::time::sleep(Duration::from_secs(3)) => {}
                 _ = self.stop_rx.changed() => break,
             }
+            diag::event("ble", format!("dev={} reconnecting", self.id));
             match tokio::time::timeout(Duration::from_secs(20), self.open()).await {
                 Ok(Ok(s)) => session = Some(s),
-                _ => {
+                Ok(Err(e)) => {
+                    diag::event("dev", format!("dev={} reconnect failed: {e}", self.id));
+                    let _ = self.peripheral.disconnect().await;
+                }
+                Err(_) => {
+                    diag::event("dev", format!("dev={} reconnect failed: timed out after 20 s", self.id));
                     let _ = self.peripheral.disconnect().await;
                 }
             }
@@ -264,7 +305,10 @@ impl Link {
                 _ = self.stop_rx.changed() => return true,
                 n = s.notifications.next() => match n {
                     Some(n) => self.on_notification(&mut s, n),
-                    None => return false,
+                    None => {
+                        diag::event("ble", format!("dev={} dropped: notification stream ended", self.id));
+                        return false;
+                    }
                 },
                 cmd = self.control_rx.recv() => {
                     let Some(cmd) = cmd else { return true };
@@ -282,6 +326,7 @@ impl Link {
                 // Not every platform ends the notification stream on disconnect.
                 _ = liveness.tick() => {
                     if !self.peripheral.is_connected().await.unwrap_or(false) {
+                        diag::event("ble", format!("dev={} dropped: link reported disconnected", self.id));
                         return false;
                     }
                 }
@@ -300,8 +345,9 @@ impl Link {
             (Dialect::TacxFec, cmd) => fec_pages(cmd).into_iter().map(|page| encode_message(msg::ACKNOWLEDGED_DATA, &[&[5u8][..], &page[..]].concat())).collect(),
         };
         for packet in packets {
-            if let Err(e) = self.peripheral.write(ch, &packet, write_type).await {
-                eprintln!("{}: trainer command failed ({e})", self.id);
+            match self.peripheral.write(ch, &packet, write_type).await {
+                Ok(()) => diag::raw("ble:tx", format!("dev={} chr={} cmd={cmd:?} hex={}", self.id, short_uuid(&ch.uuid), diag::hex(&packet))),
+                Err(e) => diag::event("ble:tx", format!("dev={} chr={} cmd={cmd:?} hex={} failed: {e}", self.id, short_uuid(&ch.uuid), diag::hex(&packet))),
             }
         }
     }
@@ -332,8 +378,32 @@ impl Link {
         } else {
             None
         };
+        if diag::detailed() {
+            diag::raw("ble:rx", format!("dev={} chr={} hex={} {}", self.id, short_uuid(&n.uuid), diag::hex(v), readings.as_ref().map_or_else(|| "undecoded".to_string(), diag::readings)));
+        }
         if let Some(r) = readings {
             self.devices.report(&self.id, r);
         }
     }
+}
+
+/// `0000180d-0000-1000-8000-00805f9b34fb` → `180d`; Tacx's `6e40fec2-…` → `fec2`; others in full.
+fn short_uuid(u: &Uuid) -> String {
+    let s = u.to_string();
+    let standard = s.starts_with("0000") && s.ends_with("-0000-1000-8000-00805f9b34fb");
+    let tacx = s.starts_with("6e40") && s.ends_with("-b5a3-f393-e0a9-e50e24dcca9e");
+    if standard || tacx {
+        s[4..8].to_string()
+    } else {
+        s
+    }
+}
+
+/// Characteristic properties as letters: r(ead) w(rite) W(rite without response) n(otify) i(ndicate).
+fn props(p: CharPropFlags) -> String {
+    [(CharPropFlags::READ, 'r'), (CharPropFlags::WRITE, 'w'), (CharPropFlags::WRITE_WITHOUT_RESPONSE, 'W'), (CharPropFlags::NOTIFY, 'n'), (CharPropFlags::INDICATE, 'i')]
+        .iter()
+        .filter(|(f, _)| p.contains(*f))
+        .map(|(_, c)| *c)
+        .collect()
 }

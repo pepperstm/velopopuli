@@ -3,6 +3,7 @@ import { errorText } from '../bridge'
 import { fmtDist, fmtEle, fmtTime, speedUnit, speedValue } from '../core/fmt'
 import { api, useBadges, useSettings } from '../state'
 import type { RideSummary, StravaStatus } from '../types'
+import { ReportButton } from './Diagnostics'
 
 /** Upload button shared by the summary and history screens. */
 export function StravaUpload({ ride, auto }: { ride: RideSummary; auto?: boolean }): React.JSX.Element | null {
@@ -126,6 +127,7 @@ export function Summary({ ride, onDone }: { ride: RideSummary; onDone: () => voi
         <button className="ghost" onClick={() => void api.revealFile(ride.filePath)}>
           Show .FIT file
         </button>
+        <ReportButton prompt={`Ride on ${ride.routeName}: `} />
       </div>
     </div>
   )

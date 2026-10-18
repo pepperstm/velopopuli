@@ -190,6 +190,8 @@ pub struct Settings {
     pub group: GroupSettings,
     /// Draw the 3D world with the GPU directly instead of in the web page (macOS, experimental).
     pub native_renderer: bool,
+    /// Log the raw data every sensor sends, for diagnostics reports.
+    pub diagnostics: bool,
 }
 
 impl Default for Settings {
@@ -210,6 +212,7 @@ impl Default for Settings {
             smart: Default::default(),
             group: Default::default(),
             native_renderer: false,
+            diagnostics: true,
         }
     }
 }

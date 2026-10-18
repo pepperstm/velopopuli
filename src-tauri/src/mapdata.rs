@@ -189,12 +189,12 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
             );
             let entry = CachedScenery { format: SCENERY_FORMAT, fetched_at: now_ms(), scenery };
             if let Err(e) = store.set(&scenery_name, &entry) {
-                eprintln!("Could not cache scenery: {e}");
+                crate::diag::event("map", format!("caching scenery failed: {e}"));
             }
             Some(entry.scenery)
         }
         Some(Err(why)) => {
-            eprintln!("Scenery unavailable for this ride ({why})");
+            crate::diag::event("map", format!("scenery unavailable: {why}"));
             cached_scenery.map(|c| c.scenery)
         }
         None => cached_scenery.map(|c| c.scenery),
@@ -224,12 +224,12 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
                     // Only a complete download is cached, so a flaky connection can't leave a route half-built.
                     let entry = Cached { format: FORMAT, fetched_at: now_ms(), detailed, footprints };
                     if let Err(e) = store.set(&buildings_name, &entry) {
-                        eprintln!("Could not cache buildings: {e}");
+                        crate::diag::event("map", format!("caching buildings failed: {e}"));
                     }
                     entry.footprints
                 }
                 Err(why) => {
-                    eprintln!("Buildings unavailable for this ride ({why})");
+                    crate::diag::event("map", format!("buildings unavailable: {why}"));
                     cached.map(|c| c.footprints).unwrap_or_default()
                 }
             }

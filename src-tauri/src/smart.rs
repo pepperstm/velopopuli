@@ -57,7 +57,7 @@ impl SmartLink {
                     continue;
                 }
                 if let Err(e) = apply(&http, &c, &token, want, speed, power, hr).await {
-                    eprintln!("Fan/lights: {e}");
+                    crate::diag::event("smart", format!("fan/lights failed: {e}"));
                 }
                 sent = Some(want);
                 last_change = Instant::now();

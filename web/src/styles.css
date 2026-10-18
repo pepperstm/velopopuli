@@ -107,7 +107,8 @@ button.strava {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg);
@@ -118,7 +119,8 @@ select {
   min-width: 0;
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid #3b6fb8;
   outline-offset: -1px;
 }
@@ -432,6 +434,12 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.field.stack {
+  margin: 12px 0;
+}
+textarea {
+  resize: vertical;
 }
 .field > span {
   font-weight: 600;

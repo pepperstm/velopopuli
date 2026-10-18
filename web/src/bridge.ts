@@ -126,6 +126,10 @@ export const api = {
     config: () => invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null } | null>('smoke_config'),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })
   },
+  diag: {
+    report: (note: string) => invoke<string | null>('diag_report', { note }),
+    openFolder: () => invoke<void>('diag_open_folder')
+  },
   log: (message: string) => invoke<void>('log', { message })
 }
 

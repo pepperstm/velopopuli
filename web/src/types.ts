@@ -20,6 +20,7 @@ export interface Settings {
   group: { relayUrl: string }
   /** Draw the 3D world with the GPU directly instead of in the page (macOS, experimental). */
   nativeRenderer: boolean
+  diagnostics: boolean
 }
 
 export type TimeOfDay = 'dawn' | 'day' | 'evening' | 'dusk' | 'night' | 'clock'
@@ -40,7 +41,8 @@ export const DEFAULT_SETTINGS: Settings = {
   look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
-  nativeRenderer: false
+  nativeRenderer: false,
+  diagnostics: true
 }
 
 export interface RouteMeta {

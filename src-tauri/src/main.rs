@@ -6,6 +6,7 @@ mod native;
 mod photos;
 mod commands;
 mod devices;
+mod diag;
 mod geo;
 mod group;
 mod library;
@@ -62,9 +63,17 @@ fn main() {
                 Some(dir) => PathBuf::from(dir),
                 None => app.path().app_data_dir()?,
             };
+            diag::init(&data_dir);
+            let store = Store::new(data_dir);
+            diag::set_detailed(store.get::<velopopuli_core::types::Settings>("settings").unwrap_or_default().diagnostics);
+            let default_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                diag::event("panic", info.to_string());
+                default_hook(info);
+            }));
             let http = reqwest::Client::builder().user_agent("VeloPopuli/0.2 (open-source indoor cycling app)").connect_timeout(std::time::Duration::from_secs(8)).build()?;
             app.manage(AppState {
-                store: Store::new(data_dir),
+                store,
                 devices: Arc::new(Devices::new(app.handle().clone())),
                 ble: Ble::default(),
                 ant: Ant::default(),
@@ -78,6 +87,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::kv_get,
             commands::kv_set,
+            commands::diag_report,
+            commands::diag_open_folder,
             commands::kv_del,
             commands::routes_import_dialog,
             commands::routes_import_text,
