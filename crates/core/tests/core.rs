@@ -3,10 +3,9 @@ use std::sync::Arc;
 use velopopuli_core::fit::{encode_fit, fit_crc, FitSample, FitSession};
 use velopopuli_core::gamify::{apply_ride, level_for, RideFacts};
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, M_PER_DEG};
-use velopopuli_core::health::{parse_health_date, HealthScanner};
 use velopopuli_core::physics::{step_speed, PhysicsParams};
 use velopopuli_core::ride::{RideEngine, RideInput, RivalKind};
-use velopopuli_core::types::{BotSettings, HealthSummary, PersonalBest, Profile, Settings};
+use velopopuli_core::types::{BotSettings, PersonalBest, Profile, Settings};
 use velopopuli_core::world::{align_dem, Dem, World, CELLS, CHUNK, FAR_CELLS, TILE};
 
 /// A straight road heading north with a given elevation profile.
@@ -316,59 +315,6 @@ mod gamify {
         assert_eq!(level_for(0).0, 1);
         assert_eq!(level_for(200).0, 2);
         assert_eq!(level_for(799), (2, 599, 600));
-    }
-}
-
-mod health {
-    use super::*;
-
-    #[test]
-    fn parses_export_dates_with_a_timezone() {
-        // 2026-01-05T07:12:00Z
-        assert_eq!(parse_health_date("2026-01-05 08:12:00 +0100"), Some(1_767_597_120_000));
-        assert_eq!(parse_health_date("1970-01-01 00:00:00 +0000"), Some(0));
-        assert_eq!(parse_health_date("garbage"), None);
-    }
-
-    #[test]
-    fn extracts_the_latest_body_metrics_across_chunk_boundaries() {
-        let now = 1_790_812_800_000; // 2026-10-01
-        let xml = [
-            r#"<HealthData locale="en_GB">"#,
-            r#" <Me HKCharacteristicTypeIdentifierDateOfBirth="1984-03-02" HKCharacteristicTypeIdentifierBiologicalSex="HKBiologicalSexMale"/>"#,
-            r#" <Record type="HKQuantityTypeIdentifierBodyMass" sourceName="Scale" unit="kg" creationDate="2026-09-01 07:00:00 +0000" startDate="2026-09-01 07:00:00 +0000" endDate="2026-09-01 07:00:00 +0000" value="74.26"/>"#,
-            r#" <Record type="HKQuantityTypeIdentifierBodyMass" sourceName="Scale" unit="lb" creationDate="2025-01-01 07:00:00 +0000" startDate="2025-01-01 07:00:00 +0000" endDate="2025-01-01 07:00:00 +0000" value="180"/>"#,
-            r#" <Record type="HKQuantityTypeIdentifierHeartRate" sourceName="Watch" unit="count/min" startDate="2026-08-01 10:00:00 +0000" endDate="2026-08-01 10:00:00 +0000" value="181">"#,
-            r#"  <MetadataEntry key="HKMetadataKeyHeartRateMotionContext" value="2"/>"#,
-            r#" </Record>"#,
-            r#" <Record type="HKQuantityTypeIdentifierHeartRate" sourceName="Watch" unit="count/min" startDate="2023-08-01 10:00:00 +0000" endDate="2023-08-01 10:00:00 +0000" value="195"/>"#,
-            r#" <Record type="HKQuantityTypeIdentifierRestingHeartRate" sourceName="Watch" unit="count/min" startDate="2026-09-20 00:00:00 +0000" endDate="2026-09-20 00:00:00 +0000" value="52"/>"#,
-            r#" <Record type="HKQuantityTypeIdentifierVO2Max" sourceName="Watch" unit="mL/min·kg" startDate="2026-09-20 00:00:00 +0000" endDate="2026-09-20 00:00:00 +0000" value="48.31"/>"#,
-            r#" <Record type="HKQuantityTypeIdentifierCyclingFunctionalThresholdPower" sourceName="Watch" unit="W" startDate="2026-09-20 00:00:00 +0000" endDate="2026-09-20 00:00:00 +0000" value="238"/>"#,
-            r#" <Workout workoutActivityType="HKWorkoutActivityTypeCycling" duration="60"/>"#,
-            r#" <Workout workoutActivityType="HKWorkoutActivityTypeRunning" duration="30"/>"#,
-            r#"</HealthData>"#,
-        ]
-        .join("\n");
-        let mut scanner = HealthScanner::new(now);
-        // 37-byte chunks split lines and the multi-byte "·" alike.
-        for chunk in xml.as_bytes().chunks(37) {
-            scanner.push(chunk);
-        }
-        assert_eq!(
-            scanner.finish(),
-            HealthSummary {
-                weight_kg: Some(74.3),
-                weight_date: Some("2026-09-01".into()),
-                resting_hr: Some(52),
-                max_hr_observed: Some(181),
-                vo2max: Some(48.3),
-                ftp: Some(238),
-                date_of_birth: Some("1984-03-02".into()),
-                cycling_workouts: 1,
-                records: 7,
-            }
-        );
     }
 }
 

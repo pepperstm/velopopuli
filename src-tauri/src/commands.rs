@@ -11,14 +11,14 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use velopopuli_core::gamify::{Badge, BADGES};
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Route};
-use velopopuli_core::types::{HealthSummary, RideSummary, RouteMeta, Settings};
+use velopopuli_core::types::{RideSummary, RouteMeta, Settings};
 use velopopuli_core::world::GridMesh;
 
 use crate::devices::DevicesSnapshot;
 use crate::library::{self, GhostMeta, WorkoutMeta};
 use crate::session::{load_route, local_day, RideInit, RideRequest, Session, DEMO_ROUTE_ID};
 use crate::strava::{self, StravaStatus};
-use crate::{geo, group, health, now_ms, photos, secrets, smart, AppState};
+use crate::{geo, group, now_ms, photos, secrets, smart, AppState};
 use velopopuli_core::fitness::{estimate_ftp, training_load, FtpEstimate, LoadDay, CURVE_DURATIONS};
 use velopopuli_core::gamify::{streaks, Streaks};
 use velopopuli_core::segments::{decode_polyline, place_segment, Segment, SegmentSource};
@@ -706,19 +706,6 @@ pub async fn smart_test(state: State<'_, AppState>) -> Res<()> {
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     link.stop();
     Ok(())
-}
-
-// ── Apple Health ───────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub async fn health_import(app: AppHandle) -> Res<Option<HealthSummary>> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let picked = app.dialog().file().set_title("Choose your Apple Health export (export.zip or export.xml)").add_filter("Apple Health export", &["zip", "xml"]).blocking_pick_file();
-        let Some(path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
-        health::import(&path).map(Some)
-    })
-    .await
-    .map_err(blocking_err)?
 }
 
 // ── Diagnostics ────────────────────────────────────────────────────────────

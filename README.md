@@ -20,7 +20,6 @@ Open source (MIT) for **Windows, macOS and Linux**. Written in **Rust**, with a 
 - **Living world.** Village and town signs, summit boards named after the place at the top, and roadside cafés, fountains, bike shops and viewpoints from OpenStreetMap. Dawn, day, evening, dusk or night (with a lamp on the bike), and clear, cloudy, rain, fog or snow — or the weather at the real place right now. Optional street-level photos of the road from Mapillary (bring your own free token).
 - **Fan and lights.** A fan that speeds up with your speed, power or heart rate, and a light coloured by power zone, through Home Assistant, a Shelly or Tasmota plug, or any webhook.
 - **Recording and sharing.** Every ride is saved as a standard `.FIT` file (GPS, power, heart rate, cadence, laps, normalised power) and can be uploaded to Strava as a Virtual Ride in one click or automatically.
-- **Apple Health.** Import your Health export to set weight, FTP and max heart rate; use an Apple Watch as a live heart-rate sensor; send rides to Health via the FIT file. See [the limits](#apple-health-and-apple-watch) below.
 - **Demo rider.** A simulated rider and trainer so you can try everything with no hardware.
 
 ## How it is built
@@ -40,14 +39,13 @@ crates/core/      Pure Rust library, no I/O — fully unit-tested
                   OpenStreetMap buildings (Overpass JSON and vector-tile decoding, extrusion);
                   scenery (forests, water, the surrounding roads, matching the route to mapped bridges and tunnels)
                   and structures (bridge decks and piers, tunnel bores and portals, overbridges)
-  health          Streaming scanner for Apple Health exports
 src-tauri/        The app (Rust, Tauri 2)
   devices/        Bluetooth via the OS stack (btleplug); ANT+ USB stick via libusb; demo rider
   session         50 Hz simulation loop, trainer control, saving rides
   native/         The optional native renderer (wgpu → Metal) and its shaders
   group, smart    Group-ride client; fan and light control
   library, geo    Workouts, ghosts, segments, goal; place search and route planning
-  terrain, mapdata, photos, strava, health, store, secrets
+  terrain, mapdata, photos, strava, store, secrets
 crates/relay/     The group-ride relay server (WebSocket, stateless)
 web/              The window contents (TypeScript, React, three.js)
   world/          Uploads the meshes Rust produced to the GPU; camera; rider models
@@ -71,7 +69,7 @@ Be aware of what has and has not been proven:
 
 | Area | Status |
 | --- | --- |
-| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, Health export scanning, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 64 core tests) |
+| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 62 core tests) |
 | Group-ride relay | Tested in-process (`cargo test -p velopopuli-relay`) and with two app instances riding together through a local relay |
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
 | Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain |
@@ -86,7 +84,6 @@ Be aware of what has and has not been proven:
 | Forests, water, bridges, tunnels, overpasses | Verified against the live map tiles on the same three routes: a valley town with a river, a reservoir road with a 1 km tunnel, and a city crossed by motorway and railway viaducts. Checked from screenshots of the automated run, not from a long ride. |
 | Bluetooth and ANT+ with **real hardware** | **Not yet tested.** Written to the published specifications, but no trainer, sensor or ANT+ stick has been connected to it — not even a scan has been run. Expect to find bugs; please report them with your device model. |
 | Strava connect and upload | **Not yet tested against the live API** (needs a personal API key). |
-| Apple Health import | Scanner unit-tested; not yet run on a real multi-GB export. |
 | Windows and Linux | **Built** (installers: `.msi`/`.exe`, `.deb`/`.AppImage`) by GitHub Actions on every push, which also runs the tests on Linux. **Not yet run** on either. |
 
 ## Installing on a Mac
@@ -156,16 +153,6 @@ Strava issues API keys per application, and a secret can't be shipped inside an 
 
 Your browser opens for approval. The key and tokens are stored in the system keychain on macOS and Windows; on Linux they are kept in a file in the app's data folder readable only by your user. Rides upload as Virtual Rides with the route map.
 
-## Apple Health and Apple Watch
-
-Apple only allows apps running **on the iPhone** to read or write Health data — there is no Health access for desktop apps on any platform, including macOS. So Velo Populi integrates in the ways that are actually possible from a computer:
-
-- **Read your data:** iPhone → Health → profile picture → *Export All Health Data*. Import the resulting `export.zip` under **Settings → Apple Health** to pull in your latest weight, cycling FTP, resting heart rate, VO₂max and the highest heart rate recorded in the last year. The file is read locally and nothing is uploaded.
-- **Live Apple Watch heart rate:** the watch can't broadcast heart rate natively. Run a broadcaster app on it (e.g. HeartCast or BlueHeart) and it appears as a normal Bluetooth heart-rate sensor.
-- **Write rides to Health:** set **Settings → Ride files** to an iCloud Drive folder, then open the `.FIT` file on the iPhone with an importer such as HealthFit or RunGap, which writes the workout into Health.
-
-Direct two-way sync would need a companion iPhone app using HealthKit. That is the top item on the roadmap.
-
 ## Notes on the model
 
 - **Speed is simulated from power**, not read from the trainer: `P = (m·g·(sinθ + Crr·cosθ) + ½·ρ·CdA·v²)·v`, with air density falling with altitude. Trainer difficulty changes only what the trainer feels like, never your virtual speed.
@@ -184,11 +171,18 @@ Direct two-way sync would need a companion iPhone app using HealthKit. That is t
 ## Roadmap
 
 - Hardware testing across trainers and sensors; pairing to specific ANT+ devices; multiple devices per type
-- Companion iPhone/Apple Watch app for real HealthKit sync and native watch heart rate
 - Native renderer: Windows and Linux, and making it the default
-- A public group-ride relay, so friends needn't run their own
 - More from OpenStreetMap: mapped roof shapes, other land cover (farmland, rock, glaciers), broadleaf trees, squares and car parks, cuttings and embankments for the side roads
 - Wahoo legacy protocol, steering and virtual gears
+
+### Stretch: self-hosted group-ride servers
+
+Group rides already go through a small relay anyone can run (`crates/relay`; CI builds it for every platform). The stretch goal is to make running your own server for a club or group of friends a first-class option:
+
+- A Docker image and a one-line install, with secure connections (`wss://`) out of the box
+- Private rooms with passwords, and a server list in the app so riders can switch between their club's server and others
+- Persistent club features on the server: scheduled rides, shared routes and leaderboards
+- Simple admin: who is connected, room limits, and kicking riders
 
 ## Data and credits
 

@@ -351,13 +351,6 @@ select:focus {
 .status.connecting {
   color: var(--warn);
 }
-.help {
-  margin-top: 22px;
-}
-.help p {
-  margin: 6px 0 0;
-}
-
 /* Modal */
 .modal-backdrop,
 .ride-overlay {
@@ -474,26 +467,6 @@ select:focus {
 .field.toggle small {
   grid-column: 2;
 }
-.steps {
-  padding-left: 20px;
-  margin: 0 0 12px;
-}
-.steps li {
-  margin-bottom: 5px;
-}
-.health {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-}
-.health .row {
-  justify-content: space-between;
-  background: var(--panel-2);
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-
 /* Summary + progress */
 .summary h1 {
   font-size: 32px;

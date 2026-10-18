@@ -292,16 +292,3 @@ pub struct RideSummary {
     pub group: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HealthSummary {
-    pub weight_kg: Option<f64>,
-    pub weight_date: Option<String>,
-    pub resting_hr: Option<u32>,
-    pub max_hr_observed: Option<u32>,
-    pub vo2max: Option<f64>,
-    pub ftp: Option<u32>,
-    pub date_of_birth: Option<String>,
-    pub cycling_workouts: u32,
-    pub records: u64,
-}

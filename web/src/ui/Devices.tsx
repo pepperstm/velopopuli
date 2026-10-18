@@ -142,14 +142,6 @@ export function Devices(): React.JSX.Element {
         })}
       </div>
 
-      <div className="card help">
-        <h3>Using an Apple Watch as your heart-rate monitor</h3>
-        <p className="muted">
-          Apple Watch can't broadcast heart rate to a computer by itself. Install a broadcaster app on the watch (for example HeartCast or
-          BlueHeart) and it will show up here under “Add Bluetooth device” like any chest strap.
-        </p>
-      </div>
-
       {scanning && (
         <div className="modal-backdrop">
           <div className="modal">

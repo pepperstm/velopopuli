@@ -220,18 +220,6 @@ export interface StravaStatus {
   athlete: string
 }
 
-export interface HealthSummary {
-  weightKg: number | null
-  weightDate: string | null
-  restingHr: number | null
-  maxHrObserved: number | null
-  vo2max: number | null
-  ftp: number | null
-  dateOfBirth: string | null
-  cyclingWorkouts: number
-  records: number
-}
-
 export interface BtCandidate {
   id: string
   name: string

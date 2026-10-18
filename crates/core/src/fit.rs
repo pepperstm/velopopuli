@@ -1,5 +1,5 @@
-//! Minimal FIT activity encoder. FIT is what Strava, Garmin Connect and the
-//! iOS apps that write to Apple Health ingest most reliably.
+//! Minimal FIT activity encoder. FIT is what Strava, Garmin Connect and most
+//! other training platforms ingest most reliably.
 
 #[derive(Debug, Clone)]
 pub struct FitSample {

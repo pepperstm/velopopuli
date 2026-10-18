@@ -12,7 +12,6 @@ import type {
   Badge,
   BtCandidate,
   DevicesSnapshot,
-  HealthSummary,
   RideInit,
   RideState,
   RideSummary,
@@ -122,9 +121,6 @@ export const api = {
   smart: {
     setToken: (token: string) => invoke<void>('smart_set_token', { token }),
     test: () => invoke<void>('smart_test')
-  },
-  health: {
-    import: () => invoke<HealthSummary | null>('health_import')
   },
   smoke: {
     config: () => invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null } | null>('smoke_config'),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { api, useSettings } from '../state'
-import type { HealthSummary, Settings, StravaStatus } from '../types'
+import type { Settings, StravaStatus } from '../types'
 
 function Num(props: {
   label: string
@@ -145,95 +145,6 @@ function StravaCard(): React.JSX.Element {
         </>
       )}
       {error && <div className="error">{error}</div>}
-    </section>
-  )
-}
-
-function HealthCard(): React.JSX.Element {
-  const { settings, update } = useSettings()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [health, setHealth] = useState<HealthSummary | null>(null)
-
-  const run = async (): Promise<void> => {
-    setBusy(true)
-    setError('')
-    try {
-      setHealth(await api.health.import())
-    } catch (err) {
-      setError(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const apply = (patch: Partial<Settings['rider']>): void => update((s) => ({ ...s, rider: { ...s.rider, ...patch } }))
-
-  return (
-    <section className="card">
-      <h2>Apple Health &amp; Apple Watch</h2>
-      <p className="muted">
-        Apple only lets apps on your iPhone talk to Health directly, so a desktop app works with it in three ways:
-      </p>
-      <ul className="muted steps">
-        <li>
-          <b>Bring your body data in:</b> on your iPhone open Health → profile picture → <i>Export All Health Data</i>, send the zip to this
-          computer and import it here to set weight, FTP and max heart rate.
-        </li>
-        <li>
-          <b>Live Apple Watch heart rate:</b> run a broadcaster app on the watch and add it under Devices as a Bluetooth sensor.
-        </li>
-        <li>
-          <b>Send rides to Health:</b> every ride is saved as a .FIT file. Point the export folder below at iCloud Drive, then open the file on
-          your iPhone with a FIT importer such as HealthFit or RunGap, which writes the workout into Health.
-        </li>
-      </ul>
-      <div className="row wrap">
-        <button className="primary" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Reading export (can take a minute)…' : 'Import Apple Health export…'}
-        </button>
-      </div>
-      {error && <div className="error">{error}</div>}
-      {health && (
-        <div className="health">
-          <div className="muted small">
-            Read {health.records.toLocaleString()} records · {health.cyclingWorkouts} cycling workouts
-            {health.vo2max ? ` · VO₂max ${health.vo2max}` : ''}
-            {health.restingHr ? ` · resting HR ${health.restingHr}` : ''}
-          </div>
-          {health.weightKg && (
-            <div className="row">
-              <span>
-                Weight <b>{health.weightKg} kg</b> ({health.weightDate})
-              </span>
-              <button disabled={settings.rider.weightKg === health.weightKg} onClick={() => apply({ weightKg: health.weightKg! })}>
-                Use
-              </button>
-            </div>
-          )}
-          {health.ftp && (
-            <div className="row">
-              <span>
-                Cycling FTP <b>{health.ftp} W</b>
-              </span>
-              <button disabled={settings.rider.ftp === health.ftp} onClick={() => apply({ ftp: health.ftp! })}>
-                Use
-              </button>
-            </div>
-          )}
-          {health.maxHrObserved && (
-            <div className="row">
-              <span>
-                Highest heart rate in the last year <b>{health.maxHrObserved} bpm</b>
-              </span>
-              <button disabled={settings.rider.maxHr === health.maxHrObserved} onClick={() => apply({ maxHr: health.maxHrObserved! })}>
-                Use as max HR
-              </button>
-            </div>
-          )}
-          {!health.weightKg && !health.ftp && !health.maxHrObserved && <div className="muted">No weight, FTP or heart-rate data in this export.</div>}
-        </div>
-      )}
     </section>
   )
 }
@@ -534,7 +445,6 @@ export function SettingsScreen(): React.JSX.Element {
       </section>
 
       <StravaCard />
-      <HealthCard />
 
       <section className="card">
         <h2>Ride files</h2>

@@ -8,7 +8,6 @@ mod commands;
 mod devices;
 mod geo;
 mod group;
-mod health;
 mod library;
 mod secrets;
 mod session;
@@ -140,7 +139,6 @@ fn main() {
             commands::strava_connect,
             commands::strava_disconnect,
             commands::strava_upload,
-            commands::health_import,
             commands::smoke_config,
             commands::smoke_done,
             commands::log,
