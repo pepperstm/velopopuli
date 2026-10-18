@@ -55,6 +55,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Intel target for the universal Mac build
+        if: runner.os == 'macOS'
+        run: rustup target add x86_64-apple-darwin
       - run: npx tauri build ${{ matrix.args }}
       - name: Relay server
         run: cargo build --release -p wintermiles-relay
