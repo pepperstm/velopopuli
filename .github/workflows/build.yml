@@ -152,5 +152,6 @@ jobs:
         with:
           name: VeloPopuli ${{ github.ref_name }}
           body_path: packaging/RELEASE_NOTES.md
-          prerelease: true
+          # A suffix (v0.3.0-beta.1) makes a pre-release; plain versions become the latest release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: out/*
