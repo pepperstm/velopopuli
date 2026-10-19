@@ -19,11 +19,13 @@
 
 The bars under the settings show every gear, from easiest to hardest, with the starting gear highlighted.
 
+![The Gears settings](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/gears-settings.jpg)
+
 ## Riding
 
 The current gear shows on the HUD under cadence, and **− Gear +** buttons appear in the controls. The new resistance is sent the moment you shift. Gears do nothing in **ERG** mode, where the trainer holds the power whatever gear you're in, or in workouts that hold targets in ERG.
 
-![Gear on the HUD](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-settings.jpg)
+![Riding in gear 13 of 22 (50×21) on a compact chainset, with Gear − + in the controls](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/gears-ride.jpg)
 
 ## How it works
 
