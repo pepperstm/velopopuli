@@ -237,4 +237,4 @@ VeloPopuli is free software under the **GNU General Public License, version 3 or
 
 In short: anyone may use, study, share and change it. Anyone who distributes it, changed or not, or distributes something built from it, must do so under the same licence and make the source code available — so VeloPopuli, and everything made from it, stays open source.
 
-Versions up to and including 0.2.0 were released under the MIT licence.
+This applies to every version, including those first published under the MIT licence (up to and including 0.2.0): the copyright holder relicensed them under GPLv3 on 19 October 2026. Anyone who obtained one of those versions under MIT before then keeps the MIT rights to that copy.
