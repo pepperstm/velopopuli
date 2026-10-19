@@ -2,7 +2,7 @@
 name = "velopopuli-core"
 version = "0.2.0"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-or-later"
 description = "Route, physics, recording, sensor-protocol and terrain logic for VeloPopuli. No I/O."
 
 [dependencies]

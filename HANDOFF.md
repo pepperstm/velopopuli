@@ -4,7 +4,7 @@ Everything someone needs to pick up the project: what it is, where it stands, ho
 
 - Website: <https://velopopuli.com> · Repository: <https://github.com/pepperstm/velopopuli> · Guides: [wiki](https://github.com/pepperstm/velopopuli/wiki) (source in [`docs/wiki/`](docs/wiki))
 - Maintainer: Graham Barber (GitHub `pepperstm`)
-- Licence: MIT (kept deliberately — see *Decisions*)
+- Licence: GPL-3.0-or-later (since after v0.2.0; earlier versions MIT — see *Decisions*)
 
 ## 1. What it is
 
@@ -128,7 +128,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 ## 9. Decisions and the reasons for them
 
 - **Rust + Tauri, not Electron:** the maintainer's stated priority is low overhead. Everything computational or hardware-facing is Rust; the page only draws.
-- **MIT licence:** AGPL (to stop closed commercial use) was discussed and prepared; the maintainer chose to keep MIT for maximum openness and adoption.
+- **GPLv3 licence:** the project began under MIT. After v0.2.0 the maintainer moved it to GPL-3.0-or-later so that everything built from it must also be open source. (AGPL was considered earlier; plain GPL was chosen. Note GPL's copyleft applies when software is *distributed* — someone running a modified relay server for others without distributing it isn't required to share the changes; AGPL would cover that.) Copies taken under MIT before the change keep MIT rights. Dependencies are MIT/Apache-2.0/BSD-style, all GPLv3-compatible; the bundled fonts are under the OFL, which is fine alongside GPL code.
 - **Name "VeloPopuli"** (one word, as on the website; header wordmark lowercase "velo**populi**"). The bundle id `org.velopopuli.VeloPopuli` and the keychain service "Velo Populi" were left unchanged so user data and logins carry over.
 - **Colours and type** follow velopopuli.com: paper `#f7f7ef`, ink `#24271f`, dark `#252d24`, lime accent `#e9ff60` (with ink text on it); DM Sans and Manrope, bundled under the OFL in `web/src/fonts/`. Checked against cycling brands: the old orange was too close to Strava/Zwift; the lime stays clear of Strava/Zwift/Tacx orange, Wahoo/Garmin blue-black and TrainerRoad red (nearest: Visma–Lease a Bike's pure yellow on black).
 - **No central services:** map data from public OSM services; relay is self-hosted; Strava keys are per user.
