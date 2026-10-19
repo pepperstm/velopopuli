@@ -6,7 +6,7 @@ pkgrel=1
 pkgdesc="The people's indoor ride: ride real GPX routes in 3D on your smart trainer"
 arch=('x86_64')
 url="https://velopopuli.com"
-license=('MIT')
+license=('GPL-3.0-or-later')
 depends=('webkit2gtk-4.1' 'gtk3' 'dbus' 'hicolor-icon-theme')
 optdepends=('bluez: Bluetooth trainers and sensors'
             'bluez-utils: bluetoothctl, for checking Bluetooth from the terminal')

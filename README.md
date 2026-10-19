@@ -6,7 +6,7 @@
 
 Ride any GPX route on your indoor trainer. VeloPopuli turns a route file into a 3D world, drives your smart trainer's resistance from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, XP and badges.
 
-Open source (MIT) for **Windows, macOS and Linux**. Written in **Rust**, with a thin web layer for drawing. Not affiliated with icTrainer or any other commercial product.
+Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Written in **Rust**, with a thin web layer for drawing. Not affiliated with icTrainer or any other commercial product.
 
 ## What it does
 
@@ -231,4 +231,10 @@ Guides for riders and developers are in the [wiki](https://github.com/pepperstm/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Copyright © 2026 Graham Barber and VeloPopuli contributors.
+
+VeloPopuli is free software under the **GNU General Public License, version 3 or later** — see [LICENSE](LICENSE).
+
+In short: anyone may use, study, share and change it. Anyone who distributes it, changed or not, or distributes something built from it, must do so under the same licence and make the source code available — so VeloPopuli, and everything made from it, stays open source.
+
+This applies to every version, including those first published under the MIT licence (up to and including 0.2.0): the copyright holder relicensed them under GPLv3 on 19 October 2026. Anyone who obtained one of those versions under MIT before then keeps the MIT rights to that copy.
