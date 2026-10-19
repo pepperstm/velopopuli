@@ -4,7 +4,7 @@
 
 ![Climbing Alpe d'Huez in VeloPopuli](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/hero.gif)
 
-VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open elevation data, drives your smart trainer from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, workouts and a season goal. It's free, open source (MIT) and runs on Windows, macOS and Linux.
+VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open elevation data, drives your smart trainer from the real gradient, and makes a game of it with ghosts, pace riders, timed climbs, workouts and a season goal. It's free, open source (GPLv3) and runs on Windows, macOS and Linux.
 
 ## Start here
 

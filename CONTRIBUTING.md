@@ -88,7 +88,7 @@ Open it as a **draft** early if you want feedback before it's finished.
 
 ## Licence
 
-VeloPopuli is MIT-licensed. By contributing you agree that your contribution is licensed under the same terms. There is no contributor agreement to sign.
+VeloPopuli is licensed under the GNU GPL, version 3 or later. By contributing you agree that your contribution is licensed under the same terms. There is no contributor agreement to sign. Only add code or assets whose licence is compatible with GPLv3 (MIT, BSD, Apache-2.0, ISC, zlib, MPL-2.0, LGPL and other GPL-compatible licences are fine; say in the PR if you're unsure).
 
 ## Conduct
 

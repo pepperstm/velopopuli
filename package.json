@@ -2,7 +2,7 @@
   "name": "velopopuli",
   "version": "0.2.0",
   "description": "Open-source indoor cycling: ride any GPX route on your smart trainer in a 3D virtual world.",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "author": "VeloPopuli contributors",
   "scripts": {
     "dev": "tauri dev",

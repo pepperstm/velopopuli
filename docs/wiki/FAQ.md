@@ -1,7 +1,7 @@
 # FAQ
 
 **Is it really free?**
-Yes — free to use, open source (MIT), no subscription, no account.
+Yes — free to use, open source (GPLv3), no subscription, no account. The licence also means anything built from VeloPopuli has to stay open source.
 
 **Which trainers work?**
 Bluetooth FTMS trainers (most made since about 2018), Tacx trainers using FE-C over Bluetooth, and any ANT+ FE-C trainer through a USB stick. Power meters, heart-rate straps and speed/cadence sensors too. Real-world testing is just beginning — see [[Connecting your trainer]].
