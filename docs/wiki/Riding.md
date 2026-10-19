@@ -10,6 +10,7 @@ Power (with W/kg and zone), speed, heart rate and cadence on the left, with what
 
 - **Gradient mode** (default): the trainer simulates the real slope. **Feel** scales it (100% = the real gradient), and **Settings → Trainer & physics** caps the steepest pitch and softens descents, so a 15% ramp is rideable on any trainer.
 - **ERG mode**: the trainer holds a fixed power while the route scrolls by.
+- **Gears**: shift your bike as normal — or, if you prefer, set up [[Virtual gears]] and shift with keys or a remote.
 - **Speed is simulated from your power** — with your weight, the bike, the slope, rolling resistance and air (thinner at altitude). The trainer's difficulty only changes how it feels, never your speed.
 
 ## Cameras

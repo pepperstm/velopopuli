@@ -29,6 +29,32 @@ export interface Settings {
   /** Draw the 3D world with the GPU directly instead of in the page (macOS, experimental). */
   nativeRenderer: boolean
   diagnostics: boolean
+  gears: GearSettings
+}
+
+/** Real gears (shift the bike as normal) or virtual gears (the bike stays in one gear). */
+export interface GearSettings {
+  mode: 'real' | 'virtual'
+  /** A preset gear set's id, or 'custom'. */
+  preset: string
+  chainrings: number[]
+  cogs: number[]
+  realChainring: number
+  realCog: number
+  wheelMm: number
+  feel: 'realistic' | 'steps'
+  step: number
+  /** From 1; 0 = closest to the real gear. */
+  startGear: number
+  keysHarder: string[]
+  keysEasier: string[]
+}
+
+export interface GearPreview {
+  presets: [string, string][]
+  gears: [string, number][]
+  start: number
+  realRatio: number
 }
 
 export type TimeOfDay = 'dawn' | 'day' | 'evening' | 'dusk' | 'night' | 'clock'
@@ -50,7 +76,21 @@ export const DEFAULT_SETTINGS: Settings = {
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
   nativeRenderer: false,
-  diagnostics: true
+  diagnostics: true,
+  gears: {
+    mode: 'real',
+    preset: 'even-24',
+    chainrings: [50, 34],
+    cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34],
+    realChainring: 50,
+    realCog: 17,
+    wheelMm: 2105,
+    feel: 'realistic',
+    step: 0.01,
+    startGear: 0,
+    keysHarder: [']', '=', 'PageDown', 'ArrowRight'],
+    keysEasier: ['[', '-', 'PageUp', 'ArrowLeft']
+  }
 }
 
 export interface RouteMeta {
@@ -324,6 +364,10 @@ export interface RideState {
   power: number
   hr: number | null
   cadence: number | null
+  /** True when cadence is worked out from speed and the virtual gear. */
+  cadenceEstimated: boolean
+  /** The virtual gear, when virtual gears are on. */
+  gear: { index: number; count: number; label: string } | null
   elapsed: number
   grade: number
   ele: number

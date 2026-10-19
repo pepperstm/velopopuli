@@ -326,6 +326,39 @@ pub fn ride_intensity(state: State<AppState>, delta: f64) -> Res<()> {
     Ok(())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GearPreview {
+    presets: Vec<(String, String)>,
+    /// `(label, ratio)` per gear, easiest first; empty with real gears.
+    gears: Vec<(String, f64)>,
+    /// The gear a ride starts in (from 0), and the ratio of the real gear.
+    start: usize,
+    real_ratio: f64,
+}
+
+/// What a gear setup amounts to, for the Settings page.
+#[tauri::command]
+pub fn gears_preview(gears: velopopuli_core::types::GearSettings) -> GearPreview {
+    use velopopuli_core::gearing;
+    let mut on = gears.clone();
+    on.mode = velopopuli_core::types::GearsMode::Virtual;
+    let list = gearing::gears(&on);
+    GearPreview {
+        presets: gearing::PRESETS.iter().map(|p| (p.id.to_string(), p.name.to_string())).collect(),
+        start: gearing::start_gear(&on, &list),
+        real_ratio: gearing::real_ratio(&on),
+        gears: list.into_iter().map(|g| (g.label, g.ratio)).collect(),
+    }
+}
+
+/// Shifts the virtual gear: +1 harder, −1 easier.
+#[tauri::command]
+pub fn ride_shift(state: State<AppState>, delta: i32) -> Res<()> {
+    state.current_session()?.shift(delta);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn ride_skip_step(state: State<AppState>) -> Res<()> {
     state.current_session()?.skip_step();
@@ -787,6 +820,10 @@ pub struct SmokeConfig {
     ghosts: Option<Vec<String>>,
     /// Seconds of window frames to save before the end, for demo clips (VP_SMOKE_CLIP).
     clip: Option<f64>,
+    /// Virtual gears to shift during the ride (VP_SMOKE_SHIFT, negative = easier).
+    shift: Option<i32>,
+    /// Scroll to the heading with this text before capturing (VP_SMOKE_SCROLL).
+    scroll: Option<String>,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -814,6 +851,8 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         room: std::env::var("VP_SMOKE_ROOM").ok(),
         ghosts: std::env::var("VP_SMOKE_GHOSTS").ok().map(|v| v.split(',').map(str::to_string).collect()),
         clip: std::env::var("VP_SMOKE_CLIP").ok().and_then(|v| v.parse().ok()),
+        shift: std::env::var("VP_SMOKE_SHIFT").ok().and_then(|v| v.parse().ok()),
+        scroll: std::env::var("VP_SMOKE_SCROLL").ok(),
     })
 }
 

@@ -9,6 +9,7 @@
 - [[Routes and the map]]
 - [[Riding]]
 - [[Workouts]]
+- [[Virtual gears]]
 - [[Progress and goals]]
 - [[Strava]]
 - [[Group rides and self-hosting]]

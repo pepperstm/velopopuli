@@ -44,6 +44,8 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_SMOKE_WINDOW` | Also save the whole window, HUD included, as `<name>.window.png` (macOS) |
 | `VP_SMOKE_CLIP` | Save this many seconds of window frames (15 fps) to `<name>.frames/` for demo clips |
 | `VP_SMOKE_REPORT` | Also save a diagnostics report here |
+| `VP_SMOKE_SHIFT` | Shift this many virtual gears during the ride (negative: easier), one every 0.4 s from 3 s in |
+| `VP_SMOKE_SCROLL` | Scroll to the section with this heading before capturing (e.g. `Gears` on the Settings screen) |
 | `VP_SKIP_OVERPASS` | Don't ask the Overpass API (tests the fallbacks) |
 
 The ride uses the newest route in the library (or the Demo Loop) and the simulated demo rider. A window that opens behind others gets few animation frames; the `.txt` reports how many were drawn.

@@ -14,6 +14,7 @@ use velopopuli_core::devices::TrainerCommand;
 use velopopuli_core::fit::encode_fit;
 use velopopuli_core::fitness::{estimate_ftp, power_curve};
 use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
+use velopopuli_core::gearing;
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
 use velopopuli_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
@@ -105,6 +106,16 @@ struct RivalState<'a> {
     speed: f64,
 }
 
+/// The virtual gear, for the HUD.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GearHud {
+    /// From 0, easiest first.
+    index: usize,
+    count: usize,
+    label: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RideState<'a> {
@@ -113,6 +124,9 @@ struct RideState<'a> {
     power: f64,
     hr: Option<f64>,
     cadence: Option<f64>,
+    /// True when `cadence` is worked out from speed and the virtual gear (no cadence sensor).
+    cadence_estimated: bool,
+    gear: Option<GearHud>,
     elapsed: f64,
     grade: f64,
     ele: f64,
@@ -367,6 +381,21 @@ impl Session {
         engine.intensity = (engine.intensity + delta).clamp(0.5, 1.5);
     }
 
+    /// Shifts the virtual gear: positive is harder. Does nothing with real gears.
+    pub fn shift(&self, delta: i32) {
+        let count = gearing::gears(&self.settings.lock().unwrap().gears).len();
+        if count == 0 {
+            return;
+        }
+        let mut engine = self.engine.lock().unwrap();
+        let next = (engine.gear as i64 + delta as i64).clamp(0, count as i64 - 1) as usize;
+        if next != engine.gear {
+            engine.gear = next;
+            engine.gear_shifted = true;
+            crate::diag::raw("ride", format!("shift to gear {}/{count}", next + 1));
+        }
+    }
+
     /// Skips to the next workout step.
     pub fn skip_step(&self) {
         let mut engine = self.engine.lock().unwrap();
@@ -550,15 +579,33 @@ fn run(
         let mut engine = engine.lock().unwrap();
         engine.tick(dt, RideInput { power: tel.power, cadence: tel.cadence, hr: tel.hr }, now_ms());
 
-        if now - commanded >= Duration::from_secs(1) {
+        // Once a second, and straight away (but no more than four times a second) after a shift.
+        if now - commanded >= Duration::from_secs(1) || (engine.gear_shifted && now - commanded >= Duration::from_millis(250)) {
             commanded = now;
+            engine.gear_shifted = false;
             let workout_target = engine.workout_target().filter(|_| trainer.workout_erg && !engine.user_paused);
             let cmd = match (workout_target, trainer.mode) {
                 (Some(w), _) => TrainerCommand::TargetPower(w),
                 (None, TrainerMode::Erg) if engine.workout.is_none() => TrainerCommand::TargetPower(trainer.erg_watts),
                 _ => {
-                    let crr = settings.lock().unwrap().physics.crr;
-                    TrainerCommand::Simulation { grade: engine.trainer_grade(&trainer), crr, cw: engine.wind_coefficient() }
+                    let (crr, gear_set, mass) = {
+                        let s = settings.lock().unwrap();
+                        (s.physics.crr, s.gears.clone(), s.rider.weight_kg + s.rider.bike_kg)
+                    };
+                    let (grade, cw) = (engine.trainer_grade(&trainer), engine.wind_coefficient());
+                    // Virtual gears: the gradient that makes the trainer feel like the chosen gear.
+                    let list = gearing::gears(&gear_set);
+                    let grade =
+                        if list.is_empty() { grade } else { gearing::effective_grade(&gear_set, &list, engine.gear.min(list.len() - 1), engine.speed, &gearing::Load { grade, crr, cw, mass }) };
+                    TrainerCommand::Simulation { grade, crr, cw }
+                }
+            };
+            let gear_note = {
+                let n = gearing::gears(&settings.lock().unwrap().gears).len();
+                if n == 0 {
+                    "real".to_string()
+                } else {
+                    format!("{}/{n}", engine.gear.min(n - 1) + 1)
                 }
             };
             devices.command_trainer(cmd);
@@ -568,7 +615,7 @@ fn run(
             crate::diag::event(
                 "ride",
                 format!(
-                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} has_power={} cmd={} devices={}",
+                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} has_power={} cmd={} gear={gear_note} devices={}",
                     engine.elapsed,
                     if tel.has_power { format!("{:.0}", tel.power) } else { "-".into() },
                     f(tel.cadence),
@@ -616,12 +663,27 @@ fn run(
             }
             let show_segment = segment_shown.as_ref().is_some_and(|(_, at)| now - *at < Duration::from_secs(9));
             let workout_pos = engine.workout_pos();
+            let (gear_set, gear_list) = {
+                let s = settings.lock().unwrap();
+                (s.gears.clone(), gearing::gears(&s.gears))
+            };
+            let gear = (!gear_list.is_empty()).then(|| {
+                let i = engine.gear.min(gear_list.len() - 1);
+                GearHud { index: i, count: gear_list.len(), label: gear_list[i].label.clone() }
+            });
+            // With virtual gears and no cadence sensor, the gear and speed say what the cadence is.
+            let (cadence, cadence_estimated) = match (tel.cadence, &gear) {
+                (None, Some(g)) if engine.moving => (Some(gearing::cadence(engine.speed, gear_list[g.index].ratio, gear_set.wheel_mm)), true),
+                (c, _) => (c, false),
+            };
             let state = RideState {
                 distance: engine.distance,
                 speed: engine.speed,
                 power: tel.power,
                 hr: tel.hr,
-                cadence: tel.cadence,
+                cadence,
+                cadence_estimated,
+                gear,
                 elapsed: engine.elapsed,
                 grade: engine.pos.grade,
                 ele: engine.pos.ele,

@@ -7,6 +7,7 @@ pub mod devices;
 pub mod fit;
 pub mod fitness;
 pub mod gamify;
+pub mod gearing;
 pub mod gpx;
 pub mod physics;
 pub mod ride;

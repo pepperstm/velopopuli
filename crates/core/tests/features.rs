@@ -311,3 +311,123 @@ fn picks_photos_facing_along_the_route() {
     // Same 30 m slot: the newer one wins. Looking backwards or sideways: dropped.
     assert_eq!(ids, ["b", "c"]);
 }
+
+mod gearing {
+    use velopopuli_core::gearing::{cadence, effective_grade, gears, real_ratio, start_gear, Load, PRESETS};
+    use velopopuli_core::types::{GearSettings, GearsMode};
+
+    fn virtual_gears(preset: &str) -> GearSettings {
+        GearSettings { mode: GearsMode::Virtual, preset: preset.into(), ..Default::default() }
+    }
+
+    fn load(grade: f64) -> Load {
+        Load { grade, crr: 0.004, cw: 0.25, mass: 84.0 }
+    }
+
+    #[test]
+    fn real_gears_need_nothing() {
+        // The default: shifting the bike's own gears. No virtual gears, and nothing is changed.
+        let s = GearSettings::default();
+        assert_eq!(s.mode, GearsMode::Real);
+        assert!(gears(&s).is_empty());
+        assert_eq!(effective_grade(&s, &gears(&s), 3, 8.0, &load(0.05)), 0.05);
+    }
+
+    #[test]
+    fn gear_sets_from_presets_and_custom_teeth() {
+        let even = gears(&virtual_gears("even-24"));
+        assert_eq!(even.len(), 24);
+        assert!((even[0].ratio - 0.75).abs() < 1e-9 && (even[23].ratio - 4.8).abs() < 1e-9);
+        assert!(even.windows(2).all(|w| w[1].ratio > w[0].ratio));
+        assert_eq!(even[6].label, "Gear 7");
+
+        // A double: every combination easiest first, near-duplicates merged.
+        let compact = gears(&virtual_gears("road-compact-12"));
+        assert!(compact.len() > 12 && compact.len() < 24, "{}", compact.len());
+        assert_eq!(compact.first().unwrap().label, "34×34");
+        assert_eq!(compact.last().unwrap().label, "50×11");
+        assert!(compact.windows(2).all(|w| w[1].ratio >= w[0].ratio * 1.025));
+
+        // A 1× set is simply its cassette.
+        assert_eq!(gears(&virtual_gears("gravel-1x-12")).len(), 12);
+
+        // The rider's own drivetrain; silly tooth counts are ignored.
+        let mut custom = virtual_gears("custom");
+        custom.chainrings = vec![46, 0];
+        custom.cogs = vec![11, 13, 15, 17, 200];
+        let g = gears(&custom);
+        assert_eq!(g.iter().map(|g| g.label.as_str()).collect::<Vec<_>>(), vec!["46×17", "46×15", "46×13", "46×11"]);
+        assert!(PRESETS.iter().all(|p| !gears(&virtual_gears(p.id)).is_empty()));
+    }
+
+    #[test]
+    fn starts_in_the_gear_closest_to_the_real_one() {
+        let mut s = virtual_gears("road-compact-12");
+        s.real_chainring = 50;
+        s.real_cog = 17;
+        let g = gears(&s);
+        assert_eq!(g[start_gear(&s, &g)].label, "50×17");
+        s.start_gear = 3;
+        assert_eq!(start_gear(&s, &g), 2);
+        s.start_gear = 99;
+        assert_eq!(g[start_gear(&s, &g)].label, "50×17");
+    }
+
+    #[test]
+    fn harder_gears_feel_harder_and_the_real_gear_feels_real() {
+        let mut s = virtual_gears("custom");
+        s.chainrings = vec![50];
+        s.cogs = vec![11, 13, 15, 17, 19, 21, 25];
+        s.real_chainring = 50;
+        s.real_cog = 17;
+        let g = gears(&s);
+        let real = start_gear(&s, &g);
+        assert_eq!(g[real].label, "50×17");
+        for grade in [-0.04, 0.0, 0.03, 0.08] {
+            for speed in [0.0, 5.0, 9.0, 14.0] {
+                // In the real gear the trainer gets the road gradient unchanged.
+                assert!((effective_grade(&s, &g, real, speed, &load(grade)) - grade).abs() < 1e-9);
+                // Wherever the road resists the rider, each harder gear asks more of the trainer. (On a
+                // descent steep enough to push the rider along, scaling that push makes it bigger —
+                // as on a real bike, where there is nothing to pedal against in any gear.)
+                let l = load(grade);
+                let road = l.mass * 9.80665 * (grade + l.crr) + l.cw * speed * speed;
+                let sent: Vec<f64> = (0..g.len()).map(|i| effective_grade(&s, &g, i, speed, &l)).collect();
+                if road > 0.0 {
+                    assert!(sent.windows(2).all(|w| w[1] >= w[0] - 1e-12), "{grade} {speed} {sent:?}");
+                }
+            }
+        }
+        // The force the trainer applies at its own speed is the road force scaled by the ratio.
+        let (speed, grade, i) = (9.0, 0.03, g.len() - 1);
+        let k = g[i].ratio / real_ratio(&s);
+        let l = load(grade);
+        let e = effective_grade(&s, &g, i, speed, &l);
+        let trainer = l.mass * 9.80665 * (e + l.crr) + l.cw * (speed / k).powi(2);
+        let road = l.mass * 9.80665 * (grade + l.crr) + l.cw * speed * speed;
+        assert!((trainer - k * road).abs() < 1e-6, "{trainer} {}", k * road);
+        // Never beyond what trainers accept.
+        assert!(effective_grade(&s, &g, i, 0.0, &load(0.35)) <= 0.40);
+        assert!(effective_grade(&s, &g, 0, 20.0, &load(-0.2)) >= -0.25);
+    }
+
+    #[test]
+    fn steps_feel_adds_a_fixed_gradient_per_gear() {
+        let mut s = virtual_gears("even-24");
+        s.feel = "steps".into();
+        s.step = 0.01;
+        let g = gears(&s);
+        let real = start_gear(&s, &g);
+        assert!((effective_grade(&s, &g, real, 8.0, &load(0.02)) - 0.02).abs() < 1e-12);
+        assert!((effective_grade(&s, &g, real + 3, 8.0, &load(0.02)) - 0.05).abs() < 1e-12);
+        assert!((effective_grade(&s, &g, real - 2, 8.0, &load(0.02)) - 0.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn cadence_from_speed_and_gear() {
+        // 50×17 on a 2105 mm wheel at 30 km/h is about 85 rpm.
+        let rpm = cadence(30.0 / 3.6, 50.0 / 17.0, 2105.0);
+        assert!((rpm - 80.8).abs() < 1.0, "{rpm}");
+        assert_eq!(cadence(5.0, 0.0, 2105.0), 0.0);
+    }
+}
