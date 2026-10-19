@@ -2,6 +2,12 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
+## What's new in 0.3.0
+
+- **Virtual gears** (optional): leave the bike in one gear and shift with keys, a Bluetooth remote or on-screen buttons. Set up your own chainrings and cassette or pick a preset; the trainer's resistance changes so each gear feels real. Riders who shift their bike's own gears don't need to change anything. [How it works](https://github.com/pepperstm/velopopuli/wiki/Virtual-gears)
+- **Now licensed under the GNU GPL v3 or later**, so VeloPopuli and anything built from it stays open source. Earlier versions have been relicensed too.
+- For contributors: a contribution guide, project handoff notes, issue and pull-request templates, and automatic formatting checks.
+
 ## Download
 
 | System | File | Notes |

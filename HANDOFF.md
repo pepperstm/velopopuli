@@ -108,7 +108,7 @@ The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branc
 
 ## 7. Releases
 
-1. Bump the version in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `crates/core/Cargo.toml`, `crates/relay/Cargo.toml` (and `pkgver` in `packaging/arch/PKGBUILD`). Update `packaging/RELEASE_NOTES.md` if anything about installing changed.
+1. Bump the version in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `crates/core/Cargo.toml`, `crates/relay/Cargo.toml` (and `pkgver` in `packaging/arch/PKGBUILD`). Rewrite the *What's new* section at the top of `packaging/RELEASE_NOTES.md` (it is the body of the GitHub Release), and update the rest if anything about installing changed.
 2. Commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. CI builds everything and publishes a release named "VeloPopuli vX.Y.Z" — the latest release for a plain version, a **pre-release** for a version with a suffix (`v0.3.0-beta.1`) — with: the universal DMG, Windows `.msi` and `-setup.exe`, `.deb`, `.AppImage`, the Arch `.pkg.tar.zst` and its `PKGBUILD` (with real checksums), the relay for each OS, and `SHA256SUMS.txt`.
 4. **AUR:** the attached PKGBUILD is ready to publish as `velopopuli-bin` (not done yet — needs an AUR account and `.SRCINFO` via `makepkg --printsrcinfo`).
