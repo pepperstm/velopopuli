@@ -143,6 +143,10 @@ pub struct RideEngine {
     pub workout_time: f64,
     /// Scales the workout's targets (1.0 = as written).
     pub intensity: f64,
+    /// The virtual gear (index into `gearing::gears`), when virtual gears are on.
+    pub gear: usize,
+    /// Set on a shift, so the new resistance is sent straight away.
+    pub gear_shifted: bool,
     seg_state: Vec<SegState>,
 
     params: PhysicsParams,
@@ -227,6 +231,8 @@ impl RideEngine {
             workout: options.workout,
             workout_time: 0.0,
             intensity: 1.0,
+            gear: crate::gearing::start_gear(&settings.gears, &crate::gearing::gears(&settings.gears)),
+            gear_shifted: false,
             params,
             cda: settings.physics.cda,
             ftp: settings.rider.ftp,

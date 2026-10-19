@@ -59,6 +59,16 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
       Math.max(0, smoke.ms - smoke.clip * 1000 - 300)
     )
   }
+  // Scroll a section into view for the screenshot.
+  if (smoke.scroll) {
+    setTimeout(
+      () => {
+        const heading = Array.from(document.querySelectorAll('h1, h2, h3')).find((h) => h.textContent?.trim() === smoke.scroll)
+        heading?.scrollIntoView({ block: 'start' })
+      },
+      Math.max(0, smoke.ms - 1500)
+    )
+  }
   setTimeout(async () => {
     // The native renderer saves its own picture of the next frame.
     let native = ''

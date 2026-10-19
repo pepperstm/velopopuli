@@ -1241,3 +1241,52 @@ body.native-3d .ride {
 body.native-3d canvas.world {
   visibility: hidden;
 }
+
+/* Virtual gears: the gear tile flashes on each shift. */
+.gear-tile {
+  animation: gear-flash 0.6s ease-out;
+}
+.gear-tile small {
+  font-size: 0.5em;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 2px;
+}
+@keyframes gear-flash {
+  from {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(233, 255, 96, 0.35);
+  }
+}
+
+.gear-mode {
+  margin-bottom: 10px;
+}
+.gear-preview {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 64px;
+  margin: 14px 0 6px;
+}
+.gear-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.gear-bar > div {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--line);
+}
+.gear-bar.start > div {
+  background: var(--accent);
+}
+.key-list {
+  gap: 6px;
+}
+.key-chip {
+  padding: 4px 10px;
+  font-size: 12.5px;
+}

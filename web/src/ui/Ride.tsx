@@ -155,6 +155,9 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         smokeHooks.native = nativeRef.current
         const smoke = await api.smoke.config()
         for (let i = 0; i < (smoke?.camera ?? 0); i++) cycleCamera()
+        // Automated check: shift this many gears (negative: easier), one every 0.4 s from 3 s in.
+        const shifts = smoke?.shift ?? 0
+        for (let i = 0; i < Math.abs(shifts); i++) setTimeout(() => void api.ride.shift(Math.sign(shifts)), 3000 + i * 400)
 
         let latest: { s: RideState; at: number } | null = null
         let received = 0
@@ -256,7 +259,11 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === ' ') togglePause()
+      const gears = settingsRef.current.gears
+      // The rider's own shift keys come first, so any key can be used.
+      if (gears.mode === 'virtual' && gears.keysHarder.includes(e.key)) void api.ride.shift(1)
+      else if (gears.mode === 'virtual' && gears.keysEasier.includes(e.key)) void api.ride.shift(-1)
+      else if (e.key === ' ') togglePause()
       else if (e.key === 'c' || e.key === 'C') cycleCamera()
       else if (e.key === 'ArrowUp') nudge(10)
       else if (e.key === 'ArrowDown') nudge(-10)
@@ -343,8 +350,18 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             </div>
             <div className="tile">
               <div className="tile-value">{hud.cadence === null ? '–' : Math.round(hud.cadence)}</div>
-              <div className="tile-label">rpm</div>
+              <div className="tile-label">{hud.cadenceEstimated ? 'rpm (from gear)' : 'rpm'}</div>
             </div>
+            {hud.gear && (
+              // Keyed on the gear so it flashes on each shift.
+              <div key={hud.gear.index} className="tile gear-tile">
+                <div className="tile-value">
+                  {hud.gear.index + 1}
+                  <small>/{hud.gear.count}</small>
+                </div>
+                <div className="tile-label">{hud.gear.label.startsWith('Gear ') ? 'gear' : `gear · ${hud.gear.label}`}</div>
+              </div>
+            )}
             {/* Coming up: below the tiles, where it can't run into them. */}
             {init.landmarks.some((m) => m.distance > hud.distance && m.distance < hud.distance + 5000) && (
               <div className="coming-up-list">
@@ -580,6 +597,17 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                   <button onClick={() => nudge(-10)}>−</button>
                   <span>Demo {Math.round(hud.demoTarget)} W</span>
                   <button onClick={() => nudge(10)}>+</button>
+                </div>
+              )}
+              {hud.gear && mode === 'sim' && (
+                <div className="stepper" title={`Virtual gears (${settings.gears.keysEasier[0] ?? ''} / ${settings.gears.keysHarder[0] ?? ''})`}>
+                  <button onClick={() => void api.ride.shift(-1)} aria-label="Easier gear">
+                    −
+                  </button>
+                  <span>Gear {hud.gear.index + 1}</span>
+                  <button onClick={() => void api.ride.shift(1)} aria-label="Harder gear">
+                    +
+                  </button>
                 </div>
               )}
               {!hud.hasTrainer && !hud.noSensors && <span className="hint">No controllable trainer — resistance is manual</span>}

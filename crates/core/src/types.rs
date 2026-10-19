@@ -42,6 +42,64 @@ pub enum TrainerMode {
     Erg,
 }
 
+/// How the rider changes gear on the trainer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GearsMode {
+    /// With the bike's own gears, as on the road: the trainer reads the flywheel speed, so
+    /// nothing needs setting up.
+    #[default]
+    Real,
+    /// The bike stays in one gear and the app shifts virtually (see `gearing`).
+    Virtual,
+}
+
+/// The rider's gear setup, for virtual gears.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GearSettings {
+    pub mode: GearsMode,
+    /// A gear set from `gearing::PRESETS` by id, or "custom" for `chainrings` × `cogs`.
+    pub preset: String,
+    /// Custom gear set: chainring and cassette teeth.
+    pub chainrings: Vec<u32>,
+    pub cogs: Vec<u32>,
+    /// The real gear the bike stays in on the trainer.
+    pub real_chainring: u32,
+    pub real_cog: u32,
+    /// Wheel circumference in mm, for working out cadence when there is no cadence sensor.
+    pub wheel_mm: f64,
+    /// "realistic" (the physics of a real gear) or "steps" (a fixed gradient per gear).
+    pub feel: String,
+    /// Gradient added per gear with the "steps" feel (fraction: 0.01 = 1%).
+    pub step: f64,
+    /// Gear to start each ride in, from 1; 0 = the one closest to the real gear.
+    pub start_gear: usize,
+    /// Keys (as the browser names them) that shift to a harder or an easier gear.
+    pub keys_harder: Vec<String>,
+    pub keys_easier: Vec<String>,
+}
+
+impl Default for GearSettings {
+    fn default() -> Self {
+        Self {
+            mode: GearsMode::Real,
+            preset: "even-24".into(),
+            chainrings: vec![50, 34],
+            cogs: vec![11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34],
+            real_chainring: 50,
+            real_cog: 17,
+            wheel_mm: 2105.0,
+            feel: "realistic".into(),
+            step: 0.01,
+            start_gear: 0,
+            // Presentation clickers and many Bluetooth remotes send Page Down / Page Up or arrows.
+            keys_harder: vec!["]".into(), "=".into(), "PageDown".into(), "ArrowRight".into()],
+            keys_easier: vec!["[".into(), "-".into(), "PageUp".into(), "ArrowLeft".into()],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TrainerSettings {
@@ -192,6 +250,8 @@ pub struct Settings {
     pub native_renderer: bool,
     /// Log the raw data every sensor sends, for diagnostics reports.
     pub diagnostics: bool,
+    /// Real or virtual gears.
+    pub gears: GearSettings,
 }
 
 impl Default for Settings {
@@ -213,6 +273,7 @@ impl Default for Settings {
             group: Default::default(),
             native_renderer: false,
             diagnostics: true,
+            gears: Default::default(),
         }
     }
 }

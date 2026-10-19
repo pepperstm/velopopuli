@@ -14,6 +14,8 @@ import type {
   DevicesSnapshot,
   RideInit,
   RideState,
+  GearPreview,
+  GearSettings,
   RideSummary,
   RouteMeta,
   Settings,
@@ -58,6 +60,7 @@ export const api = {
     start: (request: RideRequest) => invoke<RideInit>('ride_start', { request }),
     intensity: (delta: number) => invoke<void>('ride_intensity', { delta }),
     skipStep: () => invoke<void>('ride_skip_step'),
+    shift: (delta: number) => invoke<void>('ride_shift', { delta }),
     routeData: () => invoke<ArrayBuffer>('ride_route_data'),
     roadMesh: () => invoke<ArrayBuffer>('ride_road_mesh'),
     structures: () => invoke<ArrayBuffer>('ride_structures'),
@@ -127,11 +130,22 @@ export const api = {
   },
   smoke: {
     config: () =>
-      invoke<{ screen: string; ms: number; camera: number; workout: string | null; room: string | null; ghosts: string[] | null; clip: number | null } | null>(
-        'smoke_config'
-      ),
+      invoke<{
+        screen: string
+        ms: number
+        camera: number
+        workout: string | null
+        room: string | null
+        ghosts: string[] | null
+        clip: number | null
+        shift: number | null
+        scroll: string | null
+      } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })
+  },
+  gears: {
+    preview: (gears: GearSettings) => invoke<GearPreview>('gears_preview', { gears })
   },
   diag: {
     report: (note: string) => invoke<string | null>('diag_report', { note }),

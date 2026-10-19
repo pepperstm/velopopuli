@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { api, useSettings } from '../state'
-import type { Settings, StravaStatus } from '../types'
+import type { GearPreview, GearSettings, Settings, StravaStatus } from '../types'
 import { ReportButton } from './Diagnostics'
 
 function Num(props: {
@@ -50,6 +50,217 @@ function Toggle(props: { label: string; value: boolean; onChange: (v: boolean) =
       <span>{props.label}</span>
       {props.hint && <small>{props.hint}</small>}
     </label>
+  )
+}
+
+const WHEELS: [string, number][] = [
+  ['700 × 25c', 2105],
+  ['700 × 28c', 2136],
+  ['700 × 32c', 2155],
+  ['700 × 38c', 2180],
+  ['650b × 47', 2080],
+  ['29 × 2.2"', 2300],
+  ['27.5 × 2.2"', 2200]
+]
+
+/** Teeth from text like "50, 34" or "11 12 13". */
+function teeth(text: string): number[] {
+  return text
+    .split(/[^0-9]+/)
+    .map(Number)
+    .filter((t) => t >= 6 && t <= 90)
+}
+
+/** A key name as the rider would recognise it. */
+function keyName(key: string): string {
+  return (
+    ({ ' ': 'Space', ArrowRight: '→', ArrowLeft: '←', ArrowUp: '↑', ArrowDown: '↓', PageDown: 'Page Down', PageUp: 'Page Up' } as Record<string, string>)[
+      key
+    ] ?? key
+  )
+}
+
+function KeyList(props: { label: string; keys: string[]; onChange: (keys: string[]) => void }): React.JSX.Element {
+  const [listening, setListening] = useState(false)
+  useEffect(() => {
+    if (!listening) return
+    const onKey = (e: KeyboardEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key !== 'Escape' && !props.keys.includes(e.key)) props.onChange([...props.keys, e.key])
+      setListening(false)
+    }
+    window.addEventListener('keydown', onKey, { capture: true })
+    return () => window.removeEventListener('keydown', onKey, { capture: true })
+  }, [listening, props])
+  return (
+    <div className="field">
+      <span>{props.label}</span>
+      <div className="row wrap key-list">
+        {props.keys.map((k) => (
+          <button key={k} className="key-chip" title="Remove" onClick={() => props.onChange(props.keys.filter((x) => x !== k))}>
+            {keyName(k)} ×
+          </button>
+        ))}
+        <button className={listening ? 'primary' : 'ghost'} onClick={() => setListening(true)}>
+          {listening ? 'Press a key or remote button…' : '+ Add'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function GearsCard(): React.JSX.Element {
+  const { settings, update } = useSettings()
+  const g = settings.gears
+  const set = (patch: Partial<GearSettings>): void => update((s) => ({ ...s, gears: { ...s.gears, ...patch } }))
+  const [preview, setPreview] = useState<GearPreview | null>(null)
+  const [rings, setRings] = useState(g.chainrings.join(', '))
+  const [cogs, setCogs] = useState(g.cogs.join(', '))
+  useEffect(() => {
+    void api.gears.preview(g).then(setPreview)
+  }, [g])
+  const virtual = g.mode === 'virtual'
+  const wheelKnown = WHEELS.some(([, mm]) => mm === g.wheelMm)
+  const top = preview ? Math.max(...preview.gears.map(([, r]) => r), preview.realRatio) : 1
+
+  return (
+    <section className="card">
+      <h2>Gears</h2>
+      <div className="seg gear-mode">
+        <button className={!virtual ? 'on' : ''} onClick={() => set({ mode: 'real' })}>
+          My bike's gears
+        </button>
+        <button className={virtual ? 'on' : ''} onClick={() => set({ mode: 'virtual' })}>
+          Virtual gears
+        </button>
+      </div>
+      {!virtual ? (
+        <p className="muted small">
+          Shift your bike as you would on the road — there's nothing to set up. The trainer feels how fast the flywheel turns, so a harder gear means more force
+          per pedal stroke, just as it should.
+        </p>
+      ) : (
+        <>
+          <p className="muted small">
+            Leave the bike in one gear and shift with keys, a Bluetooth remote or the buttons on the ride screen. VeloPopuli changes the trainer's resistance so
+            each virtual gear feels like the real thing. For trainers with a single cog, or to spare your drivetrain.
+          </p>
+          <div className="fields">
+            <label className="field">
+              <span>Gear set</span>
+              <select value={g.preset} onChange={(e) => set({ preset: e.target.value })}>
+                {preview?.presets.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+                <option value="custom">My own chainrings and cassette</option>
+              </select>
+            </label>
+            {g.preset === 'custom' && (
+              <>
+                <label className="field">
+                  <span>Chainrings (teeth)</span>
+                  <input value={rings} placeholder="50, 34" onChange={(e) => setRings(e.target.value)} onBlur={() => set({ chainrings: teeth(rings) })} />
+                </label>
+                <label className="field">
+                  <span>Cassette (teeth)</span>
+                  <input
+                    value={cogs}
+                    placeholder="11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34"
+                    onChange={(e) => setCogs(e.target.value)}
+                    onBlur={() => set({ cogs: teeth(cogs) })}
+                  />
+                </label>
+              </>
+            )}
+            <Num label="Bike stays in: chainring" value={g.realChainring} min={20} max={60} suffix="teeth" onChange={(v) => set({ realChainring: v })} />
+            <Num
+              label="…and cog"
+              value={g.realCog}
+              min={10}
+              max={52}
+              suffix="teeth"
+              hint="The gear your bike is actually in on the trainer"
+              onChange={(v) => set({ realCog: v })}
+            />
+            <label className="field">
+              <span>Wheel</span>
+              <select value={wheelKnown ? g.wheelMm : 0} onChange={(e) => Number(e.target.value) && set({ wheelMm: Number(e.target.value) })}>
+                {WHEELS.map(([name, mm]) => (
+                  <option key={mm} value={mm}>
+                    {name}
+                  </option>
+                ))}
+                {!wheelKnown && <option value={0}>{g.wheelMm} mm</option>}
+              </select>
+              <small>Used to show your cadence when you have no cadence sensor</small>
+            </label>
+            <label className="field">
+              <span>Feel</span>
+              <select value={g.feel} onChange={(e) => set({ feel: e.target.value as GearSettings['feel'] })}>
+                <option value="realistic">Realistic — like real gears</option>
+                <option value="steps">Simple steps — a fixed amount per gear</option>
+              </select>
+            </label>
+            {g.feel === 'steps' && (
+              <Num
+                label="Each gear adds"
+                value={Math.round(g.step * 1000) / 10}
+                min={0.2}
+                max={3}
+                step={0.1}
+                suffix="% gradient"
+                onChange={(v) => set({ step: v / 100 })}
+              />
+            )}
+            <label className="field">
+              <span>Start each ride in</span>
+              <select value={g.startGear} onChange={(e) => set({ startGear: Number(e.target.value) })}>
+                <option value={0}>The gear closest to your bike's</option>
+                {preview?.gears.map(([label], i) => (
+                  <option key={i} value={i + 1}>
+                    Gear {i + 1} ({label})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {preview && preview.gears.length > 0 && (
+            <div className="gear-preview" aria-label="Your gears, easiest to hardest">
+              {preview.gears.map(([label, ratio], i) => (
+                <div key={i} className={`gear-bar${i === preview.start ? ' start' : ''}`} title={`Gear ${i + 1}: ${label} (${ratio.toFixed(2)})`}>
+                  <div style={{ height: `${(ratio / top) * 100}%` }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {preview && (
+            <p className="muted small">
+              {(() => {
+                const named = !preview.gears[0]?.[0].startsWith('Gear ')
+                const show = ([label, ratio]: [string, number]): string => (named ? label : `ratio ${ratio.toFixed(2)}`)
+                const first = preview.gears[0]
+                const last = preview.gears[preview.gears.length - 1]
+                const start = preview.gears[preview.start]
+                return first && last && start
+                  ? `${preview.gears.length} gears, from ${show(first)} to ${show(last)}. Rides start in gear ${preview.start + 1}${named ? ` (${start[0]})` : ''}, which feels like your bike's ${g.realChainring}×${g.realCog}.`
+                  : 'No gears — check the chainring and cassette teeth.'
+              })()}
+            </p>
+          )}
+          <div className="fields">
+            <KeyList label="Harder gear" keys={g.keysHarder} onChange={(keys) => set({ keysHarder: keys })} />
+            <KeyList label="Easier gear" keys={g.keysEasier} onChange={(keys) => set({ keysEasier: keys })} />
+          </div>
+          <p className="muted small">
+            Most Bluetooth presentation clickers and media remotes send arrow or Page Up / Page Down keys — press <b>+ Add</b>, then the button, to use one as a
+            shifter. Gears do nothing in ERG mode, where the trainer holds the power whatever gear you're in.
+          </p>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -361,6 +572,8 @@ export function SettingsScreen(): React.JSX.Element {
           onChange={(v) => trainer({ workoutErg: v })}
         />
       </section>
+
+      <GearsCard />
 
       <section className="card">
         <h2>Virtual world</h2>
