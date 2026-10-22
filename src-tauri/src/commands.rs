@@ -249,7 +249,7 @@ pub async fn ride_start(app: AppHandle, state: State<'_, AppState>, request: Rid
 pub fn ride_route_data(state: State<AppState>) -> Res<Response> {
     let session = state.current_session()?;
     let r = &session.world.route;
-    let mut out = Vec::with_capacity(r.n * 56);
+    let mut out = Vec::with_capacity(r.n * 64);
     for block in [&r.x, &r.z, &r.lat, &r.lon] {
         block.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
     }
@@ -257,6 +257,7 @@ pub fn ride_route_data(state: State<AppState>) -> Res<Response> {
         block.iter().for_each(|v| out.extend_from_slice(&(*v as f64).to_le_bytes()));
     }
     (0..r.n).for_each(|i| out.extend_from_slice(&(session.world.half_width(i) * 2.0).to_le_bytes()));
+    (0..r.n).for_each(|i| out.extend_from_slice(&session.world.bank(i).to_le_bytes()));
     Ok(Response::new(out))
 }
 

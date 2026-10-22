@@ -408,10 +408,18 @@ fn invert(m: &Mat) -> Mat {
 
 /// Translation by `t`, then rotation about y by `yaw` and about x by `pitch` (three.js "YXZ").
 fn model(t: [f32; 3], yaw: f32, pitch: f32) -> Mat {
+    model_rolled(t, yaw, pitch, 0.0)
+}
+
+/// As `model`, also rolled about the forward axis (positive lifts the +X side): Ry · Rx · Rz,
+/// the page's 'YXZ' order.
+fn model_rolled(t: [f32; 3], yaw: f32, pitch: f32, roll: f32) -> Mat {
     let (sy, cy) = yaw.sin_cos();
     let (sp, cp) = pitch.sin_cos();
-    // Ry · Rx
-    [[cy, 0.0, -sy, 0.0], [sy * sp, cp, cy * sp, 0.0], [sy * cp, -sp, cy * cp, 0.0], [t[0], t[1], t[2], 1.0]]
+    let (sr, cr) = roll.sin_cos();
+    let (x, y, z) = ([cy, 0.0, -sy], [sy * sp, cp, cy * sp], [sy * cp, -sp, cy * cp]);
+    let mix = |a: [f32; 3], b: [f32; 3], ka: f32, kb: f32| [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb, 0.0];
+    [mix(x, y, cr, sr), mix(x, y, -sr, cr), [z[0], z[1], z[2], 0.0], [t[0], t[1], t[2], 1.0]]
 }
 
 // ── GPU resources ───────────────────────────────────────────────────────────
@@ -971,12 +979,14 @@ impl Renderer {
             let mut riders: Vec<(usize, usize, bool)> = Vec::new();
             let pose_count = assets.poses.len().max(1);
             let pose = ((crank.fract() * pose_count as f64) as usize) % pose_count;
-            let place = |q: &Pos, lane: f64| -> Mat {
-                let at = rel([q.x + q.heading.cos() * lane, q.ele + LAYOUT.road_lift, q.z - q.heading.sin() * lane]);
-                model(at, q.heading as f32, -(q.grade.atan()) as f32)
+            // On a berm, a rider stands on the slope where they are across the trail and leans with it.
+            let place = |q: &Pos, d: f64, lane: f64| -> Mat {
+                let (bank, lift) = world.bank_at(d, lane);
+                let at = rel([q.x + q.heading.cos() * lane, q.ele + LAYOUT.road_lift + lift, q.z - q.heading.sin() * lane]);
+                model_rolled(at, q.heading as f32, -(q.grade.atan()) as f32, bank.atan() as f32)
             };
             // The rider's own colour, #e9ff60, in linear light.
-            slots.push(Draw { model: place(&p, 0.0), tint: [0.815, 1.0, 0.117, 1.0], flags: [1.0, 1.0, 0.0, 0.0] });
+            slots.push(Draw { model: place(&p, shown, 0.0), tint: [0.815, 1.0, 0.117, 1.0], flags: [1.0, 1.0, 0.0, 0.0] });
             riders.push((slots.len() - 1, pose, false));
             let mut rider_tags: Vec<(String, [f64; 3])> = Vec::new();
             for (i, (id, kind, color, d, _)) in rivals.iter().enumerate() {
@@ -991,7 +1001,7 @@ impl Renderer {
                 let q = sample(&route, *d);
                 let ghost = *kind == RivalKind::Ghost;
                 let rgb = [((color >> 16) & 255) as f32 / 255.0, ((color >> 8) & 255) as f32 / 255.0, (color & 255) as f32 / 255.0].map(|c| c.powf(2.2));
-                slots.push(Draw { model: place(&q, lane), tint: if ghost { [1.0, 1.0, 1.0, 0.38] } else { [rgb[0], rgb[1], rgb[2], 1.0] }, flags: [1.0, 1.0, 0.0, if ghost { 1.0 } else { 0.0 }] });
+                slots.push(Draw { model: place(&q, *d, lane), tint: if ghost { [1.0, 1.0, 1.0, 0.38] } else { [rgb[0], rgb[1], rgb[2], 1.0] }, flags: [1.0, 1.0, 0.0, if ghost { 1.0 } else { 0.0 }] });
                 riders.push((slots.len() - 1, (pose + i * 2) % pose_count, ghost));
                 if gap < 250.0 && gap > 12.0 {
                     rider_tags.push((id.clone(), [q.x + q.heading.cos() * lane, q.ele + 2.3, q.z - q.heading.sin() * lane]));
