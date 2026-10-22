@@ -12,6 +12,7 @@ use crate::physics::{step_speed, wind_coefficient, PhysicsParams};
 use crate::segments::{Segment, SegmentBest, SegmentSource, SPLIT_M};
 use crate::types::{PersonalBest, Settings, TrainerSettings};
 use crate::workout::{StepKind, Workout, WorkoutPos};
+use crate::world::Surface;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RideInput {
@@ -150,6 +151,9 @@ pub struct RideEngine {
     seg_state: Vec<SegState>,
 
     params: PhysicsParams,
+    /// The road surface at each route sample; empty means tarmac all the way.
+    surfaces: Vec<Surface>,
+    road_surfaces: bool,
     cda: f64,
     ftp: f64,
     acc: f64,
@@ -234,6 +238,8 @@ impl RideEngine {
             gear: crate::gearing::start_gear(&settings.gears, &crate::gearing::gears(&settings.gears)),
             gear_shifted: false,
             params,
+            surfaces: Vec::new(),
+            road_surfaces: settings.physics.road_surfaces,
             cda: settings.physics.cda,
             ftp: settings.rider.ftp,
             acc: 0.0,
@@ -276,7 +282,8 @@ impl RideEngine {
         self.moving = true;
 
         let prev_ele = self.pos.ele;
-        self.speed = step_speed(self.speed, input.power, self.pos.grade, self.pos.ele, &self.params, dt);
+        let params = PhysicsParams { crr: self.crr_at(self.distance), ..self.params };
+        self.speed = step_speed(self.speed, input.power, self.pos.grade, self.pos.ele, &params, dt);
         self.distance += self.speed * dt;
         self.elapsed += dt;
         if self.workout.is_some() {
@@ -311,7 +318,8 @@ impl RideEngine {
     }
 
     fn step_rivals(&mut self, dt: f64) {
-        for r in &mut self.rivals {
+        let crrs: Vec<f64> = self.rivals.iter().map(|r| self.crr_at(r.distance)).collect();
+        for (r, crr) in self.rivals.iter_mut().zip(crrs) {
             match r.kind {
                 RivalKind::Ghost => {
                     let d = r.trace.as_deref().map_or(0.0, |t| trace_at(t, self.elapsed)).min(self.route.total);
@@ -321,7 +329,7 @@ impl RideEngine {
                 RivalKind::Remote => {}
                 RivalKind::Bot if r.distance < self.route.total => {
                     let p = self.route.sample_at(r.distance);
-                    let params = PhysicsParams { mass: r.mass, ..self.params };
+                    let params = PhysicsParams { mass: r.mass, crr, ..self.params };
                     r.speed = step_speed(r.speed, r.power, p.grade, p.ele, &params, dt);
                     r.distance = (r.distance + r.speed * dt).min(self.route.total);
                 }
@@ -510,11 +518,37 @@ impl RideEngine {
     }
 
     /// Gradient to send to the trainer: scaled, softened downhill and capped as the settings say.
+    /// The gradient to send the trainer. A rough surface's extra rolling resistance is added
+    /// as gradient (the same force, `m·g·Δcrr`), since every trainer follows the gradient.
     pub fn trainer_grade(&self, trainer: &TrainerSettings) -> f64 {
         if self.finished || self.user_paused {
             0.0
         } else {
-            trainer.trainer_grade(self.pos.grade)
+            trainer.trainer_grade(self.pos.grade) + self.crr_at(self.distance) - self.params.crr
+        }
+    }
+
+    /// Sets the road surface at each route sample, as the world was built.
+    pub fn set_surfaces(&mut self, surfaces: Vec<Surface>) {
+        self.surfaces = surfaces;
+    }
+
+    /// The road surface at the rider's position.
+    pub fn surface(&self) -> Surface {
+        self.surface_at(self.distance)
+    }
+
+    fn surface_at(&self, distance: f64) -> Surface {
+        let i = (distance / self.route.step).round().max(0.0) as usize;
+        self.surfaces.get(i.min(self.surfaces.len().saturating_sub(1))).copied().unwrap_or_default()
+    }
+
+    /// Rolling resistance at a distance along the route.
+    fn crr_at(&self, distance: f64) -> f64 {
+        if self.road_surfaces {
+            self.params.crr * self.surface_at(distance).rolling_factor()
+        } else {
+            self.params.crr
         }
     }
 

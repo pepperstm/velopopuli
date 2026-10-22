@@ -5,7 +5,7 @@ import type { Climb } from './core/gpx'
 
 export interface Settings {
   rider: { name: string; weightKg: number; bikeKg: number; ftp: number; maxHr: number }
-  physics: { cda: number; crr: number; maxSpeedKph: number }
+  physics: { cda: number; crr: number; maxSpeedKph: number; roadSurfaces: boolean }
   trainer: { difficulty: number; mode: 'sim' | 'erg'; ergWatts: number; virtualPower: boolean; maxGrade: number; downhill: number; workoutErg: boolean }
   units: 'metric' | 'imperial'
   bots: { enabled: boolean; wkg: number[] }
@@ -62,7 +62,7 @@ export type Weather = 'clear' | 'cloudy' | 'rain' | 'fog' | 'snow' | 'live'
 
 export const DEFAULT_SETTINGS: Settings = {
   rider: { name: 'Rider', weightKg: 75, bikeKg: 9, ftp: 200, maxHr: 185 },
-  physics: { cda: 0.32, crr: 0.004, maxSpeedKph: 80 },
+  physics: { cda: 0.32, crr: 0.004, maxSpeedKph: 80, roadSurfaces: true },
   trainer: { difficulty: 0.75, mode: 'sim', ergWatts: 150, virtualPower: false, maxGrade: 0.15, downhill: 0.5, workoutErg: true },
   units: 'metric',
   bots: { enabled: true, wkg: [1.5, 2.2, 3.0] },
