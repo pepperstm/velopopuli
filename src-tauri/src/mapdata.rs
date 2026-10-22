@@ -87,6 +87,16 @@ async fn overpass_text(http: &reqwest::Client, endpoint: &'static str, query: &s
     Ok((res.text().await.map_err(|e| e.to_string())?, endpoint))
 }
 
+/// Asks every Overpass server at once and returns the first good answer, within `wait`.
+pub async fn overpass_first(http: &reqwest::Client, query: &str, wait: Duration) -> Result<String, String> {
+    let race = select_ok(OVERPASS.map(|endpoint| Box::pin(overpass_text(http, endpoint, query))));
+    let ((text, _), _) = tokio::time::timeout(wait, race)
+        .await
+        .map_err(|_| "No OpenStreetMap server answered in time; try again in a minute.".to_string())?
+        .map_err(|e| format!("The OpenStreetMap servers are busy ({e}); try again in a minute."))?;
+    Ok(text)
+}
+
 async fn overpass_request(http: &reqwest::Client, endpoint: &'static str, query: &str) -> Result<(Vec<Footprint>, &'static str), String> {
     let (text, endpoint) = overpass_text(http, endpoint, query).await?;
     Ok((parse_overpass(&text)?, endpoint))

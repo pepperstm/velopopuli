@@ -119,7 +119,25 @@ export const api = {
         points,
         profile
       }),
-    classics: () => invoke<{ name: string; region: string; points: [number, number][] }[]>('geo_classics')
+    classics: () => invoke<{ name: string; region: string; points: [number, number][] }[]>('geo_classics'),
+    /** Waymarked mountain-bike routes within `[south, west, north, east]`. */
+    mtbRoutes: (bounds: [number, number, number, number]) =>
+      invoke<{ id: number; name: string; reference: string; network: string; distance: number | null; bounds: [number, number, number, number] | null }[]>(
+        'geo_mtb_routes',
+        { bounds }
+      ),
+    /** One waymarked route, joined into a line with elevation, ready to save. */
+    mtbRoute: (id: number) =>
+      invoke<{
+        gpx: string
+        distance: number
+        ascent: number
+        climbs: number
+        line: [number, number][]
+        profile: [number, number][]
+        name: string | null
+        gaps: number
+      }>('geo_mtb_route', { id })
   },
   group: {
     fetchRoute: (room: string) => invoke<RouteMeta>('group_fetch_route', { room })

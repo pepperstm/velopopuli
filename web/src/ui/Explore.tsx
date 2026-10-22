@@ -26,12 +26,25 @@ interface Planned {
   climbs: number
   line: [number, number][]
   profile: [number, number][]
+  /** Where a waymarked route's mapped ways don't meet. */
+  gaps?: number
 }
+
+interface MtbRoute {
+  id: number
+  name: string
+  reference: string
+  network: string
+  distance: number | null
+}
+
+const NETWORKS: Record<string, string> = { lcn: 'local', rcn: 'regional', ncn: 'national', icn: 'international' }
 
 const PROFILES = [
   { id: 'fastbike', label: 'Road bike (fast roads)' },
   { id: 'trekking', label: 'Quiet roads and lanes' },
-  { id: 'safety', label: 'Safest (avoid traffic)' }
+  { id: 'safety', label: 'Safest (avoid traffic)' },
+  { id: 'mtb', label: 'Mountain bike (trails)' }
 ]
 
 function Elevation({ profile }: { profile: [number, number][] }): React.JSX.Element | null {
@@ -66,6 +79,7 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [mtbRoutes, setMtbRoutes] = useState<MtbRoute[] | null>(null)
 
   useEffect(() => {
     const m = L.map(el.current!, { zoomControl: true }).setView([46.2, 7.2], 6)
@@ -131,6 +145,36 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
     setBusy('Searching…')
     try {
       setPlaces(await api.geo.search(query))
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const findMtb = async (): Promise<void> => {
+    const b = map.current?.getBounds()
+    if (!b) return
+    setBusy('Looking for mountain-bike routes…')
+    setError('')
+    try {
+      setMtbRoutes(await api.geo.mtbRoutes([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]))
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const pickMtb = async (r: MtbRoute): Promise<void> => {
+    setPoints([])
+    setBusy(`Fetching ${r.name} and its elevation…`)
+    setError('')
+    try {
+      const p = await api.geo.mtbRoute(r.id)
+      setPlanned(p)
+      setName(p.name ?? r.name)
+      map.current?.fitBounds(L.latLngBounds(p.line).pad(0.15))
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -225,6 +269,12 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
               </span>
             </div>
             <Elevation profile={planned.profile} />
+            {!!planned.gaps && (
+              <div className="muted small">
+                The map's pieces of this route don't meet in {planned.gaps} place{planned.gaps === 1 ? '' : 's'}; you'll ride straight across
+                {planned.gaps === 1 ? ' that gap' : ' those gaps'}.
+              </div>
+            )}
             <div className="row">
               <input value={name} placeholder="Name this route" onChange={(e) => setName(e.target.value)} />
               <button className="primary" onClick={() => void save()}>
@@ -232,6 +282,32 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
               </button>
             </div>
             {saved && <div className="ok small">“{saved}” is in your routes, ready to ride.</div>}
+          </div>
+        )}
+        <h2>Mountain-bike routes</h2>
+        <p className="muted small">Waymarked trails mapped in OpenStreetMap, in the area on the map.</p>
+        <button disabled={!!busy} onClick={() => void findMtb()}>
+          Find MTB routes here
+        </button>
+        {mtbRoutes && mtbRoutes.length === 0 && (
+          <div className="muted small">No waymarked mountain-bike routes here. Try another area, or plan one with “Mountain bike (trails)”.</div>
+        )}
+        {mtbRoutes && mtbRoutes.length > 0 && (
+          <div className="pick-list">
+            {mtbRoutes.map((r) => (
+              <button key={r.id} className="ghost" disabled={!!busy} onClick={() => void pickMtb(r)}>
+                <b>{r.name}</b>{' '}
+                <span className="muted small">
+                  {[
+                    r.reference && r.name !== `MTB route ${r.reference}` ? r.reference : '',
+                    NETWORKS[r.network] ?? '',
+                    r.distance ? fmtDist(r.distance, u) : ''
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </button>
+            ))}
           </div>
         )}
         <h2>Famous climbs</h2>

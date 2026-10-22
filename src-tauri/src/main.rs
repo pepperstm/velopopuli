@@ -140,6 +140,8 @@ fn main() {
             commands::geo_search,
             commands::geo_plan,
             commands::geo_classics,
+            commands::geo_mtb_routes,
+            commands::geo_mtb_route,
             commands::weather_now,
             commands::ride_photos,
             commands::photo_image,

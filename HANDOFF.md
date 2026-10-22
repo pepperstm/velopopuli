@@ -39,6 +39,7 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
   workout, fitness  Workouts; power curve, FTP estimate, zones, CTL/ATL/TSB
   gearing           Virtual gears: gear sets (presets, custom teeth), the effective gradient that makes the trainer feel like a gear
   segments, fit     Strava segments/ghost matching, photo picking; FIT encoder
+  waymarked         Waymarked MTB routes (route=mtb relations): listing an area, joining a relation's ways into one line, GPX
   devices/          BLE GATT (FTMS, CPS, CSC, HR, Tacx FE-C tunnel) and ANT+ (framing, FE-C, power, HR, S&C) codecs; sensor hub (most direct source wins)
   world/            mod.rs: World, chunk/horizon meshes, the route road ribbon
                     height.rs: height field pinned to the road; dem.rs: elevation tiles
