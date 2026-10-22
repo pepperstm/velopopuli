@@ -31,8 +31,6 @@ jobs:
       # The repository's formatting (rustfmt.toml, .prettierrc.json); fix with `npm run format`.
       - run: cargo fmt --all --check
       - run: npx prettier --check "web/src/**/*.{ts,tsx,css}"
-      # The app embeds the built page (dist-web), so build it before compiling the app's tests.
-      - run: npx vite build
       - run: cargo test --workspace
 
   app:
