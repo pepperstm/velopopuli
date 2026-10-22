@@ -1253,3 +1253,77 @@ mod scenery {
         assert!(b.water.is_empty() && b.roads.vertices() == 0 && mapped.structures().lit.vertices() == 0);
     }
 }
+
+mod waymarked {
+    use super::*;
+    use velopopuli_core::waymarked::{area_query, join, parse_area, parse_route, route_query, to_gpx};
+
+    /// A point `north` and `east` metres from 45° N, 7° E.
+    fn at(north: f64, east: f64) -> [f64; 2] {
+        [45.0 + north / M_PER_DEG, 7.0 + east / (M_PER_DEG * 45f64.to_radians().cos())]
+    }
+
+    #[test]
+    fn joins_ways_in_any_order_and_direction() {
+        // Three ways of a 3 km line heading north, out of order, the middle one pointing south.
+        let a = vec![at(0.0, 0.0), at(500.0, 0.0), at(1000.0, 0.0)];
+        let b = vec![at(2000.0, 0.0), at(1500.0, 0.0), at(1000.0, 0.0)];
+        let c = vec![at(2000.0, 0.0), at(3000.0, 0.0)];
+        let (line, gaps) = join(vec![c, a, b]);
+        assert_eq!(gaps, 0);
+        // End to end, no point repeated where ways meet.
+        assert_eq!(line.len(), 6);
+        let north = |p: [f64; 2]| (p[0] - 45.0) * M_PER_DEG;
+        assert!(line.windows(2).all(|w| north(w[1]) > north(w[0])) || line.windows(2).all(|w| north(w[1]) < north(w[0])));
+        // A way that doesn't meet the rest is joined across a counted gap.
+        let (line, gaps) = join(vec![vec![at(0.0, 0.0), at(1000.0, 0.0)], vec![at(1300.0, 0.0), at(2000.0, 0.0)]]);
+        assert_eq!((gaps, line.len()), (1, 4));
+    }
+
+    #[test]
+    fn reads_routes_from_overpass() {
+        let area = r#"{"elements":[
+            {"type":"relation","id":7,"bounds":{"minlat":44.1,"minlon":8.2,"maxlat":44.2,"maxlon":8.3},"tags":{"route":"mtb","ref":"12","network":"lcn"}},
+            {"type":"relation","id":5,"tags":{"route":"mtb","name":"Anello del Melogno","distance":"23,5 km"}}
+        ]}"#;
+        // Longest first: 23.5 km mapped, against a box about 14 km across.
+        let routes = parse_area(area).unwrap();
+        assert_eq!(routes.iter().map(|r| r.id).collect::<Vec<_>>(), vec![5, 7]);
+        assert_eq!(routes[0].distance, Some(23_500.0));
+        assert_eq!((routes[1].name.as_str(), routes[1].reference.as_str()), ("MTB route 12", "12"));
+        assert_eq!(routes[1].bounds, Some([44.1, 8.2, 44.2, 8.3]));
+
+        let p = |n: f64| format!(r#"{{"lat":{},"lon":{}}}"#, at(n, 0.0)[0], at(n, 0.0)[1]);
+        let route = format!(
+            r#"{{"elements":[{{"type":"relation","id":5,"tags":{{"name":"Anello"}},"members":[
+                {{"type":"node","role":"","lat":45.0,"lon":7.0}},
+                {{"type":"way","role":"","geometry":[{},{}]}},
+                {{"type":"way","role":"excursion","geometry":[{},{}]}},
+                {{"type":"way","role":"forward","geometry":[{},{}]}}
+            ]}}]}}"#,
+            p(1000.0),
+            p(0.0),
+            p(5000.0),
+            p(6000.0),
+            p(1000.0),
+            p(2000.0)
+        );
+        let joined = parse_route(&route).unwrap();
+        // The side trip is left out; the rest is one line 2 km long.
+        assert_eq!((joined.name.as_str(), joined.gaps, joined.line.len()), ("Anello", 0, 3));
+        assert!(parse_route(r#"{"elements":[{"type":"relation","id":1,"members":[]}]}"#).is_err());
+        assert!(area_query([44.0, 8.0, 44.5, 8.5]).contains(r#"relation["route"="mtb"](44.00000,8.00000,44.50000,8.50000)"#));
+        assert!(route_query(5).contains("relation(5);out geom;"));
+    }
+
+    #[test]
+    fn writes_a_gpx_the_library_can_read() {
+        let points: Vec<([f64; 2], Option<f64>)> = (0..=100).map(|i| (at(i as f64 * 20.0, 0.0), Some(100.0 + i as f64))).collect();
+        let (name, raw) = parse_gpx(&to_gpx("Up & over", &points)).unwrap();
+        assert_eq!(name, "Up & over");
+        assert_eq!(raw.len(), 101);
+        assert_eq!(raw[100].ele, Some(200.0));
+        let flat: Vec<([f64; 2], Option<f64>)> = points.iter().map(|(p, _)| (*p, None)).collect();
+        assert!(parse_gpx(&to_gpx("No heights", &flat)).unwrap().1.iter().all(|p| p.ele.is_none()));
+    }
+}
