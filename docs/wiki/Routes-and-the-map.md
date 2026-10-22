@@ -5,7 +5,8 @@
 ## Getting routes
 
 - **Import GPX** from anywhere. Routes without elevation (planner exports) get it filled in from open terrain data.
-- **Find a route** — search for a place, click waypoints and get a route along bike-friendly roads with real elevation (via [BRouter](https://brouter.de)), or pick one of the famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill).
+- **Find a route** — search for a place, click waypoints and get a route along bike-friendly roads with real elevation (via [BRouter](https://brouter.de)), or pick one of the famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). **Prefer: Mountain bike (trails)** plans along tracks and singletrack instead of roads.
+- **Mountain-bike routes** — on **Find a route**, move the map to an area and press **Find MTB routes here** to list the waymarked mountain-bike routes mapped there (OpenStreetMap `route=mtb`), longest first. Pick one to see it on the map with its distance, climbing and elevation profile, then save it. Its mapped pieces are joined end to end; if some don't meet, you're told how many gaps there are, and you ride straight across them. The area can be up to about 60 km across.
 
 ![Route finder](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-explore.jpg)
 

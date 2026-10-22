@@ -1,5 +1,6 @@
 //! Finding places and planning routes inside the app: place search through
-//! OpenStreetMap's Nominatim, and bike routing (with elevation) through BRouter.
+//! OpenStreetMap's Nominatim, bike routing (with elevation) through BRouter, and
+//! waymarked mountain-bike routes through the Overpass API.
 
 use serde::Serialize;
 
@@ -45,7 +46,7 @@ pub async fn plan(http: &reqwest::Client, points: &[[f64; 2]], profile: &str) ->
         return Err("Use at most 30 waypoints.".into());
     }
     let profile = match profile {
-        "trekking" | "safety" | "fastbike" => profile,
+        "trekking" | "safety" | "fastbike" | "mtb" => profile,
         _ => "fastbike",
     };
     let lonlats = points.iter().map(|p| format!("{:.6},{:.6}", p[1], p[0])).collect::<Vec<_>>().join("|");
@@ -58,6 +59,23 @@ pub async fn plan(http: &reqwest::Client, points: &[[f64; 2]], profile: &str) ->
         return Err(format!("No route found between those points{}", if reason.is_empty() { ".".into() } else { format!(": {reason}") }));
     }
     Ok(text)
+}
+
+/// The waymarked mountain-bike routes within `[south, west, north, east]`.
+pub async fn mtb_routes(http: &reqwest::Client, bounds: [f64; 4]) -> Result<Vec<velopopuli_core::waymarked::WaymarkedSummary>, String> {
+    let [s, w, n, e] = bounds;
+    // About 60 km across at most: wider areas hold too many routes for a public server.
+    if (n - s).abs() > 0.6 || (e - w).abs() > 0.9 {
+        return Err("Zoom in a little to search this area.".into());
+    }
+    let text = crate::mapdata::overpass_first(http, &velopopuli_core::waymarked::area_query(bounds), std::time::Duration::from_secs(30)).await?;
+    velopopuli_core::waymarked::parse_area(&text)
+}
+
+/// One waymarked route's ways, joined into one line.
+pub async fn mtb_route(http: &reqwest::Client, id: u64) -> Result<velopopuli_core::waymarked::WaymarkedLine, String> {
+    let text = crate::mapdata::overpass_first(http, &velopopuli_core::waymarked::route_query(id), std::time::Duration::from_secs(45)).await?;
+    velopopuli_core::waymarked::parse_route(&text)
 }
 
 /// Famous climbs, each as waypoints from the foot to the summit.
@@ -97,5 +115,24 @@ mod tests {
             println!("{}: {:.1} km, {:.0} m up, {} climbs", c.name, route.total / 1000.0, route.ascent, route.climbs.len());
             assert!(route.ascent > 100.0 && route.climbs.len() >= 1, "{}", c.name);
         }
+    }
+
+    /// Needs the network: `cargo test -p velopopuli -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn finds_and_joins_waymarked_mtb_routes() {
+        let http = reqwest::Client::builder().user_agent("VeloPopuli/0.3 (open-source indoor cycling app)").build().unwrap();
+        // Finale Ligure: one of Europe's best-mapped mountain-bike areas.
+        let found = super::mtb_routes(&http, [44.12, 8.22, 44.28, 8.42]).await.unwrap();
+        println!("{} routes", found.len());
+        assert!(!found.is_empty());
+        for r in found.iter().take(5) {
+            let line = super::mtb_route(&http, r.id).await.unwrap();
+            let raw: Vec<_> = line.line.iter().map(|p| velopopuli_core::gpx::RawPoint { lat: p[0], lon: p[1], ele: None }).collect();
+            let route = build_route(&line.name, &raw).unwrap();
+            println!("{} ({}): {:.1} km, {} gaps, mapped {:?} km", line.name, r.id, route.total / 1000.0, line.gaps, r.distance.map(|d| d / 1000.0));
+            assert!(route.total > 500.0);
+        }
+        assert!(super::mtb_routes(&http, [44.0, 8.0, 45.0, 9.0]).await.is_err(), "too wide an area is refused");
     }
 }

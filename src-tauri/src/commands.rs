@@ -738,21 +738,57 @@ pub struct Planned {
     /// `[lat, lon]` outline and `[distance, elevation]` profile, thinned for drawing.
     line: Vec<[f64; 2]>,
     profile: Vec<[f64; 2]>,
+    /// The route's own name, for a waymarked route.
+    name: Option<String>,
+    /// Places where a waymarked route's mapped ways don't meet.
+    gaps: usize,
+}
+
+impl Planned {
+    fn new(gpx: String, route: &Route, name: Option<String>, gaps: usize) -> Self {
+        let stride = (route.n / 600).max(1);
+        Planned {
+            distance: route.total,
+            ascent: route.ascent,
+            climbs: route.climbs.len(),
+            line: route.preview_outline(1500),
+            profile: (0..route.n).step_by(stride).map(|i| [i as f64 * route.step, route.ele[i] as f64]).collect(),
+            gpx,
+            name,
+            gaps,
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn geo_plan(state: State<'_, AppState>, points: Vec<[f64; 2]>, profile: String) -> Res<Planned> {
     let gpx = geo::plan(&state.http, &points, &profile).await?;
     let route = build_route("Planned", &parse_gpx(&gpx)?.1)?;
-    let stride = (route.n / 600).max(1);
-    Ok(Planned {
-        distance: route.total,
-        ascent: route.ascent,
-        climbs: route.climbs.len(),
-        line: route.preview_outline(1500),
-        profile: (0..route.n).step_by(stride).map(|i| [i as f64 * route.step, route.ele[i] as f64]).collect(),
-        gpx,
-    })
+    Ok(Planned::new(gpx, &route, None, 0))
+}
+
+/// The waymarked mountain-bike routes within `[south, west, north, east]`.
+#[tauri::command]
+pub async fn geo_mtb_routes(state: State<'_, AppState>, bounds: [f64; 4]) -> Res<Vec<velopopuli_core::waymarked::WaymarkedSummary>> {
+    geo::mtb_routes(&state.http, bounds).await
+}
+
+/// One waymarked mountain-bike route, ready to preview and save, with elevation from the terrain.
+#[tauri::command]
+pub async fn geo_mtb_route(state: State<'_, AppState>, id: u64) -> Res<Planned> {
+    let way = geo::mtb_route(&state.http, id).await?;
+    let raw: Vec<velopopuli_core::gpx::RawPoint> = way.line.iter().map(|p| velopopuli_core::gpx::RawPoint { lat: p[0], lon: p[1], ele: None }).collect();
+    let mut route = build_route(&way.name, &raw)?;
+    // The relation has no heights; the terrain tiles do.
+    let dem = crate::terrain::load_dem(&state.http, &route).await;
+    if let Some(dem) = &dem {
+        velopopuli_core::world::align_dem(&mut route, dem);
+    }
+    // Every 20 m or so is plenty for a ride; elevations only when the terrain gave them.
+    let stride = ((20.0 / route.step).round() as usize).max(1);
+    let points: Vec<([f64; 2], Option<f64>)> = (0..route.n).step_by(stride).chain([route.n - 1]).map(|i| ([route.lat[i], route.lon[i]], dem.as_ref().map(|_| route.ele[i] as f64))).collect();
+    let gpx = velopopuli_core::waymarked::to_gpx(&way.name, &points);
+    Ok(Planned::new(gpx, &route, Some(way.name), way.gaps))
 }
 
 /// Street-level photos along the route being ridden.
