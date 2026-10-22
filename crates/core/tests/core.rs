@@ -6,7 +6,7 @@ use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, 
 use velopopuli_core::physics::{step_speed, PhysicsParams};
 use velopopuli_core::ride::{RideEngine, RideInput, RivalKind};
 use velopopuli_core::types::{BotSettings, PersonalBest, Profile, Settings};
-use velopopuli_core::world::{align_dem, Dem, Surface, World, CELLS, CHUNK, FAR_CELLS, TILE};
+use velopopuli_core::world::{align_dem, Dem, Surface, Trail, World, CELLS, CHUNK, FAR_CELLS, TILE};
 
 /// A straight road heading north with a given elevation profile.
 fn straight(length_m: f64, ele_at: impl Fn(f64) -> Option<f64>) -> Vec<RawPoint> {
@@ -317,6 +317,46 @@ mod ride {
         // Turned off, every surface rides like tarmac.
         assert!(close(unfelt, tarmac, 1e-9));
         assert_eq!(unfelt_grade, 0.0);
+    }
+
+    #[test]
+    fn harder_trails_roll_heavier() {
+        let route = flat();
+        let ride = |trail: Option<Trail>| {
+            let mut engine = RideEngine::new(route.clone(), &settings(), None);
+            engine.set_surfaces(vec![Surface::Dirt; route.n]);
+            engine.set_trails(vec![trail; route.n]);
+            let mut clock = 0;
+            run(&mut engine, 120, 200.0, &mut clock);
+            (engine.distance, engine.trainer_grade(&Default::default()), engine.trail())
+        };
+        let (dirt, dirt_grade, _) = ride(None);
+        let (ungraded, _, _) = ride(Some(Trail::default()));
+        let (easy, _, _) = ride(Some(Trail { grade: Some(1), estimated: false }));
+        let (hard, hard_grade, on) = ride(Some(Trail { grade: Some(3), estimated: false }));
+        assert_eq!(on, Some(Trail { grade: Some(3), estimated: false }));
+        // An ungraded trail rides as its surface; graded ones get harder with the grade.
+        assert!(close(ungraded, dirt, 1e-9));
+        assert!(easy < dirt && hard < easy - 50.0, "{dirt} {easy} {hard}");
+        // The trainer feels it: 0.004 × (8 − 1) for S3, against 0.004 × (3.5 − 1) on plain earth.
+        assert!(close(hard_grade, 0.028, 1e-9) && close(dirt_grade, 0.010, 1e-9));
+    }
+
+    #[test]
+    fn graded_trails_are_ridden_no_faster_than_their_grade_allows() {
+        // A steep descent: on a road the rider would reach the descent limit.
+        let route = Arc::new(build_route("descent", &straight(3000.0, |d| Some(1000.0 - d * 0.08))).unwrap());
+        let ride = |trail: Option<Trail>| {
+            let mut engine = RideEngine::new(route.clone(), &settings(), None);
+            engine.set_trails(vec![trail; route.n]);
+            let mut clock = 0;
+            run(&mut engine, 60, 200.0, &mut clock);
+            engine.speed * 3.6
+        };
+        assert!(ride(None) > 60.0);
+        assert!(close(ride(Some(Trail { grade: Some(2), estimated: false })), 22.0, 0.01));
+        assert!(close(ride(Some(Trail { grade: Some(4), estimated: false })), 10.0, 0.01));
+        assert!(ride(Some(Trail::default())) > 60.0);
     }
 
     #[test]
@@ -759,8 +799,8 @@ mod vector_tiles {
 mod scenery {
     use super::*;
     use velopopuli_core::world::{
-        barrier_model, corridor_tiles, highway_marked, highway_width, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery,
-        Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
+        barrier_model, corridor_tiles, highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh,
+        MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
     };
 
     /// Terrain tiles at a constant height, covering the route.
@@ -850,10 +890,10 @@ mod scenery {
                 // Cobbles on the first 300 m of the route's own road (a residential street, mapped a metre
                 // to one side), a gravel road across it at 900 m, a short patch of concrete at 1500 m,
                 // and a main road 9 m wide from 2000 to 2400 m.
-                MappedWay { highway: "residential".into(), surface: Some(Surface::Cobbles), width: None, line: geo(&route, &[(1.0, 0.0), (1.0, 300.0)]) },
-                MappedWay { highway: "unclassified".into(), surface: Some(Surface::Gravel), width: None, line: geo(&route, &[(-300.0, 900.0), (300.0, 900.0)]) },
-                MappedWay { highway: "service".into(), surface: Some(Surface::Concrete), width: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 1510.0)]) },
-                MappedWay { highway: "primary".into(), surface: None, width: Some(9.0), line: geo(&route, &[(0.0, 2000.0), (0.0, 2400.0)]) },
+                MappedWay { highway: "residential".into(), surface: Some(Surface::Cobbles), width: None, mtb: None, hiking: None, line: geo(&route, &[(1.0, 0.0), (1.0, 300.0)]) },
+                MappedWay { highway: "unclassified".into(), surface: Some(Surface::Gravel), width: None, mtb: None, hiking: None, line: geo(&route, &[(-300.0, 900.0), (300.0, 900.0)]) },
+                MappedWay { highway: "service".into(), surface: Some(Surface::Concrete), width: None, mtb: None, hiking: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 1510.0)]) },
+                MappedWay { highway: "primary".into(), surface: None, width: Some(9.0), mtb: None, hiking: None, line: geo(&route, &[(0.0, 2000.0), (0.0, 2400.0)]) },
             ],
             way_tags: WAY_TAGS,
         };
@@ -882,6 +922,53 @@ mod scenery {
     }
 
     #[test]
+    fn rides_trails_narrow_without_barriers() {
+        // 3 km: a lane, then from 1000 to 2000 m a graded singletrack (mapped only in the tags,
+        // as many trails are), then a paved shared path from 2000 m.
+        let route = Arc::new(build_route("trail", &straight(3000.0, |_| Some(100.0))).unwrap());
+        let way = |highway: &str, surface: Option<Surface>, mtb: Option<u8>, from: f64, to: f64| MappedWay {
+            highway: highway.into(),
+            surface,
+            width: None,
+            mtb,
+            hiking: None,
+            line: geo(&route, &[(1.0, from), (1.0, to)]),
+        };
+        let scenery = Scenery {
+            tiles: corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect(),
+            roads: vec![Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(2.0, 0.0), (2.0, 1000.0)]) }],
+            ways: vec![way("path", None, Some(2), 1000.0, 2000.0), way("path", Some(Surface::Asphalt), None, 2000.0, 3000.0)],
+            way_tags: WAY_TAGS,
+            ..Default::default()
+        };
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &[]);
+        let at = |m: f64| (m / route.step) as usize;
+        let scene = &world.scene;
+        // The singletrack: a graded trail of earth, a metre and a half wide, no centre line.
+        assert_eq!(scene.trails[at(1500.0)], Some(Trail { grade: Some(2), estimated: false }));
+        assert_eq!(scene.surfaces[at(1500.0)], Surface::Dirt);
+        assert!((scene.widths[at(1500.0)] - 1.5).abs() < 0.05, "{}", scene.widths[at(1500.0)]);
+        assert!(!scene.marked[at(1500.0)]);
+        // The lane and the paved path are not trails.
+        assert_eq!((scene.trails[at(500.0)], scene.trails[at(2500.0)]), (None, None));
+        assert_eq!(scene.surfaces[at(2500.0)], Surface::Asphalt);
+        // Barriers line the lane and the path, but not the singletrack.
+        let barriers = world.barriers();
+        let near = |m: f64| barriers.iter().any(|b| (b[4] as f64 - m).abs() < 5.0);
+        assert!(near(500.0) && near(2500.0));
+        assert!(!near(1500.0));
+        assert_eq!(Trail { grade: Some(2), estimated: false }.name(), "S2");
+        assert_eq!(Trail { grade: Some(2), estimated: true }.name(), "~S2");
+        // A walking trail's hiking grade stands in for a mountain-bike one, marked as estimated.
+        let mut hike = scenery.clone();
+        hike.ways[0] = MappedWay { highway: "footway".into(), surface: Some(Surface::Dirt), width: None, mtb: None, hiking: Some(1), line: geo(&route, &[(1.0, 1000.0), (1.0, 2000.0)]) };
+        let world = World::with_map(route.clone(), None, 0.0, Some(&hike), &[]);
+        assert_eq!(world.scene.trails[at(1500.0)], Some(Trail { grade: Some(1), estimated: true }));
+        assert!(Trail { grade: Some(3), estimated: false }.rolling_factor() > Trail { grade: Some(1), estimated: false }.rolling_factor());
+        assert_eq!(Trail::default().rolling_factor(), None);
+    }
+
+    #[test]
     fn leaves_the_mapped_roads_on_a_dirt_track() {
         // 3 km: a lane from 0 to 1000 m, a 60 m gap, the lane again to 1500 m, nothing mapped
         // from 1500 to 2500 m, then the lane to the end.
@@ -892,8 +979,9 @@ mod scenery {
         let world = World::with_map(route.clone(), None, 0.0, Some(&scenery(tiles)), &[]);
         let at = |m: f64| (m / route.step) as usize;
         let (s, w) = (&world.scene.surfaces, &world.scene.widths);
-        // Off the map: dirt, a track's width, no centre line.
+        // Off the map: dirt, a track's width, no centre line, a trail (so no barriers).
         assert_eq!(s[at(2000.0)], Surface::Dirt);
+        assert_eq!(world.scene.trails[at(2000.0)], Some(Trail::default()));
         assert!((w[at(2000.0)] - 3.0).abs() < 0.05, "{}", w[at(2000.0)]);
         assert_eq!(world.road().looks[at(2000.0)], Surface::Dirt as u8);
         // On the lane, and across the short gap in it, still tarmac.
@@ -902,7 +990,7 @@ mod scenery {
         assert_eq!(s[at(2800.0)], Surface::Asphalt);
         // A road with tags but missing from the tiles is still a road.
         let mut tagged = scenery(corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect());
-        tagged.ways = vec![MappedWay { highway: "unclassified".into(), surface: None, width: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 2500.0)]) }];
+        tagged.ways = vec![MappedWay { highway: "unclassified".into(), surface: None, width: None, mtb: None, hiking: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 2500.0)]) }];
         let world = World::with_map(route.clone(), None, 0.0, Some(&tagged), &[]);
         assert_eq!(world.scene.surfaces[at(2000.0)], Surface::Asphalt);
         // Where no map was loaded, nothing is known: no dirt.
@@ -982,6 +1070,30 @@ mod scenery {
         assert_eq!(ways[1].highway, "residential");
         assert_eq!(Surface::from_osm("concrete:plates"), Some(Surface::Concrete));
         assert_eq!(Surface::from_osm("dirt;grass"), Some(Surface::Dirt));
+        // Mountain-bike grades: mtb:scale with its +/- refinements, else the IMBA scale.
+        let graded = r#"{"elements":[
+            {"type":"way","id":5,"tags":{"highway":"path","mtb:scale":"2+"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]},
+            {"type":"way","id":6,"tags":{"highway":"track","mtb:scale:imba":"1"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]},
+            {"type":"way","id":7,"tags":{"highway":"path","mtb:scale":"steep"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]}
+        ]}"#;
+        assert_eq!(parse_ways(graded).unwrap().iter().map(|w| w.mtb).collect::<Vec<_>>(), vec![Some(2), Some(1), None]);
+        assert_eq!(mtb_grade(Some("3-"), Some("1")), Some(3));
+        assert_eq!(mtb_grade(Some("9"), None), None);
+        // Trails: anything graded, and paths and bridleways unless paved.
+        assert!(is_trail("path", None, None, None) && is_trail("bridleway", Some(Surface::Dirt), None, None) && is_trail("track", None, Some(1), None));
+        assert!(!is_trail("path", Some(Surface::Asphalt), None, None) && !is_trail("track", None, None, None) && !is_trail("cycleway", None, None, None));
+        // Walking trails: an unpaved or hiking-graded footway, and steps; but not a town pavement.
+        assert!(is_trail("footway", Some(Surface::Dirt), None, None) && is_trail("footway", None, None, Some(1)) && is_trail("steps", Some(Surface::Concrete), None, None));
+        assert!(!is_trail("footway", None, None, None) && !is_trail("footway", Some(Surface::Asphalt), None, Some(0)));
+        // Hiking grades become estimated mountain-bike grades; steps are S2 unless graded.
+        let walking = r#"{"elements":[
+            {"type":"way","id":8,"tags":{"highway":"path","sac_scale":"demanding_mountain_hiking"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]},
+            {"type":"way","id":9,"tags":{"highway":"steps"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]},
+            {"type":"way","id":10,"tags":{"highway":"path","sac_scale":"hiking","mtb:scale":"3"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]}
+        ]}"#;
+        let ways = parse_ways(walking).unwrap();
+        assert_eq!(ways.iter().map(|w| (w.mtb, w.hiking)).collect::<Vec<_>>(), vec![(None, Some(2)), (None, Some(2)), (Some(3), Some(0))]);
+        assert_eq!((hiking_grade(Some("alpine_hiking")), hiking_grade(Some("strolling"))), (Some(3), None));
         let route = build_route("q", &straight(1000.0, |_| Some(100.0))).unwrap();
         let q = way_query(&route, 0, route.n, 12.0, 40.0);
         assert!(q.contains("way[\"highway\"](around:12,") && q.ends_with("out tags geom;"), "{q}");

@@ -23,7 +23,9 @@ pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
-pub use surface::{highway_marked, highway_width, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, UNMARKED, WAY_TAGS};
+pub use surface::{
+    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, UNMARKED, WAY_TAGS,
+};
 
 use std::sync::Arc;
 

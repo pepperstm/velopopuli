@@ -340,6 +340,8 @@ pub struct Scene {
     pub widths: Vec<f64>,
     /// Whether the route's road is a main road with a centre line, per route sample.
     pub marked: Vec<bool>,
+    /// Where the route is on a trail rather than a road, per route sample.
+    pub trails: Vec<Option<super::surface::Trail>>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
     pub counts: SceneryCounts,
@@ -777,7 +779,7 @@ const SAME_FOR_M: f64 = 40.0;
 /// is off the mapped network: a field, a beach, a trail nobody has mapped. Shorter gaps are
 /// junctions and GPS wander, and keep the road either side.
 const OFF_MAP_M: f64 = 100.0;
-/// The dirt track drawn off the mapped network.
+/// The dirt track drawn off the mapped network (a trail, but wide enough for a farm vehicle).
 const OFF_MAP_WIDTH: f64 = 3.0;
 /// A ring of road no longer than this is a roundabout.
 const ROUNDABOUT_M: f64 = 450.0;
@@ -788,10 +790,18 @@ const RAIL_HEAD: f64 = 0.16;
 /// Width of the line painted along each edge of a main road.
 const EDGE_LINE: f64 = 0.18;
 
-/// The surface and width at every route sample: from the tags of the mapped road the route
-/// follows where the map has them, otherwise guessed from what kind of road it is.
-fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay], covered: &[bool]) -> (Vec<super::surface::Surface>, Vec<f64>, Vec<bool>) {
-    use super::surface::{highway_marked, highway_width, smooth_widths, tidy, Surface, MAX_WIDTH, MIN_RUN_M, MIN_WIDTH};
+/// What the route's road is like at every route sample.
+struct RouteRoad {
+    surfaces: Vec<super::surface::Surface>,
+    widths: Vec<f64>,
+    marked: Vec<bool>,
+    trails: Vec<Option<super::surface::Trail>>,
+}
+
+/// The surface and width at every route sample, and where it is a trail: from the tags of the
+/// mapped way the route follows where the map has them, otherwise guessed from what kind of road it is.
+fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay], covered: &[bool]) -> RouteRoad {
+    use super::surface::{highway_marked, highway_width, is_trail, smooth_widths, tidy, Surface, Trail, MAX_WIDTH, MIN_RUN_M, MIN_WIDTH, TRAIL_MIN_WIDTH, TRAIL_WIDTH};
     // Main roads have a centre line; lanes, streets, tracks and paths don't. Off the map: as a main road.
     let mut marked: Vec<bool> = kinds.iter().map(|k| k.is_none_or(|k| matches!(k, RoadKind::Main | RoadKind::Major))).collect();
     let mut surfaces: Vec<Surface> = kinds
@@ -812,15 +822,21 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
             Some(RoadKind::Service) => 3.5,
             Some(RoadKind::Track) => 3.0,
             Some(RoadKind::Footway) => 2.5,
-            Some(RoadKind::Path) => 2.0,
+            Some(RoadKind::Path) => TRAIL_WIDTH,
             // Nothing mapped alongside: a recorded track off the map, or no map at all.
             _ => super::ROAD_WIDTH,
         })
         .collect();
+    // The tiles don't say whether a path is paved; the tags below do, where they can be had.
+    let mut trails: Vec<Option<Trail>> = kinds.iter().map(|k| matches!(k, Some(RoadKind::Path)).then(Trail::default)).collect();
     // Mapped tags, on the stretches of road that run along the route (not ones crossing it).
     let mut best = vec![f64::INFINITY; route.n];
     for way in mapped {
-        let width = way.width.or_else(|| highway_width(&way.highway));
+        let trail = is_trail(&way.highway, way.surface, way.mtb, way.hiking).then(|| match way.mtb {
+            Some(g) => Trail { grade: Some(g), estimated: false },
+            None => Trail { grade: way.hiking, estimated: way.hiking.is_some() },
+        });
+        let width = way.width.or_else(|| if trail.is_some() { Some(TRAIL_WIDTH) } else { highway_width(&way.highway) });
         // Fine enough that every route sample beside the way is the nearest to some piece of it.
         let line = resample(&way.line.iter().map(|p| route.to_local(p[0], p[1])).collect::<Vec<_>>(), (route.step / 2.0).min(4.0));
         for w in line.windows(2) {
@@ -832,13 +848,17 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
             let d = (route.x[i] - mid.0).hypot(route.z[i] - mid.1);
             if d < best[i] {
                 best[i] = d;
-                if let Some(s) = way.surface {
-                    surfaces[i] = s;
+                match (way.surface, trail) {
+                    (Some(s), _) => surfaces[i] = s,
+                    // An untagged trail is earth.
+                    (None, Some(_)) => surfaces[i] = Surface::Dirt,
+                    (None, None) => {}
                 }
                 if let Some(w) = width {
                     widths[i] = w;
                 }
                 marked[i] = highway_marked(&way.highway);
+                trails[i] = trail;
             }
         }
     }
@@ -849,16 +869,20 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
             surfaces[from..to].fill(Surface::Dirt);
             widths[from..to].fill(OFF_MAP_WIDTH);
             marked[from..to].fill(false);
+            trails[from..to].fill(Some(Trail::default()));
         }
     }
-    tidy(&mut surfaces, (MIN_RUN_M / route.step).ceil() as usize);
-    for w in &mut widths {
-        *w = w.clamp(MIN_WIDTH, MAX_WIDTH);
+    let min_run = (MIN_RUN_M / route.step).ceil() as usize;
+    tidy(&mut surfaces, min_run);
+    // A trail for less than a short stretch (a path's end at a junction) is mapping noise too.
+    tidy(&mut trails, min_run);
+    for (w, trail) in widths.iter_mut().zip(&trails) {
+        *w = w.clamp(if trail.is_some() { TRAIL_MIN_WIDTH } else { MIN_WIDTH }, MAX_WIDTH);
     }
     smooth_widths(&mut widths, ((40.0 / route.step).round() as usize) | 1);
     // Like surfaces, a change of markings for less than a short stretch is mapping noise.
-    tidy(&mut marked, (MIN_RUN_M / route.step).ceil() as usize);
-    (surfaces, widths, marked)
+    tidy(&mut marked, min_run);
+    RouteRoad { surfaces, widths, marked, trails }
 }
 
 impl Scene {
@@ -936,7 +960,8 @@ impl Scene {
             }
         }
         let covered: Vec<bool> = (0..route.n).map(|i| scene.covers(route, route.x[i], route.z[i])).collect();
-        (scene.surfaces, scene.widths, scene.marked) = route_road(route, &beside, &nearest_kind, &scenery.ways, &covered);
+        let road = route_road(route, &beside, &nearest_kind, &scenery.ways, &covered);
+        (scene.surfaces, scene.widths, scene.marked, scene.trails) = (road.surfaces, road.widths, road.marked, road.trails);
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }
