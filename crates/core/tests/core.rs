@@ -6,7 +6,7 @@ use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, 
 use velopopuli_core::physics::{step_speed, PhysicsParams};
 use velopopuli_core::ride::{RideEngine, RideInput, RivalKind};
 use velopopuli_core::types::{BotSettings, PersonalBest, Profile, Settings};
-use velopopuli_core::world::{align_dem, Dem, World, CELLS, CHUNK, FAR_CELLS, TILE};
+use velopopuli_core::world::{align_dem, Dem, Surface, World, CELLS, CHUNK, FAR_CELLS, TILE};
 
 /// A straight road heading north with a given elevation profile.
 fn straight(length_m: f64, ele_at: impl Fn(f64) -> Option<f64>) -> Vec<RawPoint> {
@@ -288,6 +288,51 @@ mod ride {
         run(&mut engine, 10, 200.0, &mut clock);
         assert_eq!(engine.distance, d);
         assert_eq!(engine.trainer_grade(&Default::default()), 0.0);
+    }
+
+    #[test]
+    fn rough_surfaces_roll_heavier_on_screen_and_on_the_trainer() {
+        let route = flat();
+        let ride = |surface: Surface, feel: bool| {
+            let mut s = settings();
+            s.physics.road_surfaces = feel;
+            let mut engine = RideEngine::new(route.clone(), &s, None);
+            engine.set_surfaces(vec![surface; route.n]);
+            let mut clock = 0;
+            run(&mut engine, 120, 200.0, &mut clock);
+            (engine.distance, engine.trainer_grade(&Default::default()), engine.surface(), engine.rivals[0].distance)
+        };
+        let (tarmac, tarmac_grade, _, tarmac_bot) = ride(Surface::Asphalt, true);
+        let (gravel, gravel_grade, surface, gravel_bot) = ride(Surface::Gravel, true);
+        let (cobbles, cobbles_grade, _, _) = ride(Surface::Cobbles, true);
+        let (unfelt, unfelt_grade, _, _) = ride(Surface::Cobbles, false);
+        assert_eq!(surface, Surface::Gravel);
+        // Same power, slower on rougher ground; pace riders too.
+        assert!(gravel < tarmac - 50.0 && cobbles < gravel - 20.0, "{tarmac} {gravel} {cobbles}");
+        assert!(gravel_bot < tarmac_bot - 20.0);
+        // The trainer gets the extra rolling resistance as gradient: 0.004 × (2.5 − 1).
+        assert_eq!(tarmac_grade, 0.0);
+        assert!(close(gravel_grade, 0.006, 1e-9));
+        assert!(cobbles_grade > gravel_grade);
+        // Turned off, every surface rides like tarmac.
+        assert!(close(unfelt, tarmac, 1e-9));
+        assert_eq!(unfelt_grade, 0.0);
+    }
+
+    #[test]
+    fn the_surface_changes_where_the_road_does() {
+        let route = flat();
+        let mut engine = RideEngine::new(route.clone(), &settings(), None);
+        let half = route.n / 2;
+        engine.set_surfaces((0..route.n).map(|i| if i < half { Surface::Asphalt } else { Surface::Cobbles }).collect());
+        assert_eq!(engine.surface(), Surface::Asphalt);
+        engine.distance = (half + 2) as f64 * route.step;
+        assert_eq!(engine.surface(), Surface::Cobbles);
+        // Past the end of the list: the last surface; no list at all: tarmac.
+        engine.distance = route.total + 100.0;
+        assert_eq!(engine.surface(), Surface::Cobbles);
+        engine.set_surfaces(Vec::new());
+        assert_eq!(engine.surface(), Surface::Asphalt);
     }
 }
 

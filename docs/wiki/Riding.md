@@ -12,6 +12,7 @@ Power (with W/kg and zone), speed, heart rate and cadence on the left, with what
 - **ERG mode**: the trainer holds a fixed power while the route scrolls by.
 - **Gears**: shift your bike as normal — or, if you prefer, set up [[Virtual gears]] and shift with keys or a remote.
 - **Speed is simulated from your power** — with your weight, the bike, the slope, rolling resistance and air (thinner at altitude). The trainer's difficulty only changes how it feels, never your speed.
+- **You feel the road surface.** Concrete, gravel, cobbles and earth roll heavier than tarmac: you slow down on screen, and the trainer gets harder by the same force. At 200 W on the flat (84 kg, road tyres) that's about 34 km/h on tarmac, 33.5 on concrete, 31 on gravel and 29 on cobbles or earth. Set your tyres' rolling resistance on tarmac, or turn this off, under **Settings → Trainer & physics → Feel the road surface**. It does nothing in ERG mode.
 
 ## Cameras
 
