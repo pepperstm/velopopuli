@@ -773,6 +773,12 @@ const SAME_PATH_M: f64 = 3.5;
 const SAME_ONEWAY_M: f64 = 2.5;
 const SAME_COS: f64 = 0.94;
 const SAME_FOR_M: f64 = 40.0;
+/// Where the map is loaded but no road runs along the route for at least this far, the rider
+/// is off the mapped network: a field, a beach, a trail nobody has mapped. Shorter gaps are
+/// junctions and GPS wander, and keep the road either side.
+const OFF_MAP_M: f64 = 100.0;
+/// The dirt track drawn off the mapped network.
+const OFF_MAP_WIDTH: f64 = 3.0;
 /// A ring of road no longer than this is a roundabout.
 const ROUNDABOUT_M: f64 = 450.0;
 const CORNER_M: f64 = 4.0;
@@ -784,7 +790,7 @@ const EDGE_LINE: f64 = 0.18;
 
 /// The surface and width at every route sample: from the tags of the mapped road the route
 /// follows where the map has them, otherwise guessed from what kind of road it is.
-fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay]) -> (Vec<super::surface::Surface>, Vec<f64>, Vec<bool>) {
+fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped: &[super::surface::MappedWay], covered: &[bool]) -> (Vec<super::surface::Surface>, Vec<f64>, Vec<bool>) {
     use super::surface::{highway_marked, highway_width, smooth_widths, tidy, Surface, MAX_WIDTH, MIN_RUN_M, MIN_WIDTH};
     // Main roads have a centre line; lanes, streets, tracks and paths don't. Off the map: as a main road.
     let mut marked: Vec<bool> = kinds.iter().map(|k| k.is_none_or(|k| matches!(k, RoadKind::Main | RoadKind::Major))).collect();
@@ -834,6 +840,15 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
                 }
                 marked[i] = highway_marked(&way.highway);
             }
+        }
+    }
+    // Off the mapped network: a dirt track, where the map is loaded and neither it nor the tags have a road.
+    let off_map: Vec<bool> = (0..route.n).map(|i| covered[i] && kinds[i].is_none() && best[i].is_infinite()).collect();
+    for (from, to, off) in super::surface::runs(&off_map) {
+        if off && (to - from) as f64 * route.step >= OFF_MAP_M {
+            surfaces[from..to].fill(Surface::Dirt);
+            widths[from..to].fill(OFF_MAP_WIDTH);
+            marked[from..to].fill(false);
         }
     }
     tidy(&mut surfaces, (MIN_RUN_M / route.step).ceil() as usize);
@@ -920,7 +935,8 @@ impl Scene {
                 }
             }
         }
-        (scene.surfaces, scene.widths, scene.marked) = route_road(route, &beside, &nearest_kind, &scenery.ways);
+        let covered: Vec<bool> = (0..route.n).map(|i| scene.covers(route, route.x[i], route.z[i])).collect();
+        (scene.surfaces, scene.widths, scene.marked) = route_road(route, &beside, &nearest_kind, &scenery.ways, &covered);
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }

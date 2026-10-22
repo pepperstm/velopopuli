@@ -21,7 +21,7 @@ pub enum Surface {
     Cobbles = 2,
     /// Gravel, compacted or loose, and other unpaved but made-up surfaces.
     Gravel = 3,
-    /// Earth, grass, mud and sand.
+    /// Earth, grass, mud and sand; also the track drawn where the route leaves the mapped roads.
     Dirt = 4,
 }
 

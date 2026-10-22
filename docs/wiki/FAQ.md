@@ -16,7 +16,7 @@ Your speed comes from your power, weight and the virtual road, as it would outdo
 It downloads that route's terrain and map data once. Later rides start immediately, and work offline.
 
 **Why does the road surface or width look wrong somewhere?**
-They come from OpenStreetMap tags. If a stretch is mis-tagged, you can fix it on [openstreetmap.org](https://www.openstreetmap.org) and everyone benefits. If the tags couldn't be fetched, the app guesses from the road class and tries again a day later.
+They come from OpenStreetMap tags. If a stretch is mis-tagged, you can fix it on [openstreetmap.org](https://www.openstreetmap.org) and everyone benefits. If the tags couldn't be fetched, the app guesses from the road class and tries again a day later. A dirt track where you expected a road means the map has no road along your route there — often a route drawn freehand rather than along the roads; re-plan it along the road (Find a route does) or add the missing road to OpenStreetMap.
 
 **Can I ride with friends?**
 Yes — see [[Group rides and self-hosting]]. For now one of you runs the small relay server.

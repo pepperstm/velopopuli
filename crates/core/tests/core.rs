@@ -759,8 +759,8 @@ mod vector_tiles {
 mod scenery {
     use super::*;
     use velopopuli_core::world::{
-        barrier_model, highway_marked, highway_width, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery, Surface, Waterway,
-        WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
+        barrier_model, corridor_tiles, highway_marked, highway_width, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh, MappedWay, Road, RoadKind, Scenery,
+        Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
     };
 
     /// Terrain tiles at a constant height, covering the route.
@@ -879,6 +879,35 @@ mod scenery {
         assert_eq!(runs.first().map(|r| (r.0, r.2)), Some((0, Surface::Cobbles)));
         assert_eq!(runs.last().map(|r| (r.1, r.2)), Some((route.n, Surface::Asphalt)));
         assert_eq!(world.road().looks[(100.0 / route.step) as usize], Surface::Cobbles as u8);
+    }
+
+    #[test]
+    fn leaves_the_mapped_roads_on_a_dirt_track() {
+        // 3 km: a lane from 0 to 1000 m, a 60 m gap, the lane again to 1500 m, nothing mapped
+        // from 1500 to 2500 m, then the lane to the end.
+        let route = Arc::new(build_route("off the map", &straight(3000.0, |_| Some(100.0))).unwrap());
+        let lane = |from: f64, to: f64| Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(2.0, from), (2.0, to)]) };
+        let scenery = |tiles: Vec<[u32; 2]>| Scenery { tiles, roads: vec![lane(0.0, 1000.0), lane(1060.0, 1500.0), lane(2500.0, 3000.0)], way_tags: WAY_TAGS, ..Default::default() };
+        let tiles: Vec<[u32; 2]> = corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect();
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery(tiles)), &[]);
+        let at = |m: f64| (m / route.step) as usize;
+        let (s, w) = (&world.scene.surfaces, &world.scene.widths);
+        // Off the map: dirt, a track's width, no centre line.
+        assert_eq!(s[at(2000.0)], Surface::Dirt);
+        assert!((w[at(2000.0)] - 3.0).abs() < 0.05, "{}", w[at(2000.0)]);
+        assert_eq!(world.road().looks[at(2000.0)], Surface::Dirt as u8);
+        // On the lane, and across the short gap in it, still tarmac.
+        assert_eq!(s[at(500.0)], Surface::Asphalt);
+        assert_eq!(s[at(1030.0)], Surface::Asphalt);
+        assert_eq!(s[at(2800.0)], Surface::Asphalt);
+        // A road with tags but missing from the tiles is still a road.
+        let mut tagged = scenery(corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect());
+        tagged.ways = vec![MappedWay { highway: "unclassified".into(), surface: None, width: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 2500.0)]) }];
+        let world = World::with_map(route.clone(), None, 0.0, Some(&tagged), &[]);
+        assert_eq!(world.scene.surfaces[at(2000.0)], Surface::Asphalt);
+        // Where no map was loaded, nothing is known: no dirt.
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery(Vec::new())), &[]);
+        assert_eq!(world.scene.surfaces[at(2000.0)], Surface::Asphalt);
     }
 
     #[test]

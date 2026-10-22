@@ -138,7 +138,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **No central services:** map data from public OSM services; relay is self-hosted; Strava keys are per user.
 - **Speed from power, never from the trainer**, so every trainer gives the same speed for the same effort.
 - **Map data:** vector tiles (`vector.openstreetmap.org/shortbread_v1`) for scenery and roads — reliable; Overpass for building detail and the route's road tags (`surface`, `width`, `lanes`, `highway`) — unreliable. Only `overpass.private.coffee` answered consistently in testing; `overpass-api.de` rejects clients without a proper User-Agent (the app sends one). Failures fall back gracefully and are retried later (buildings after two weeks, road tags after a day).
-- **The route's road is a "closed race road"**: barriers both sides, real surface and width, centre line only on main roads; the mapped copy of the route's own road is hidden.
+- **The route's road is a "closed race road"**: barriers both sides, real surface and width, centre line only on main roads; the mapped copy of the route's own road is hidden. Where the map is loaded but has no road along the route for 100 m or more, it is a 3 m dirt track (`OFF_MAP_M` in `scenery.rs`); with no map data at all it stays tarmac, so missing data never looks like off-road.
 - **Diagnostics are always on** (raw sensor data optional) so a user can send a useful report after the fact; reports strip names, tokens and locations.
 - **GitHub reporting opens a pre-filled issue in the browser** rather than signing in from the app: a device-flow sign-in was started and dropped in favour of the simpler approach.
 - **Apple Health removed** for now (no desktop HealthKit; export import was clunky).
