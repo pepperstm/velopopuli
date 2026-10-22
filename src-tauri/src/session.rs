@@ -127,6 +127,8 @@ struct RideState<'a> {
     /// True when `cadence` is worked out from speed and the virtual gear (no cadence sensor).
     cadence_estimated: bool,
     gear: Option<GearHud>,
+    /// The trail the rider is on, if any.
+    trail: Option<velopopuli_core::world::Trail>,
     elapsed: f64,
     grade: f64,
     ele: f64,
@@ -278,6 +280,7 @@ impl Session {
         let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default() };
         let mut engine = RideEngine::with_options(route.clone(), &settings, pb.clone(), options);
         engine.set_surfaces(world.scene.surfaces.clone());
+        engine.set_trails(world.scene.trails.clone());
         // The automated check can start part-way along, to look at a particular spot.
         if let Some(at) = std::env::var("VP_SMOKE_AT").ok().filter(|_| std::env::var_os("VP_SMOKE").is_some()).and_then(|v| v.parse::<f64>().ok()) {
             engine.distance = at.clamp(0.0, route.total - 50.0);
@@ -318,12 +321,17 @@ impl Session {
         crate::diag::event(
             "ride",
             format!(
-                "surfaces {} widths {}",
+                "surfaces {} trails {} widths {}",
                 velopopuli_core::world::surface_runs(&world.scene.surfaces)
                     .iter()
                     .map(|(a, b, s)| format!("{}:{:.0}-{:.0}m", s.name(), *a as f64 * route.step, *b as f64 * route.step))
                     .collect::<Vec<_>>()
                     .join(" "),
+                velopopuli_core::world::surface_runs(&world.scene.trails)
+                    .iter()
+                    .filter_map(|(a, b, t)| t.map(|t| format!("{}:{:.0}-{:.0}m", t.name(), *a as f64 * route.step, *b as f64 * route.step)))
+                    .reduce(|a, b| format!("{a} {b}"))
+                    .unwrap_or_else(|| "none".into()),
                 world.scene.widths.iter().step_by(((250.0 / route.step) as usize).max(1)).map(|w| format!("{w:.1}")).collect::<Vec<_>>().join(",")
             ),
         );
@@ -616,7 +624,7 @@ fn run(
             crate::diag::event(
                 "ride",
                 format!(
-                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} surface={} has_power={} cmd={} gear={gear_note} devices={}",
+                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} surface={}{} has_power={} cmd={} gear={gear_note} devices={}",
                     engine.elapsed,
                     if tel.has_power { format!("{:.0}", tel.power) } else { "-".into() },
                     f(tel.cadence),
@@ -624,6 +632,7 @@ fn run(
                     engine.distance,
                     engine.pos.grade * 100.0,
                     engine.surface().name(),
+                    engine.trail().map(|t| format!(" trail={}", t.name())).unwrap_or_default(),
                     tel.has_power,
                     match cmd {
                         TrainerCommand::Simulation { grade, .. } => format!("sim:{:.1}%", grade * 100.0),
@@ -686,6 +695,7 @@ fn run(
                 cadence,
                 cadence_estimated,
                 gear,
+                trail: engine.trail(),
                 elapsed: engine.elapsed,
                 grade: engine.pos.grade,
                 ele: engine.pos.ele,

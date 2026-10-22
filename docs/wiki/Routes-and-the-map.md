@@ -23,6 +23,8 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
   When the tags can't be fetched, surface and width are guessed from the road class, and fetching is tried again a day later.
 
+  **Trails** — an unpaved path or bridleway, or anything graded for mountain bikes (`mtb:scale` S0–S6, or `mtb:scale:imba`), is ridden as a trail: earth unless the map says otherwise, 1.5 m wide unless a width is mapped, no centre line and no crowd barriers. The HUD shows **MTB trail · S2** (or **Trail** if ungraded). A paved shared path is ridden like a lane.
+
   **Off the mapped roads** — where your route crosses a field, a beach or a trail nobody has mapped, for 100 m or more, you ride a 3 m dirt track. Shorter gaps (junctions, a GPS trace wandering off the road) keep the road either side, and where no map data could be loaded nothing is assumed: the road stays tarmac.
 
 ![The Arenberg cobbles](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-cobbles.jpg)

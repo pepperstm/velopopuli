@@ -12,7 +12,7 @@ use crate::physics::{step_speed, wind_coefficient, PhysicsParams};
 use crate::segments::{Segment, SegmentBest, SegmentSource, SPLIT_M};
 use crate::types::{PersonalBest, Settings, TrainerSettings};
 use crate::workout::{StepKind, Workout, WorkoutPos};
-use crate::world::Surface;
+use crate::world::{Surface, Trail};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RideInput {
@@ -153,6 +153,8 @@ pub struct RideEngine {
     params: PhysicsParams,
     /// The road surface at each route sample; empty means tarmac all the way.
     surfaces: Vec<Surface>,
+    /// Where the route is on a trail, per route sample; empty means road all the way.
+    trails: Vec<Option<Trail>>,
     road_surfaces: bool,
     cda: f64,
     ftp: f64,
@@ -239,6 +241,7 @@ impl RideEngine {
             gear_shifted: false,
             params,
             surfaces: Vec::new(),
+            trails: Vec::new(),
             road_surfaces: settings.physics.road_surfaces,
             cda: settings.physics.cda,
             ftp: settings.rider.ftp,
@@ -282,7 +285,7 @@ impl RideEngine {
         self.moving = true;
 
         let prev_ele = self.pos.ele;
-        let params = PhysicsParams { crr: self.crr_at(self.distance), ..self.params };
+        let params = self.params_at(self.distance, self.params.mass);
         self.speed = step_speed(self.speed, input.power, self.pos.grade, self.pos.ele, &params, dt);
         self.distance += self.speed * dt;
         self.elapsed += dt;
@@ -318,8 +321,8 @@ impl RideEngine {
     }
 
     fn step_rivals(&mut self, dt: f64) {
-        let crrs: Vec<f64> = self.rivals.iter().map(|r| self.crr_at(r.distance)).collect();
-        for (r, crr) in self.rivals.iter_mut().zip(crrs) {
+        let params: Vec<PhysicsParams> = self.rivals.iter().map(|r| self.params_at(r.distance, r.mass)).collect();
+        for (r, params) in self.rivals.iter_mut().zip(params) {
             match r.kind {
                 RivalKind::Ghost => {
                     let d = r.trace.as_deref().map_or(0.0, |t| trace_at(t, self.elapsed)).min(self.route.total);
@@ -329,7 +332,6 @@ impl RideEngine {
                 RivalKind::Remote => {}
                 RivalKind::Bot if r.distance < self.route.total => {
                     let p = self.route.sample_at(r.distance);
-                    let params = PhysicsParams { mass: r.mass, crr, ..self.params };
                     r.speed = step_speed(r.speed, r.power, p.grade, p.ele, &params, dt);
                     r.distance = (r.distance + r.speed * dt).min(self.route.total);
                 }
@@ -533,6 +535,21 @@ impl RideEngine {
         self.surfaces = surfaces;
     }
 
+    /// Sets where the route is on a trail, as the world was built.
+    pub fn set_trails(&mut self, trails: Vec<Option<Trail>>) {
+        self.trails = trails;
+    }
+
+    /// The trail the rider is on, if any.
+    pub fn trail(&self) -> Option<Trail> {
+        self.trail_at(self.distance)
+    }
+
+    fn trail_at(&self, distance: f64) -> Option<Trail> {
+        let i = (distance / self.route.step).round().max(0.0) as usize;
+        self.trails.get(i.min(self.trails.len().saturating_sub(1))).copied().flatten()
+    }
+
     /// The road surface at the rider's position.
     pub fn surface(&self) -> Surface {
         self.surface_at(self.distance)
@@ -543,10 +560,19 @@ impl RideEngine {
         self.surfaces.get(i.min(self.surfaces.len().saturating_sub(1))).copied().unwrap_or_default()
     }
 
+    /// The physics for a rider of `mass` at a distance along the route: the road's rolling
+    /// resistance, and a graded trail's speed limit.
+    fn params_at(&self, distance: f64, mass: f64) -> PhysicsParams {
+        let trail_limit = self.trail_at(distance).and_then(Trail::max_speed).unwrap_or(f64::INFINITY);
+        PhysicsParams { mass, crr: self.crr_at(distance), max_speed: self.params.max_speed.min(trail_limit), ..self.params }
+    }
+
     /// Rolling resistance at a distance along the route.
     fn crr_at(&self, distance: f64) -> f64 {
         if self.road_surfaces {
-            self.params.crr * self.surface_at(distance).rolling_factor()
+            // A graded trail's roots and rocks decide; otherwise what it's made of.
+            let factor = self.trail_at(distance).and_then(Trail::rolling_factor).unwrap_or_else(|| self.surface_at(distance).rolling_factor());
+            self.params.crr * factor
         } else {
             self.params.crr
         }

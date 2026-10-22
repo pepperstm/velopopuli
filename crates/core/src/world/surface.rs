@@ -65,6 +65,65 @@ impl Surface {
     }
 }
 
+/// A stretch of the route on a trail rather than a road: an unpaved path or bridleway, anything
+/// graded for mountain bikes, or the route's own track off the mapped network. Trails are narrow,
+/// have no race barriers, and roll heavier the harder they are graded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Trail {
+    /// Mountain-bike difficulty on OpenStreetMap's `mtb:scale`, S0 (easy) to S6, if mapped.
+    pub grade: Option<u8>,
+}
+
+impl Trail {
+    /// How much harder than smooth tarmac a graded trail rolls, as a multiple of the rider's own
+    /// rolling resistance: roots, rocks and steps cost more the higher the grade. `None` when
+    /// ungraded, so the surface decides.
+    pub fn rolling_factor(self) -> Option<f64> {
+        self.grade.map(|g| match g {
+            0 => 4.0,
+            1 => 5.0,
+            2 => 6.5,
+            3 => 8.0,
+            _ => 10.0,
+        })
+    }
+
+    /// The fastest a graded trail is ridden, in m/s. Like the descent speed limit, it stands in
+    /// for braking — here for roots, rocks, steps and tight turns — which the model can't see.
+    pub fn max_speed(self) -> Option<f64> {
+        self.grade.map(|g| {
+            (match g {
+                0 => 40.0,
+                1 => 30.0,
+                2 => 22.0,
+                3 => 15.0,
+                _ => 10.0,
+            }) / 3.6
+        })
+    }
+
+    /// "S2" for a graded trail, "trail" otherwise.
+    pub fn name(self) -> String {
+        self.grade.map_or_else(|| "trail".to_string(), |g| format!("S{g}"))
+    }
+}
+
+/// The mountain-bike grade from `mtb:scale` ("2", "2+", "3-") or else `mtb:scale:imba` (0–4).
+pub fn mtb_grade(scale: Option<&str>, imba: Option<&str>) -> Option<u8> {
+    let first_digit = |v: &str, max: u32| v.trim().chars().next().and_then(|c| c.to_digit(10)).filter(|&d| d <= max).map(|d| d as u8);
+    scale.and_then(|v| first_digit(v, 6)).or_else(|| imba.and_then(|v| first_digit(v, 4)))
+}
+
+/// Whether a mapped way is a trail: graded for mountain bikes, or a path or bridleway that
+/// isn't paved (a tarmac shared path is ridden like a lane).
+pub fn is_trail(highway: &str, surface: Option<Surface>, mtb: Option<u8>) -> bool {
+    mtb.is_some() || (matches!(highway, "path" | "bridleway") && !matches!(surface, Some(Surface::Asphalt | Surface::Concrete | Surface::Cobbles)))
+}
+
+/// Width of a trail with no width mapped (singletrack), and the narrowest a trail is drawn.
+pub const TRAIL_WIDTH: f64 = 1.5;
+pub const TRAIL_MIN_WIDTH: f64 = 1.2;
+
 /// A mapped road near the route and what its tags say, as `[lat, lon]` points.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MappedWay {
@@ -75,11 +134,14 @@ pub struct MappedWay {
     /// Carriageway width in metres, from `width` or else `lanes`.
     #[serde(default)]
     pub width: Option<f64>,
+    /// Mountain-bike grade (`mtb:scale`), if mapped.
+    #[serde(default)]
+    pub mtb: Option<u8>,
     pub line: Vec<[f64; 2]>,
 }
 
 /// Version of what `MappedWay` holds; caches from older versions are fetched again.
-pub const WAY_TAGS: u32 = 2;
+pub const WAY_TAGS: u32 = 3;
 
 /// Usual carriageway width in metres for an OpenStreetMap `highway` class.
 pub fn highway_width(highway: &str) -> Option<f64> {
@@ -159,6 +221,7 @@ pub fn parse_ways(json: &str) -> Result<Vec<MappedWay>, String> {
                 highway: tag("highway")?.to_string(),
                 surface: tag("surface").and_then(Surface::from_osm),
                 width: tagged_width(tag("width").or(tag("est_width")), tag("lanes")),
+                mtb: mtb_grade(tag("mtb:scale"), tag("mtb:scale:imba")),
                 line: e.geometry.iter().map(|p| [p.lat, p.lon]).collect(),
             })
         })

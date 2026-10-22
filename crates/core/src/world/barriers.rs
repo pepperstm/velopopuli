@@ -94,7 +94,8 @@ impl World {
         for k in 0..count {
             let d = 4.0 + (k as f64 + 0.5) * SECTION_M;
             let i = ((d / r.step).round() as usize).min(r.n - 1);
-            if kinds.get(i).is_some_and(|&kind| kind != OPEN) {
+            // None on bridges and in tunnels (they have their own sides), nor along a trail.
+            if kinds.get(i).is_some_and(|&kind| kind != OPEN) || self.scene.trails.get(i).is_some_and(Option::is_some) {
                 continue;
             }
             let (a, b) = (i.saturating_sub(1), (i + 1).min(r.n - 1));
