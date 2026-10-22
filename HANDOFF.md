@@ -60,7 +60,7 @@ web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (s
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
-.github/workflows/build.yml   CI: core and relay tests, installers for every platform, Arch package, releases
+.github/workflows/build.yml   CI: all tests, installers for every platform, Arch package, releases
 .github/ISSUE_TEMPLATE, PULL_REQUEST_TEMPLATE.md   Bug, hardware-report and feature forms; the pull-request checklist
 resources/          99-ant-usb.rules (Linux udev rule for ANT+ sticks)
 ```
@@ -101,7 +101,7 @@ The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branc
 
 ## 6. Testing
 
-- `cargo test --workspace` — 79 tests: 72 core, 1 relay, 6 app (plus one app test that needs the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs only the core and relay tests, so run the app tests locally (`npm run check` does) when changing `src-tauri`.
+- `cargo test --workspace` — 79 tests: 72 core, 1 relay, 6 app (plus one app test that needs the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them (it builds the page first, because the app embeds it).
 - **The smoke harness** is how most visual and end-to-end checking has been done: a debug build that rides (or opens a screen) by itself, saves pictures and the visible text, and quits. All the `VP_SMOKE_*` switches are documented in the wiki's [Building from source](https://github.com/pepperstm/velopopuli/wiki/Building-from-source). The most useful: `VP_SMOKE_AT` (start part-way), `VP_SMOKE_CAM=3` (overhead — good for junctions), `VP_SMOKE_WINDOW=1` (whole window with HUD), `VP_SMOKE_CLIP=6` (frames for a demo clip), `VP_SMOKE_SURFACE`, `VP_SKIP_OVERPASS`, `VP_SMOKE_REPORT`.
 - The ride-start diagnostics line `[ride] surfaces … widths …` shows what the map matching decided.
 - Good test routes: Bourg d'Oisans → Alpe d'Huez (town, river, hairpins — route it with BRouter); the Trouée d'Arenberg (OSM track "Drève des Boules d'Hérin", `surface=sett`); Meylan near Grenoble (roundabouts); any city crossing (viaducts).
