@@ -25,13 +25,16 @@ impl Default for RiderSettings {
 #[serde(rename_all = "camelCase", default)]
 pub struct PhysicsSettings {
     pub cda: f64,
+    /// The rider's tyres on smooth tarmac.
     pub crr: f64,
     pub max_speed_kph: f64,
+    /// Rougher surfaces (concrete, gravel, cobbles, earth) roll heavier, on screen and on the trainer.
+    pub road_surfaces: bool,
 }
 
 impl Default for PhysicsSettings {
     fn default() -> Self {
-        Self { cda: 0.32, crr: 0.004, max_speed_kph: 80.0 }
+        Self { cda: 0.32, crr: 0.004, max_speed_kph: 80.0, road_surfaces: true }
     }
 }
 

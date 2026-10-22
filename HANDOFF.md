@@ -34,7 +34,7 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 
 ```
 crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/tests/)
-  gpx, physics      Route building; speed from power (CdA, Crr, altitude-dependent air density)
+  gpx, physics      Route building; speed from power (CdA, Crr scaled by road surface, altitude-dependent air density)
   ride, gamify      50 Hz ride engine, rivals/ghosts, recorder; XP, levels, badges, streaks
   workout, fitness  Workouts; power curve, FTP estimate, zones, CTL/ATL/TSB
   gearing           Virtual gears: gear sets (presets, custom teeth), the effective gradient that makes the trainer feel like a gear
@@ -123,7 +123,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 2. **Try the Windows and Linux builds** on real machines (ANT+ on Windows needs WinUSB via Zadig).
 3. **Strava** against the live API.
 4. Pairing to a specific ANT+ device and more than one device per type.
-5. Rolling resistance per road surface (cobbles/gravel heavier) — agreed as a natural next step, not started.
+5. Rolling resistance per road surface — built (`Surface::rolling_factor`; the trainer gets the extra as gradient so every trainer feels it). Next: feel it on a real trainer and tune the factors.
 5a. Virtual gears — built (keyboard, Bluetooth remotes, on-screen buttons, rider-defined gear sets); next: Di2 and Zwift Click/Play shifters, Zwift Hub native shifting, and feeling it on real trainers.
 6. Native renderer: verify HUD in a real window, measure release-build overhead, then Windows/Linux hosts.
 7. **Stretch — self-hosted group servers and clubs.** Design agreed in discussion: no central server; identity is a keypair created on the device (no accounts), friends lists stored locally and exchanged by friend codes/QR including the friend's home server address, clubs run their own server (the relay plus a small database: members, invites, scheduled rides, shared routes, leaderboards), optional community server, federation later. Package the relay as a Docker image with `wss://`. Leaderboards can't be cheat-proof (power comes from the rider's device).

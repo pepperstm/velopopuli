@@ -277,6 +277,7 @@ impl Session {
         let imported_ghosts = ghosts.iter().map(|g| g.id.clone()).collect();
         let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default() };
         let mut engine = RideEngine::with_options(route.clone(), &settings, pb.clone(), options);
+        engine.set_surfaces(world.scene.surfaces.clone());
         // The automated check can start part-way along, to look at a particular spot.
         if let Some(at) = std::env::var("VP_SMOKE_AT").ok().filter(|_| std::env::var_os("VP_SMOKE").is_some()).and_then(|v| v.parse::<f64>().ok()) {
             engine.distance = at.clamp(0.0, route.total - 50.0);
@@ -615,13 +616,14 @@ fn run(
             crate::diag::event(
                 "ride",
                 format!(
-                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} has_power={} cmd={} gear={gear_note} devices={}",
+                    "t={:.0} power={} cad={} spd={:.1} dist={:.0} grade={:.1} surface={} has_power={} cmd={} gear={gear_note} devices={}",
                     engine.elapsed,
                     if tel.has_power { format!("{:.0}", tel.power) } else { "-".into() },
                     f(tel.cadence),
                     engine.speed * 3.6,
                     engine.distance,
                     engine.pos.grade * 100.0,
+                    engine.surface().name(),
                     tel.has_power,
                     match cmd {
                         TrainerCommand::Simulation { grade, .. } => format!("sim:{:.1}%", grade * 100.0),

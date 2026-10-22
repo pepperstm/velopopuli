@@ -40,6 +40,20 @@ impl Surface {
         })
     }
 
+    /// How much harder the surface is to roll over than smooth tarmac, as a multiple of the
+    /// rider's own rolling resistance (their tyres on tarmac). Typical road-tyre values:
+    /// tarmac 0.004, concrete 0.005, compacted gravel 0.008–0.012, setts 0.012–0.020,
+    /// firm earth and grass 0.012–0.020.
+    pub fn rolling_factor(self) -> f64 {
+        match self {
+            Surface::Asphalt => 1.0,
+            Surface::Concrete => 1.25,
+            Surface::Gravel => 2.5,
+            Surface::Cobbles => 3.5,
+            Surface::Dirt => 3.5,
+        }
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Surface::Asphalt => "asphalt",

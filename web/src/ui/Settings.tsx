@@ -546,7 +546,7 @@ export function SettingsScreen(): React.JSX.Element {
             min={0.002}
             max={0.02}
             step={0.0005}
-            hint="0.004 road tyres on tarmac, 0.008 gravel."
+            hint="Your tyres on smooth tarmac: 0.004 road tyres, 0.005 wider or gravel tyres."
             onChange={(v) => physics({ crr: v })}
           />
           <Num
@@ -559,6 +559,12 @@ export function SettingsScreen(): React.JSX.Element {
             onChange={(v) => physics({ maxSpeedKph: v })}
           />
         </div>
+        <Toggle
+          label="Feel the road surface"
+          hint="Concrete, gravel, cobbles and earth roll heavier than tarmac — you go slower on screen and the trainer gets harder. Not in ERG."
+          value={settings.physics.roadSurfaces}
+          onChange={(v) => physics({ roadSurfaces: v })}
+        />
         <Toggle
           label="Estimate power from a speed sensor"
           hint="For basic (non-smart) trainers with no power meter. Uses a typical fluid-trainer curve, so treat the watts as approximate."
