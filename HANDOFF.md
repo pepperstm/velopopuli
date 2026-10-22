@@ -12,15 +12,16 @@ A free, open-source indoor-cycling app: import any GPX route, ride it on a smart
 
 It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding GPX routes over winter), was rewritten the same day from Electron/TypeScript into Rust + Tauri for low overhead, renamed "Velo Populi" and then "VeloPopuli" to match the website.
 
-## 2. Where it stands (October 2026, v0.2.0)
+## 2. Where it stands (October 2026, v0.3.0)
 
-**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks, weather), diagnostics, the relay. 73 automated tests, plus visual checks through the automated smoke harness (section 6).
+**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks, weather), the virtual-gear maths, diagnostics, the relay. 79 automated tests (plus one that needs the network and is skipped by default), plus visual checks through the automated smoke harness (section 6).
 
 **Built but not proven with real use:**
 
 | Area | State |
 |---|---|
 | **Trainers and sensors** | Protocols unit-tested against the specs. The first real trainer — a **Tacx Vortex Smart (T2180) over Bluetooth** — connected but **kept dropping out and showed no power**. Not yet diagnosed: a diagnostics report from a ride is needed. This is the top priority. |
+| **Virtual gears** | The maths is unit-tested and shifting was checked with the demo rider and the smoke harness (`VP_SMOKE_SHIFT`), but it has **never been felt on a real trainer**. |
 | **Strava** (OAuth, upload, segments, activities as ghosts) | Never run against the live API. Users must create their own API key (open source can't ship a secret). Scope is `read,activity:read_all,activity:write`. |
 | **Windows and Linux** | Built and packaged by CI on every push (and Arch's package is installed in a container and its libraries checked), but **never run by a person**. |
 | **Native renderer** (macOS, opt-in) | wgpu/Metal in an NSView under a transparent webview. Matches three.js in screenshots; HUD-over-native never checked in a real window; no clean release-build performance comparison. |
@@ -59,7 +60,8 @@ web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (s
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
-.github/workflows/build.yml   CI: tests, installers for every platform, Arch package, releases
+.github/workflows/build.yml   CI: all tests, installers for every platform, Arch package, releases
+.github/ISSUE_TEMPLATE, PULL_REQUEST_TEMPLATE.md   Bug, hardware-report and feature forms; the pull-request checklist
 resources/          99-ant-usb.rules (Linux udev rule for ANT+ sticks)
 ```
 
@@ -80,7 +82,7 @@ Rust stable + Node 20+. Linux needs `libwebkit2gtk-4.1-dev build-essential libss
 ```bash
 npm install
 npm run dev          # hot reload
-npm test             # Rust tests
+npm test             # core library tests only (npm run check runs them all)
 npm run build        # this platform's installer
 npm run build:mac    # universal (arm64 + x86_64) app + DMG, ad-hoc signed
 npx tauri build --debug --no-bundle   # quick debug binary at target/debug/velopopuli
@@ -99,7 +101,7 @@ The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branc
 
 ## 6. Testing
 
-- `cargo test --workspace` — 73 tests (core, app, relay); `npx tsc --noEmit` for the page.
+- `cargo test --workspace` — 79 tests: 72 core, 1 relay, 6 app (plus one app test that needs the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
 - **The smoke harness** is how most visual and end-to-end checking has been done: a debug build that rides (or opens a screen) by itself, saves pictures and the visible text, and quits. All the `VP_SMOKE_*` switches are documented in the wiki's [Building from source](https://github.com/pepperstm/velopopuli/wiki/Building-from-source). The most useful: `VP_SMOKE_AT` (start part-way), `VP_SMOKE_CAM=3` (overhead — good for junctions), `VP_SMOKE_WINDOW=1` (whole window with HUD), `VP_SMOKE_CLIP=6` (frames for a demo clip), `VP_SMOKE_SURFACE`, `VP_SKIP_OVERPASS`, `VP_SMOKE_REPORT`.
 - The ride-start diagnostics line `[ride] surfaces … widths …` shows what the map matching decided.
 - Good test routes: Bourg d'Oisans → Alpe d'Huez (town, river, hairpins — route it with BRouter); the Trouée d'Arenberg (OSM track "Drève des Boules d'Hérin", `surface=sett`); Meylan near Grenoble (roundabouts); any city crossing (viaducts).
