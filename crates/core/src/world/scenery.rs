@@ -832,7 +832,10 @@ fn route_road(route: &Route, beside: &Beside, kinds: &[Option<RoadKind>], mapped
     // Mapped tags, on the stretches of road that run along the route (not ones crossing it).
     let mut best = vec![f64::INFINITY; route.n];
     for way in mapped {
-        let trail = is_trail(&way.highway, way.surface, way.mtb).then_some(Trail { grade: way.mtb });
+        let trail = is_trail(&way.highway, way.surface, way.mtb, way.hiking).then(|| match way.mtb {
+            Some(g) => Trail { grade: Some(g), estimated: false },
+            None => Trail { grade: way.hiking, estimated: way.hiking.is_some() },
+        });
         let width = way.width.or_else(|| if trail.is_some() { Some(TRAIL_WIDTH) } else { highway_width(&way.highway) });
         // Fine enough that every route sample beside the way is the nearest to some piece of it.
         let line = resample(&way.line.iter().map(|p| route.to_local(p[0], p[1])).collect::<Vec<_>>(), (route.step / 2.0).min(4.0));

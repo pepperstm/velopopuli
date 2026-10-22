@@ -328,7 +328,11 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               <span>
                 {fmtEle(hud.ele, units)} · ↗ {fmtEle(hud.ascent, units)}
               </span>
-              {hud.trail && <span>{hud.trail.grade === null ? 'Trail' : `MTB trail · S${hud.trail.grade}`}</span>}
+              {hud.trail && (
+                <span>
+                  {hud.trail.grade === null ? 'Trail' : hud.trail.estimated ? `Trail · about S${hud.trail.grade}` : `MTB trail · S${hud.trail.grade}`}
+                </span>
+              )}
             </div>
           </div>
 

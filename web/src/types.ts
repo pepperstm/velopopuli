@@ -368,8 +368,8 @@ export interface RideState {
   cadenceEstimated: boolean
   /** The virtual gear, when virtual gears are on. */
   gear: { index: number; count: number; label: string } | null
-  /** The trail the rider is on (grade on the mtb:scale, S0–S6), if any. */
-  trail: { grade: number | null } | null
+  /** The trail the rider is on (grade on the mtb:scale, S0–S6, perhaps estimated from a hiking grade), if any. */
+  trail: { grade: number | null; estimated: boolean } | null
   elapsed: number
   grade: number
   ele: number

@@ -65,13 +65,16 @@ impl Surface {
     }
 }
 
-/// A stretch of the route on a trail rather than a road: an unpaved path or bridleway, anything
-/// graded for mountain bikes, or the route's own track off the mapped network. Trails are narrow,
+/// A stretch of the route on a trail rather than a road: an unpaved path, bridleway or footway,
+/// steps, anything graded for mountain bikes, or the route's own track off the mapped network. Trails are narrow,
 /// have no race barriers, and roll heavier the harder they are graded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Trail {
-    /// Mountain-bike difficulty on OpenStreetMap's `mtb:scale`, S0 (easy) to S6, if mapped.
+    /// Mountain-bike difficulty on OpenStreetMap's `mtb:scale`, S0 (easy) to S6, if known.
     pub grade: Option<u8>,
+    /// The grade is estimated from a walking trail's hiking grade (or from steps), not mapped.
+    #[serde(default)]
+    pub estimated: bool,
 }
 
 impl Trail {
@@ -102,9 +105,13 @@ impl Trail {
         })
     }
 
-    /// "S2" for a graded trail, "trail" otherwise.
+    /// "S2" for a graded trail, "~S2" for an estimated grade, "trail" otherwise.
     pub fn name(self) -> String {
-        self.grade.map_or_else(|| "trail".to_string(), |g| format!("S{g}"))
+        match (self.grade, self.estimated) {
+            (Some(g), false) => format!("S{g}"),
+            (Some(g), true) => format!("~S{g}"),
+            (None, _) => "trail".to_string(),
+        }
     }
 }
 
@@ -114,11 +121,36 @@ pub fn mtb_grade(scale: Option<&str>, imba: Option<&str>) -> Option<u8> {
     scale.and_then(|v| first_digit(v, 6)).or_else(|| imba.and_then(|v| first_digit(v, 4)))
 }
 
-/// Whether a mapped way is a trail: graded for mountain bikes, or a path or bridleway that
-/// isn't paved (a tarmac shared path is ridden like a lane).
-pub fn is_trail(highway: &str, surface: Option<Surface>, mtb: Option<u8>) -> bool {
-    mtb.is_some() || (matches!(highway, "path" | "bridleway") && !matches!(surface, Some(Surface::Asphalt | Surface::Concrete | Surface::Cobbles)))
+/// A mountain-bike grade estimated from a walking trail's hiking grade (`sac_scale`). The scales
+/// measure different things, but rough, steep, rocky paths are hard on either.
+pub fn hiking_grade(sac_scale: Option<&str>) -> Option<u8> {
+    Some(match sac_scale?.trim() {
+        "hiking" => 0,
+        "mountain_hiking" => 1,
+        "demanding_mountain_hiking" => 2,
+        "alpine_hiking" => 3,
+        "demanding_alpine_hiking" | "difficult_alpine_hiking" => 4,
+        _ => return None,
+    })
 }
+
+/// Whether a mapped way is a trail: graded for mountain bikes; steps; a path or bridleway that
+/// isn't paved (a tarmac shared path is ridden like a lane); or a footway that is plainly a
+/// walking trail — unpaved by its tags, or with a hiking grade. (Most footways are town
+/// pavements with no surface tagged, and stay roads.)
+pub fn is_trail(highway: &str, surface: Option<Surface>, mtb: Option<u8>, hiking: Option<u8>) -> bool {
+    let paved = matches!(surface, Some(Surface::Asphalt | Surface::Concrete | Surface::Cobbles));
+    mtb.is_some()
+        || match highway {
+            "steps" => true,
+            "path" | "bridleway" => !paved,
+            "footway" => !paved && (matches!(surface, Some(Surface::Gravel | Surface::Dirt)) || hiking.is_some()),
+            _ => false,
+        }
+}
+
+/// The grade given to steps with none mapped: S2 is where the mountain-bike scale puts small steps.
+pub const STEPS_GRADE: u8 = 2;
 
 /// Width of a trail with no width mapped (singletrack), and the narrowest a trail is drawn.
 pub const TRAIL_WIDTH: f64 = 1.5;
@@ -137,6 +169,9 @@ pub struct MappedWay {
     /// Mountain-bike grade (`mtb:scale`), if mapped.
     #[serde(default)]
     pub mtb: Option<u8>,
+    /// A mountain-bike grade estimated from the hiking grade (`sac_scale`), or for steps.
+    #[serde(default)]
+    pub hiking: Option<u8>,
     pub line: Vec<[f64; 2]>,
 }
 
@@ -222,6 +257,7 @@ pub fn parse_ways(json: &str) -> Result<Vec<MappedWay>, String> {
                 surface: tag("surface").and_then(Surface::from_osm),
                 width: tagged_width(tag("width").or(tag("est_width")), tag("lanes")),
                 mtb: mtb_grade(tag("mtb:scale"), tag("mtb:scale:imba")),
+                hiking: hiking_grade(tag("sac_scale")).or((tag("highway") == Some("steps")).then_some(STEPS_GRADE)),
                 line: e.geometry.iter().map(|p| [p.lat, p.lon]).collect(),
             })
         })
