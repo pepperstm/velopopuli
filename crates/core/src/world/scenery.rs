@@ -342,6 +342,8 @@ pub struct Scene {
     pub marked: Vec<bool>,
     /// Where the route is on a trail rather than a road, per route sample.
     pub trails: Vec<Option<super::surface::Trail>>,
+    /// The trail's cross-slope (rise per metre across) per route sample: berms on tight turns.
+    pub banks: Vec<f64>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
     pub counts: SceneryCounts,
@@ -962,6 +964,7 @@ impl Scene {
         let covered: Vec<bool> = (0..route.n).map(|i| scene.covers(route, route.x[i], route.z[i])).collect();
         let road = route_road(route, &beside, &nearest_kind, &scenery.ways, &covered);
         (scene.surfaces, scene.widths, scene.marked, scene.trails) = (road.surfaces, road.widths, road.marked, road.trails);
+        scene.banks = super::berms::banks(route, &scene.trails, &scene.widths, &scene.kinds);
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }

@@ -225,6 +225,12 @@ impl Session {
                 }
             }
             eprintln!("Under cover: {:?}", world.scene.covered);
+            for (from, to, banked) in velopopuli_core::world::surface_runs(&(0..route.n).map(|i| world.bank(i) != 0.0).collect::<Vec<_>>()) {
+                if banked {
+                    let steepest = (from..to).map(|i| world.bank(i).abs().atan().to_degrees()).fold(0.0, f64::max);
+                    eprintln!("Berm from {:.0} m to {:.0} m, up to {steepest:.0}°", from as f64 * route.step, to as f64 * route.step);
+                }
+            }
             let c = world.scene.counts;
             eprintln!("Other roads: {} drawn, {} of their bridges", c.roads, c.road_bridges);
             for deck in &world.scene.decks {
@@ -321,7 +327,7 @@ impl Session {
         crate::diag::event(
             "ride",
             format!(
-                "surfaces {} trails {} widths {}",
+                "surfaces {} trails {} berms {} widths {}",
                 velopopuli_core::world::surface_runs(&world.scene.surfaces)
                     .iter()
                     .map(|(a, b, s)| format!("{}:{:.0}-{:.0}m", s.name(), *a as f64 * route.step, *b as f64 * route.step))
@@ -332,6 +338,7 @@ impl Session {
                     .filter_map(|(a, b, t)| t.map(|t| format!("{}:{:.0}-{:.0}m", t.name(), *a as f64 * route.step, *b as f64 * route.step)))
                     .reduce(|a, b| format!("{a} {b}"))
                     .unwrap_or_else(|| "none".into()),
+                velopopuli_core::world::surface_runs(&(0..route.n).map(|i| world.bank(i) != 0.0).collect::<Vec<_>>()).iter().filter(|r| r.2).count(),
                 world.scene.widths.iter().step_by(((250.0 / route.step) as usize).max(1)).map(|w| format!("{w:.1}")).collect::<Vec<_>>().join(",")
             ),
         );

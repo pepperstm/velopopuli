@@ -26,6 +26,8 @@ export interface Route {
   lon: Float64Array
   /** Width of the road in metres, per sample (it follows the mapped road). */
   width: Float64Array
+  /** Cross-slope per sample (rise per metre across, + when the +offset side is higher): berms on tight trail turns. */
+  bank: Float64Array
   climbs: Climb[]
 }
 
@@ -33,6 +35,22 @@ export interface Route {
 export function halfWidthAt(route: Route, dist: number): number {
   const i = Math.max(0, Math.min(route.n - 1, Math.round(dist / route.step)))
   return (route.width[i] ?? 6.5) / 2
+}
+
+/**
+ * The trail's cross-slope at `dist`, and how far the surface `offset` metres across stands above
+ * the centre-line height (the inside edge of a berm stays put; the outside rises). As World::bank_at.
+ */
+export function bankAt(route: Route, dist: number, offset: number): [number, number] {
+  const f = Math.max(0, Math.min(route.n - 1, dist / route.step))
+  const i = Math.min(route.n - 2, Math.floor(f))
+  const t = f - i
+  const at = (k: number): [number, number] => {
+    const s = route.bank[k] ?? 0
+    return [s, Math.abs(s) * ((route.width[k] ?? 6.5) / 2) + offset * s]
+  }
+  const [a, b] = [at(i), at(i + 1)]
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
 }
 
 export interface RoutePos {

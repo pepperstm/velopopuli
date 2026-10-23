@@ -969,6 +969,58 @@ mod scenery {
     }
 
     #[test]
+    fn banks_tight_turns_on_mountain_bike_trails() {
+        // North 400 m, a right-hand turn of 8 m radius, then east 400 m.
+        let r = 8.0;
+        let ll = |north: f64, east: f64| [45.0 + north / M_PER_DEG, 7.0 + east / (M_PER_DEG * 45f64.to_radians().cos())];
+        let mut pts: Vec<[f64; 2]> = (0..=40).map(|k| ll(k as f64 * 10.0, 0.0)).collect();
+        pts.extend((1..=9).map(|k| {
+            let a = k as f64 * 10.0_f64.to_radians();
+            ll(400.0 + r * a.sin(), r - r * a.cos())
+        }));
+        pts.extend((1..=40).map(|k| ll(400.0 + r, r + k as f64 * 10.0)));
+        let raw: Vec<RawPoint> = pts.iter().map(|p| RawPoint { lat: p[0], lon: p[1], ele: Some(100.0) }).collect();
+        let route = Arc::new(build_route("berm", &raw).unwrap());
+        let trail = |mtb: Option<u8>, hiking: Option<u8>| Scenery {
+            tiles: corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect(),
+            ways: vec![MappedWay { highway: "path".into(), surface: None, width: None, mtb, hiking, line: pts.clone() }],
+            way_tags: WAY_TAGS,
+            ..Default::default()
+        };
+        let world = World::with_map(route.clone(), None, 0.0, Some(&trail(Some(2), None)), &[]);
+        // The bend's centre, and the sample where the bank is steepest.
+        let c = route.to_local(ll(400.0, r)[0], ll(400.0, r)[1]);
+        let i = (0..route.n).max_by(|&a, &b| world.bank(a).abs().total_cmp(&world.bank(b).abs())).unwrap();
+        assert!(world.bank(i).abs() > 15f64.to_radians().tan(), "{}", world.bank(i));
+        assert!((route.x[i] - c.0).hypot(route.z[i] - c.1) < 20.0, "steepest at the turn");
+        // Flat on the straights.
+        assert_eq!(world.bank((150.0 / route.step) as usize), 0.0);
+        assert_eq!(world.bank(route.n - 20), 0.0);
+        // The inside edge stays at the trail's height; the outside, away from the bend's centre, is raised.
+        let (a, b) = (i - 1, i + 1);
+        let (tx, tz) = (route.x[b] - route.x[a], route.z[b] - route.z[a]);
+        let len = tx.hypot(tz);
+        let inside = ((c.0 - route.x[i]) * tz / len - (c.1 - route.z[i]) * tx / len).signum();
+        let h = world.half_width(i);
+        assert!(world.surface_lift(i, inside * h).abs() < 1e-9);
+        assert!(world.surface_lift(i, -inside * h) > 0.4);
+        assert!(world.surface_lift(i, -inside * h) <= 1.0 + 1e-9);
+        // The road mesh follows: its outside edge stands higher than its inside edge there.
+        let road = world.road();
+        let y = |k: usize| road.positions[(i * ROAD_SECTION + k) * 3 + 1] as f64;
+        let (left, right) = (y(2), y(3));
+        assert!(if inside > 0.0 { left > right + 0.4 } else { right > left + 0.4 }, "{left} {right}");
+        // A rider at the centre stands half-way up, leaning in.
+        let (bank, lift) = world.bank_at(i as f64 * route.step, 0.0);
+        assert!((lift - world.bank(i).abs() * h).abs() < 1e-9 && bank == world.bank(i));
+        // Walking paths (an estimated grade) and roads have no berms.
+        let walk = World::with_map(route.clone(), None, 0.0, Some(&trail(None, Some(2))), &[]);
+        assert!((0..route.n).all(|i| walk.bank(i) == 0.0));
+        let plain = World::with_map(route.clone(), None, 0.0, Some(&Scenery::default()), &[]);
+        assert!((0..route.n).all(|i| plain.bank(i) == 0.0));
+    }
+
+    #[test]
     fn leaves_the_mapped_roads_on_a_dirt_track() {
         // 3 km: a lane from 0 to 1000 m, a 60 m gap, the lane again to 1500 m, nothing mapped
         // from 1500 to 2500 m, then the lane to the end.

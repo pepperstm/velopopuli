@@ -3,6 +3,7 @@
 //! off the render thread.
 
 mod barriers;
+mod berms;
 mod buildings;
 mod dem;
 mod height;
@@ -473,9 +474,11 @@ impl World {
             let offsets = [-foot - 0.4, -foot, -edge, edge, foot, foot + 0.4];
             for k in 0..ROAD_SECTION {
                 let offset = if offsets[k] * curvature > 0.0 { offsets[k].signum() * offsets[k].abs().min(inside) } else { offsets[k] };
+                // A berm raises the outside edge of the riding surface; the embankment falls from it.
+                let berm = if k == 2 || k == 3 { self.surface_lift(i, offset) } else { 0.0 };
                 mesh.positions.extend_from_slice(&[
                     (r.x[i] + tz * offset) as f32,
-                    (r.ele[i] as f64 + ROAD_LIFT + if kinds[i] == BRIDGE { deck[k] } else { drops[k] }) as f32,
+                    (r.ele[i] as f64 + ROAD_LIFT + berm + if kinds[i] == BRIDGE { deck[k] } else { drops[k] }) as f32,
                     (r.z[i] - tx * offset) as f32,
                 ]);
                 mesh.uvs.extend_from_slice(&[us[k], (i as f64 * r.step / 12.0) as f32]);

@@ -42,7 +42,7 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
   waymarked         Waymarked MTB routes (route=mtb relations): listing an area, joining a relation's ways into one line, GPX
   devices/          BLE GATT (FTMS, CPS, CSC, HR, Tacx FE-C tunnel) and ANT+ (framing, FE-C, power, HR, S&C) codecs; sensor hub (most direct source wins)
   world/            mod.rs: World, chunk/horizon meshes, the route road ribbon
-                    height.rs: height field pinned to the road; dem.rs: elevation tiles
+                    height.rs: height field pinned to the road; dem.rs: elevation tiles; berms.rs: banked trail turns
                     mvt.rs: vector-tile decoder; scenery.rs: forests, water, other roads, route↔map matching, Kerb lookups
                     roads.rs: draping other roads on terrain; structures.rs: decks, bores, overbridges
                     buildings.rs: OSM footprints → meshes; surface.rs: route surface/width/markings from OSM tags
@@ -154,3 +154,4 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Fonts on canvas:** barrier banners are drawn on a canvas in Manrope; `Ride.tsx` waits for `document.fonts.load` before building the world, or the banner falls back to a system font.
 - **The native renderer is fed partly from the page** (`native.ts`: textures, text labels, props baked from the three.js scene, rider poses) and partly from Rust meshes; anything added to the three.js scene that native should also show must be either baked or reimplemented in `native/mod.rs` (barriers, road surfaces and precipitation are reimplemented there).
 - **Barriers and the road width:** anything placed beside the route must use `World::half_width(i)` (Rust) or `halfWidthAt()` (page), never a constant.
+- **Berms tilt the riding surface:** anything standing *on* the route's surface (riders) must add `World::bank_at` (Rust) or `bankAt()` (page) — the lift at its offset, and the roll. The inside edge of a berm is at the centre-line height; the outside is raised.
