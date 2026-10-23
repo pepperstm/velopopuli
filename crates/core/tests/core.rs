@@ -1038,9 +1038,9 @@ mod scenery {
         );
         let i = (1000.0 / route.step) as usize;
         assert_eq!(logs.field.kinds()[i], BRIDGE);
-        // Planks on the trail's bridge, earth either side of it; the road's bridge keeps its surface.
+        // Planks on the trail's bridge, singletrack either side of it; the road's bridge keeps its surface.
         assert_eq!(logs.road().looks[i], velopopuli_core::world::TIMBER);
-        assert_eq!(logs.road().looks[(900.0 / route.step) as usize], Surface::Dirt as u8);
+        assert_eq!(logs.road().looks[(900.0 / route.step) as usize], velopopuli_core::world::SINGLETRACK);
         assert_ne!(concrete.road().looks[i], velopopuli_core::world::TIMBER);
         // How far from the route's line anything on the bridge reaches.
         let reach = |w: &World| {
@@ -1078,6 +1078,7 @@ mod scenery {
         assert_eq!(s[at(2000.0)], Surface::Dirt);
         assert_eq!(world.scene.trails[at(2000.0)], Some(Trail::default()));
         assert!((w[at(2000.0)] - 3.0).abs() < 0.05, "{}", w[at(2000.0)]);
+        // A track, not singletrack: it is wider, with two ruts.
         assert_eq!(world.road().looks[at(2000.0)], Surface::Dirt as u8);
         // On the lane, and across the short gap in it, still tarmac.
         assert_eq!(s[at(500.0)], Surface::Asphalt);
