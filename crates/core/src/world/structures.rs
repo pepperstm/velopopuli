@@ -1,6 +1,6 @@
 //! The built things along the route that aren't buildings: bridge parapets and
-//! piers, tunnel bores with their portals and the land over them, and the
-//! bridges that carry other roads and railways across overhead.
+//! piers (or, on a trail, a log bridge), tunnel bores with their portals and the
+//! land over them, and the bridges that carry other roads and railways across overhead.
 
 use super::height::{smoothstep, BLEND, BRIDGE, TUNNEL};
 use super::mesh::TriMesh;
@@ -31,6 +31,14 @@ const ASPHALT: [f64; 3] = [0.30, 0.30, 0.32];
 const BALLAST: [f64; 3] = [0.45, 0.41, 0.37];
 const BANK: [f64; 3] = [0.36, 0.48, 0.24];
 const LAMP: [f64; 3] = [1.0, 0.90, 0.66];
+const TIMBER: [f64; 3] = [0.52, 0.39, 0.26];
+const TIMBER_DARK: [f64; 3] = [0.36, 0.26, 0.17];
+
+/// A log bridge: the logs under its planks, its handrail, and the trestles under a longer span.
+const LOG_RADIUS: f64 = 0.17;
+const RAIL_OUT: f64 = 0.22;
+const RAIL_TOP: f64 = 1.05;
+const TRESTLE_EVERY_M: f64 = 8.0;
 
 /// Half-width of the bridge deck, out to the slab edge.
 /// A bridge deck reaches this far beyond the edge of the road on it.
@@ -63,6 +71,8 @@ impl World {
         let mut out = Structures::default();
         for (kind, from, to) in runs(self.field.kinds()) {
             match kind {
+                // A trail crosses on a log bridge; a road on a concrete one.
+                BRIDGE if (from..to).filter(|&i| self.timber(i)).count() * 2 >= to - from => self.log_bridge(&mut out.lit, from, to),
                 BRIDGE => self.bridge(&mut out.lit, from, to),
                 TUNNEL => self.tunnel(&mut out, from, to),
                 _ => {}
@@ -114,6 +124,77 @@ impl World {
             let ground = corners.iter().map(|c| self.field.height(c.0, c.1).0).fold(f64::MAX, f64::min);
             if top - ground > 1.5 {
                 self.block(mesh, corners, ground - 1.5, top, CONCRETE);
+            }
+        }
+    }
+
+    /// Whether sample `i` is on a log bridge: a bridge on a trail.
+    pub(super) fn timber(&self, i: usize) -> bool {
+        self.field.kinds().get(i) == Some(&BRIDGE) && self.scene.trails.get(i).is_some_and(Option::is_some)
+    }
+
+    /// The parts of a log bridge the planks don't supply: logs along the span underneath, a
+    /// handrail on posts each side, and timber trestles where the span is long and high.
+    fn log_bridge(&self, mesh: &mut TriMesh, from: usize, to: usize) {
+        let (wood, dark) = (rgb(TIMBER), rgb(TIMBER_DARK));
+        let to = to.min(self.route.n - 1);
+        let across = |i: usize| {
+            let (tx, tz) = self.heading(i);
+            [tz, 0.0, -tx]
+        };
+        for i in from..to {
+            let (h0, h1) = (self.half_width(i), self.half_width(i + 1));
+            // Three logs: one under each edge of the planks and one down the middle.
+            for place in [-1.0, 0.0, 1.0] {
+                let (c0, c1) = (place * (h0 - 0.2), place * (h1 - 0.2));
+                let below = -0.1 - LOG_RADIUS;
+                for k in 0..8 {
+                    let (a, b) = (k as f64 * std::f64::consts::FRAC_PI_4, (k + 1) as f64 * std::f64::consts::FRAC_PI_4);
+                    let at = |i: usize, c: f64, t: f64| self.beside(i, c + LOG_RADIUS * t.cos(), below + LOG_RADIUS * t.sin());
+                    let mid = (a + b) / 2.0;
+                    let n = across(i).map(|v| v * mid.cos());
+                    mesh.quad([at(i, c0, a), at(i + 1, c1, a), at(i + 1, c1, b), at(i, c0, b)], [n[0], mid.sin(), n[2]], [if mid.sin() > 0.0 { wood } else { dark }; 4]);
+                }
+            }
+            // The handrail: a top rail and a middle one each side, faced both ways.
+            for side in [-1.0, 1.0] {
+                let (a0, a1) = (side * (h0 + RAIL_OUT), side * (h1 + RAIL_OUT));
+                for (lo, hi) in [(RAIL_TOP - 0.1, RAIL_TOP), (0.48, 0.56)] {
+                    let face = [self.beside(i, a0, lo), self.beside(i + 1, a1, lo), self.beside(i + 1, a1, hi), self.beside(i, a0, hi)];
+                    let out = across(i).map(|v| v * side);
+                    mesh.quad(face, out, [dark, dark, wood, wood]);
+                    mesh.quad(face, out.map(|v| -v), [dark, dark, wood, wood]);
+                    mesh.quad([self.beside(i, a0 - 0.04, hi), self.beside(i + 1, a1 - 0.04, hi), self.beside(i + 1, a1 + 0.04, hi), self.beside(i, a0 + 0.04, hi)], [0.0, 1.0, 0.0], [wood; 4]);
+                }
+            }
+        }
+        // Posts for the handrail at every sample, from the timber edge to the top rail.
+        let r = &self.route;
+        let foot = |i: usize, across: f64, along: f64| {
+            let (tx, tz) = self.heading(i);
+            (r.x[i] + tz * across + tx * along, r.z[i] - tx * across + tz * along)
+        };
+        let deck = |i: usize| r.ele[i] as f64 + ROAD_LIFT;
+        for i in from..=to {
+            for side in [-1.0, 1.0] {
+                let c = side * (self.half_width(i) + RAIL_OUT);
+                let corners = [foot(i, c - 0.06, -0.06), foot(i, c + 0.06, -0.06), foot(i, c + 0.06, 0.06), foot(i, c - 0.06, 0.06)];
+                self.block(mesh, corners, deck(i) - 0.3, deck(i) + RAIL_TOP + 0.05, TIMBER_DARK);
+            }
+        }
+        // Trestles under a longer span, where the ground is far enough below: a pair of posts.
+        let span = (to - from) as f64 * r.step;
+        let trestles = (span / TRESTLE_EVERY_M).floor() as usize;
+        for k in 1..=trestles.min(200) {
+            let i = from + ((to - from) * k) / (trestles + 1);
+            let top = deck(i) - 0.1 - 2.0 * LOG_RADIUS;
+            for side in [-1.0, 1.0] {
+                let c = side * (self.half_width(i) - 0.2);
+                let corners = [foot(i, c - 0.13, -0.13), foot(i, c + 0.13, -0.13), foot(i, c + 0.13, 0.13), foot(i, c - 0.13, 0.13)];
+                let ground = corners.iter().map(|p| self.field.height(p.0, p.1).0).fold(f64::MAX, f64::min);
+                if top - ground > 0.8 {
+                    self.block(mesh, corners, ground - 0.5, top, TIMBER_DARK);
+                }
             }
         }
     }

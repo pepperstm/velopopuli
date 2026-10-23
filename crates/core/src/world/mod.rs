@@ -25,7 +25,7 @@ pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, L
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
 pub use surface::{
-    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, UNMARKED, WAY_TAGS,
+    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, TIMBER, UNMARKED, WAY_TAGS,
 };
 
 use std::sync::Arc;
@@ -443,6 +443,8 @@ impl World {
     }
 
     pub fn road(&self) -> RoadMesh {
+        // A log bridge's deck: planks, and a timber edge a little below them.
+        const PLANKS: [f64; 6] = [-0.3, -0.1, 0.0, 0.0, -0.1, -0.3];
         let r = &self.route;
         let n = r.n;
         let drops = [-0.9 - WALL_DEPTH, -0.9, 0.0, 0.0, -0.9, -0.9 - WALL_DEPTH];
@@ -453,6 +455,7 @@ impl World {
         let us = [0.0f32, 0.0, 20.0 / 256.0, 236.0 / 256.0, 1.0, 1.0];
         let looks = (0..n)
             .map(|i| match self.scene.surfaces.get(i) {
+                _ if self.timber(i) => TIMBER,
                 Some(Surface::Asphalt) if !self.scene.marked.get(i).copied().unwrap_or(true) => UNMARKED,
                 Some(s) => *s as u8,
                 None => 0,
@@ -470,15 +473,28 @@ impl World {
             // cross over itself, so it is pulled in to just short of the bend's centre.
             let curvature = if i > 0 && i + 1 < n { ((r.x[i + 1] - 2.0 * r.x[i] + r.x[i - 1]) * tz - (r.z[i + 1] - 2.0 * r.z[i] + r.z[i - 1]) * tx) / (r.step * r.step) } else { 0.0 };
             let inside = if curvature.abs() > 1e-6 { 0.8 / curvature.abs() } else { f64::INFINITY };
-            let (edge, foot) = (self.half_width(i), self.half_width(i) + 2.6);
-            let offsets = [-foot - 0.4, -foot, -edge, edge, foot, foot + 0.4];
+            // A log bridge is barely wider than the trail: planks on a thin timber edge. The slim
+            // section carries on a sample past each end, so the embankment narrows over firm ground.
+            let slim = self.timber(i) || self.timber(i.saturating_sub(1)) || self.timber((i + 1).min(n - 1));
+            let edge = self.half_width(i);
+            let (foot, beyond) = if slim { (edge + 0.3, 0.05) } else { (edge + 2.6, 0.4) };
+            let offsets = [-foot - beyond, -foot, -edge, edge, foot, foot + beyond];
             for k in 0..ROAD_SECTION {
                 let offset = if offsets[k] * curvature > 0.0 { offsets[k].signum() * offsets[k].abs().min(inside) } else { offsets[k] };
                 // A berm raises the outside edge of the riding surface; the embankment falls from it.
                 let berm = if k == 2 || k == 3 { self.surface_lift(i, offset) } else { 0.0 };
                 mesh.positions.extend_from_slice(&[
                     (r.x[i] + tz * offset) as f32,
-                    (r.ele[i] as f64 + ROAD_LIFT + berm + if kinds[i] == BRIDGE { deck[k] } else { drops[k] }) as f32,
+                    (r.ele[i] as f64
+                        + ROAD_LIFT
+                        + berm
+                        + if slim {
+                            PLANKS[k]
+                        } else if kinds[i] == BRIDGE {
+                            deck[k]
+                        } else {
+                            drops[k]
+                        }) as f32,
                     (r.z[i] - tx * offset) as f32,
                 ]);
                 mesh.uvs.extend_from_slice(&[us[k], (i as f64 * r.step / 12.0) as f32]);

@@ -2,10 +2,11 @@ import * as THREE from 'three'
 
 /**
  * Textures for the route's road, one per look (`Surface as u8` in Rust: asphalt, concrete,
- * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road). Across: the gravel shoulder on the outer 20/256ths
+ * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road;
+ * then 6, the planks of a log bridge on a trail). Across: the gravel shoulder on the outer 20/256ths
  * each side (stretched down the embankment), the surface between. Along: 12 m per repeat.
  */
-export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane'] as const
+export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber'] as const
 
 /** Deterministic noise, so both renderers get the same picture. */
 function random(seed: number): () => number {
@@ -104,6 +105,26 @@ function draw(surface: number): HTMLCanvasElement {
       ctx.fillRect(160, 0, 34, 256)
       speckle(ctx, 256, 256, rnd, 4200, [150, 136, 112], 70, 0.6, 2)
       speckle(ctx, 256, 256, rnd, 500, [200, 190, 172], 30, 0.7, 1)
+      return c
+    }
+    case 'timber': {
+      // Planks laid across, about 0.2 m wide, each a slightly different brown, with dark gaps.
+      const [c, ctx] = canvas(256, 512)
+      shoulders(ctx, 256, 512, '#4f3a26')
+      const plank = 512 / 60
+      for (let k = 0; k < 60; k++) {
+        const r = 128 + rnd() * 34
+        ctx.fillStyle = `rgb(${r},${r * 0.76},${r * 0.5})`
+        ctx.fillRect(20, k * plank, 216, plank - 1.4)
+        // Grain along each plank, and a nail head near each end.
+        ctx.fillStyle = 'rgba(70,48,28,0.25)'
+        for (let g = 0; g < 3; g++) ctx.fillRect(20, k * plank + 1 + rnd() * (plank - 3), 216, 1)
+        ctx.fillStyle = 'rgba(40,36,32,0.8)'
+        ctx.fillRect(30, k * plank + plank / 2 - 1, 2, 2)
+        ctx.fillRect(224, k * plank + plank / 2 - 1, 2, 2)
+      }
+      ctx.fillStyle = '#2c2116'
+      for (let k = 0; k < 60; k++) ctx.fillRect(20, (k + 1) * plank - 1.4, 216, 1.4)
       return c
     }
     case 'dirt': {

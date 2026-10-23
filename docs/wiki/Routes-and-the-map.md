@@ -30,6 +30,8 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
   **Berms** — tight turns on trails with a mapped mountain-bike grade are banked: the outside edge rises (up to 35°, and never more than a metre), the inside stays at ground level, and riders lean into the turn with it. A bend counts as tight from a radius of about 30 m, fully banked from 12 m — measured on the route as ridden, whose corners are rounded off a little. Walking paths and farm tracks stay flat.
 
+  **Log bridges** — where a trail crosses a mapped bridge, it's a timber one: a plank deck barely wider than the trail, logs underneath, a wooden handrail on posts each side, and timber trestles under a longer span. Roads keep their concrete bridges.
+
   **Off the mapped roads** — where your route crosses a field, a beach or a trail nobody has mapped, for 100 m or more, you ride a 3 m dirt track. Shorter gaps (junctions, a GPS trace wandering off the road) keep the road either side, and where no map data could be loaded nothing is assumed: the road stays tarmac.
 
 ![The Arenberg cobbles](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-cobbles.jpg)

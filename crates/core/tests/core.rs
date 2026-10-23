@@ -1021,6 +1021,49 @@ mod scenery {
     }
 
     #[test]
+    fn a_trail_crosses_on_a_log_bridge() {
+        // 3 km of graded singletrack with a 30 m bridge at 1000 m; and the same on a road.
+        let route = Arc::new(build_route("bridge", &straight(3000.0, |_| Some(100.0))).unwrap());
+        let scenery = |trail: bool| Scenery {
+            tiles: corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect(),
+            crossings: vec![road(&route, false, false, &[(0.0, 985.0), (0.0, 1015.0)])],
+            roads: vec![Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(2.0, 0.0), (2.0, 3000.0)]) }],
+            ways: if trail { vec![MappedWay { highway: "path".into(), surface: None, width: None, mtb: Some(1), hiking: None, line: geo(&route, &[(1.0, 0.0), (1.0, 3000.0)]) }] } else { Vec::new() },
+            way_tags: WAY_TAGS,
+            ..Default::default()
+        };
+        let (logs, concrete) = (
+            World::with_map(route.clone(), Some(level_ground(&route, 96.0)), 0.0, Some(&scenery(true)), &[]),
+            World::with_map(route.clone(), Some(level_ground(&route, 96.0)), 0.0, Some(&scenery(false)), &[]),
+        );
+        let i = (1000.0 / route.step) as usize;
+        assert_eq!(logs.field.kinds()[i], BRIDGE);
+        // Planks on the trail's bridge, earth either side of it; the road's bridge keeps its surface.
+        assert_eq!(logs.road().looks[i], velopopuli_core::world::TIMBER);
+        assert_eq!(logs.road().looks[(900.0 / route.step) as usize], Surface::Dirt as u8);
+        assert_ne!(concrete.road().looks[i], velopopuli_core::world::TIMBER);
+        // How far from the route's line anything on the bridge reaches.
+        let reach = |w: &World| {
+            let s = w.structures();
+            (0..s.lit.vertices())
+                .filter_map(|v| {
+                    let (x, z) = (s.lit.positions[v * 3] as f64, s.lit.positions[v * 3 + 2] as f64);
+                    let k = (0..route.n).min_by(|&a, &b| (route.x[a] - x).hypot(route.z[a] - z).total_cmp(&(route.x[b] - x).hypot(route.z[b] - z)))?;
+                    ((980.0..1020.0).contains(&(k as f64 * route.step))).then(|| (route.x[k] - x).hypot(route.z[k] - z))
+                })
+                .fold(0.0, f64::max)
+        };
+        // The log bridge is no wider than its handrail; the road bridge has a broad deck and parapets.
+        let h = logs.half_width(i);
+        assert!(reach(&logs) < h + 0.4, "{} vs half-width {h}", reach(&logs));
+        assert!(reach(&concrete) > concrete.half_width(i) + 2.5);
+        // Its deck is barely wider than the trail.
+        let road = logs.road();
+        let edge = |k: usize| (road.positions[(i * ROAD_SECTION + k) * 3] as f64 - route.x[i]).abs();
+        assert!(edge(0) < h + 0.4);
+    }
+
+    #[test]
     fn leaves_the_mapped_roads_on_a_dirt_track() {
         // 3 km: a lane from 0 to 1000 m, a 60 m gap, the lane again to 1500 m, nothing mapped
         // from 1500 to 2500 m, then the lane to the end.

@@ -204,6 +204,8 @@ pub fn highway_marked(highway: &str) -> bool {
 /// How the route's road is drawn at each sample: `Surface as u8`, or `UNMARKED` for
 /// tarmac without a centre line (anything smaller than a main road).
 pub const UNMARKED: u8 = 5;
+/// …or `TIMBER` for the planks of a log bridge on a trail.
+pub const TIMBER: u8 = 6;
 
 /// Width in metres from a `width` tag ("5", "5.5 m", "6m") or, failing that, a `lanes` tag.
 pub fn tagged_width(width: Option<&str>, lanes: Option<&str>) -> Option<f64> {
