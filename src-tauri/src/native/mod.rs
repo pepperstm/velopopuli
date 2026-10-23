@@ -19,7 +19,7 @@ use bytemuck::{Pod, Zeroable};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use velopopuli_core::ride::{RideEngine, RivalKind};
-use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, LAYOUT, TIMBER, UNMARKED};
+use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, LAYOUT, SINGLETRACK, TIMBER, UNMARKED};
 use wgpu::util::DeviceExt;
 
 use host::HostView;
@@ -1389,6 +1389,7 @@ impl SceneMeshes {
                 let texture = match Surface::ALL.get(look as usize) {
                     _ if look == UNMARKED => "road_lane",
                     _ if look == TIMBER => "road_timber",
+                    _ if look == SINGLETRACK => "road_singletrack",
                     Some(Surface::Concrete) => "road_concrete",
                     Some(Surface::Cobbles) => "road_cobbles",
                     Some(Surface::Gravel) => "road_gravel",

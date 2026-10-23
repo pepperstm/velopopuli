@@ -25,7 +25,8 @@ pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, L
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
 pub use surface::{
-    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, TIMBER, UNMARKED, WAY_TAGS,
+    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, SINGLETRACK,
+    SINGLETRACK_WIDTH, TIMBER, UNMARKED, WAY_TAGS,
 };
 
 use std::sync::Arc;
@@ -456,6 +457,7 @@ impl World {
         let looks = (0..n)
             .map(|i| match self.scene.surfaces.get(i) {
                 _ if self.timber(i) => TIMBER,
+                Some(Surface::Dirt) if self.scene.trails.get(i).is_some_and(Option::is_some) && self.half_width(i) * 2.0 < SINGLETRACK_WIDTH => SINGLETRACK,
                 Some(Surface::Asphalt) if !self.scene.marked.get(i).copied().unwrap_or(true) => UNMARKED,
                 Some(s) => *s as u8,
                 None => 0,

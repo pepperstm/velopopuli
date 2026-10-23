@@ -3,10 +3,10 @@ import * as THREE from 'three'
 /**
  * Textures for the route's road, one per look (`Surface as u8` in Rust: asphalt, concrete,
  * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road;
- * then 6, the planks of a log bridge on a trail). Across: the gravel shoulder on the outer 20/256ths
+ * then 6, the planks of a log bridge on a trail; 7, singletrack, a narrow earth trail). Across: the gravel shoulder on the outer 20/256ths
  * each side (stretched down the embankment), the surface between. Along: 12 m per repeat.
  */
-export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber'] as const
+export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber', 'singletrack'] as const
 
 /** Deterministic noise, so both renderers get the same picture. */
 function random(seed: number): () => number {
@@ -142,6 +142,52 @@ function draw(surface: number): HTMLCanvasElement {
         const side = rnd()
         const x = side < 0.35 ? 20 + rnd() * 26 : side < 0.7 ? 210 + rnd() * 26 : 112 + rnd() * 32
         ctx.fillRect(x, rnd() * 256, 2, 3)
+      }
+      return c
+    }
+    case 'singletrack': {
+      // Packed earth worn to one darker, smoother line down the middle, with stones, leaf
+      // litter and grass at the edges, and roots across it here and there.
+      const [c, ctx] = canvas(256, 256)
+      shoulders(ctx, 256, 256, '#56703a')
+      ctx.fillStyle = '#76593f'
+      ctx.fillRect(20, 0, 216, 256)
+      // The worn line: dark at its heart, fading out to the sides.
+      for (let k = 0; k < 6; k++) {
+        ctx.fillStyle = 'rgba(78,56,38,0.22)'
+        ctx.fillRect(84 + k * 6, 0, 88 - k * 12, 256)
+      }
+      speckle(ctx, 256, 256, rnd, 2400, [112, 86, 62], 46, 0.5, 2)
+      // Stones, mostly off the worn line.
+      for (let i = 0; i < 90; i++) {
+        const x = rnd() < 0.5 ? 24 + rnd() * 60 : 172 + rnd() * 60
+        const g = 120 + rnd() * 50
+        ctx.fillStyle = `rgb(${g},${g * 0.96},${g * 0.9})`
+        ctx.fillRect(x, rnd() * 256, 2 + rnd() * 3, 2 + rnd() * 2)
+      }
+      // Leaf litter and grass creeping in from the edges.
+      for (let i = 0; i < 900; i++) {
+        const edge = rnd() < 0.5
+        const x = edge ? 20 + rnd() * rnd() * 56 : 236 - rnd() * rnd() * 56
+        ctx.fillStyle = rnd() < 0.6 ? 'rgba(86,112,58,0.7)' : 'rgba(120,84,44,0.6)'
+        ctx.fillRect(x, rnd() * 256, 2, 3)
+      }
+      // Roots: dark, slightly bent bands running across the trail.
+      for (let r = 0; r < 4; r++) {
+        let y = 20 + r * 62 + rnd() * 30
+        const tilt = (rnd() - 0.5) * 0.5
+        const from = 20 + rnd() * 50
+        const to = 236 - rnd() * 50
+        const line: [number, number][] = []
+        for (let x = from; x < to; x += 2) {
+          y += tilt + (rnd() - 0.5) * 1.2
+          line.push([x, y])
+        }
+        ctx.fillStyle = 'rgba(58,40,26,0.9)'
+        for (const [x, y] of line) ctx.fillRect(x, y, 2, 3)
+        // Worn pale on top where tyres cross it.
+        ctx.fillStyle = 'rgba(150,118,84,0.5)'
+        for (const [x, y] of line) ctx.fillRect(x, y - 1, 2, 1)
       }
       return c
     }
