@@ -74,7 +74,10 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
     let native = ''
     if (smokeHooks.native) {
       const [frames, error] = await api.native.capture()
-      await new Promise((r) => setTimeout(r, 600))
+      // Wait for it to be written (a debug build takes a few seconds), but not for ever.
+      for (let waited = 0; waited < 30000 && (await api.native.saving()); waited += 200) {
+        await new Promise((r) => setTimeout(r, 200))
+      }
       native = `\n--- native frames drawn: ${frames}${error ? ` (error: ${error})` : ''}`
     }
     const tiles = document.querySelectorAll('.leaflet-tile-loaded').length

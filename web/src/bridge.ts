@@ -107,7 +107,8 @@ export const api = {
     stop: () => invoke<void>('native_stop'),
     camera: (index?: number) => invoke<void>('native_camera', { index: index ?? null }),
     look: (look: Record<string, unknown>) => invoke<void>('native_look', { look }),
-    capture: () => invoke<[number, string | null]>('native_capture')
+    capture: () => invoke<[number, string | null]>('native_capture'),
+    saving: () => invoke<boolean>('native_saving')
   },
   weatherNow: (lat: number, lon: number) => invoke<number>('weather_now', { lat, lon }),
   stravaActivities: () => invoke<StravaActivity[]>('strava_activities'),

@@ -41,6 +41,7 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_SMOKE_WORKOUT` | Ride with this workout (e.g. `builtin-sweetspot`) |
 | `VP_SMOKE_GHOSTS`, `VP_SMOKE_ROOM` | Race these ghosts / join this group-ride room |
 | `VP_SMOKE_SURFACE` | Lay the whole route in one surface (0 tarmac, 1 concrete, 2 cobbles, 3 gravel, 4 dirt) |
+| *(native renderer)* | With `"nativeRenderer": true` in `data/settings.json`, also saves the native renderer's own frame as `<name>.native.png` (macOS); the app waits for it to be written before quitting |
 | `VP_SMOKE_WINDOW` | Also save the whole window, HUD included, as `<name>.window.png` (macOS) |
 | `VP_SMOKE_CLIP` | Save this many seconds of window frames (15 fps) to `<name>.frames/` for demo clips |
 | `VP_SMOKE_REPORT` | Also save a diagnostics report here |
