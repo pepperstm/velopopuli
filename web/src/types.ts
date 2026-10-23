@@ -370,6 +370,8 @@ export interface RideState {
   gear: { index: number; count: number; label: string } | null
   /** The trail the rider is on (grade on the mtb:scale, S0–S6, perhaps estimated from a hiking grade), if any. */
   trail: { grade: number | null; estimated: boolean } | null
+  /** Riding through a ford. */
+  ford: boolean
   elapsed: number
   grade: number
   ele: number

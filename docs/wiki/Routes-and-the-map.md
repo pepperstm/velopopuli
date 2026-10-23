@@ -32,6 +32,8 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
   **Log bridges** — where a trail crosses a mapped bridge, it's a timber one: a plank deck barely wider than the trail, logs underneath, a wooden handrail on posts each side, and timber trestles under a longer span. Roads keep their concrete bridges.
 
+  **Fords** — where a trail crosses a mapped stream with no bridge, it goes through the water: the trail dips about 30 cm, its bed is wet stones, and the stream runs on across it, shallow at the edges and deepest in the middle. Riding through is about as heavy as an S2 trail and held to 12 km/h for a few metres either side; the HUD shows **Ford**. Roads over streams keep their culverts.
+
   **Off the mapped roads** — where your route crosses a field, a beach or a trail nobody has mapped, for 100 m or more, you ride a 3 m dirt track. Shorter gaps (junctions, a GPS trace wandering off the road) keep the road either side, and where no map data could be loaded nothing is assumed: the road stays tarmac.
 
 ![The Arenberg cobbles](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-cobbles.jpg)

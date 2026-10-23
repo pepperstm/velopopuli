@@ -28,6 +28,8 @@ export interface Route {
   width: Float64Array
   /** Cross-slope per sample (rise per metre across, + when the +offset side is higher): berms on tight trail turns. */
   bank: Float64Array
+  /** How far the riding surface dips per sample, in metres: a ford. */
+  dip: Float64Array
   climbs: Climb[]
 }
 
@@ -47,7 +49,7 @@ export function bankAt(route: Route, dist: number, offset: number): [number, num
   const t = f - i
   const at = (k: number): [number, number] => {
     const s = route.bank[k] ?? 0
-    return [s, Math.abs(s) * ((route.width[k] ?? 6.5) / 2) + offset * s]
+    return [s, Math.abs(s) * ((route.width[k] ?? 6.5) / 2) + offset * s - (route.dip[k] ?? 0)]
   }
   const [a, b] = [at(i), at(i + 1)]
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
