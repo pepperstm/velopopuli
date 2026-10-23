@@ -199,6 +199,8 @@ struct Control {
     camera: usize,
     look: Option<Look>,
     capture: Option<std::path::PathBuf>,
+    /// A capture was asked for and its picture isn't written yet.
+    saving: bool,
     frames: u64,
     size: (u32, u32),
     /// False while the window can't be seen; drawing pauses.
@@ -283,7 +285,13 @@ impl Native {
     pub fn capture(&self, path: std::path::PathBuf) -> u64 {
         let mut c = self.control.lock().unwrap();
         c.capture = Some(path);
+        c.saving = true;
         c.frames
+    }
+
+    /// Whether the picture asked for by `capture` is still being taken or written.
+    pub fn saving(&self) -> bool {
+        self.control.lock().unwrap().saving
     }
 
     pub fn frames(&self) -> (u64, Option<String>) {
@@ -1035,14 +1043,19 @@ impl Renderer {
             let label_buf = (!quads.is_empty())
                 .then(|| self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&quads), usage: wgpu::BufferUsages::VERTEX }));
 
+            // No frame to draw this time: a capture asked for waits for the next one.
             let frame = match self.surface.get_current_texture() {
                 Ok(f) => f,
                 Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => {
                     self.surface.configure(&self.device, &self.config);
+                    control.lock().unwrap().capture = capture;
                     continue;
                 }
                 Err(e) => {
-                    control.lock().unwrap().error = Some(e.to_string());
+                    let mut c = control.lock().unwrap();
+                    c.error = Some(e.to_string());
+                    c.capture = capture;
+                    drop(c);
                     std::thread::sleep(Duration::from_millis(50));
                     continue;
                 }
@@ -1227,6 +1240,7 @@ impl Renderer {
                 std::thread::sleep(FRAME - spent);
             }
 
+            let captured = capture.is_some();
             if let (Some(path), Some((buf, w, h, row))) = (capture, readback) {
                 let bgra = matches!(self.config.format, wgpu::TextureFormat::Bgra8UnormSrgb | wgpu::TextureFormat::Bgra8Unorm);
                 let slice = buf.slice(..);
@@ -1251,6 +1265,9 @@ impl Renderer {
                     }
                     let _ = write_png(&path, w, h, &rgba);
                 }
+            }
+            if captured {
+                control.lock().unwrap().saving = false;
             }
         }
     }

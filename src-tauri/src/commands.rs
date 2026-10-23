@@ -450,6 +450,12 @@ pub fn native_capture(state: State<AppState>) -> Res<(u64, Option<String>)> {
     Ok(n.frames())
 }
 
+/// For the automated check: whether the native picture asked for is still being written.
+#[tauri::command]
+pub fn native_saving(state: State<AppState>) -> bool {
+    state.native.lock().unwrap().as_ref().is_some_and(|n| n.saving())
+}
+
 // ── Strava ─────────────────────────────────────────────────────────────────
 
 #[tauri::command]
