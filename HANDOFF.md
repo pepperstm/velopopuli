@@ -14,7 +14,7 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 
 ## 2. Where it stands (October 2026, v0.3.0)
 
-**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks, weather), the virtual-gear maths, diagnostics, the relay. 79 automated tests (plus one that needs the network and is skipped by default), plus visual checks through the automated smoke harness (section 6).
+**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks, weather), the virtual-gear maths, diagnostics, the relay. 107 automated tests (plus three that need the network and are skipped by default), plus visual checks through the automated smoke harness (section 6).
 
 **Built but not proven with real use:**
 
@@ -48,7 +48,8 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
                     roads.rs: draping other roads on terrain; structures.rs: decks, bores, overbridges
                     buildings.rs: OSM footprints → meshes (walls, roofs over a fitted rectangle); style.rs: regional
                     building styles, building kinds, OSM roof/colour/material tags → a Look; surface.rs: route surface/width/markings from OSM tags
-                    barriers.rs: race barriers; landmarks.rs: signs, summits, POIs
+                    barriers.rs: race barriers; landmarks.rs: signs, summits, POIs;
+                    sights.rs: landmark models (turbines, towers, castles…) fetched with the road tags
                     imagery.rs: imagery sources per country, web-map tiles → one image per chunk, far-mesh colours
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
 src-tauri/          The app (Tauri 2)
@@ -76,7 +77,7 @@ How a ride flows end to end is in the wiki's [Architecture](https://github.com/p
 
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
 - `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
-- **Caches have versions:** buildings `FORMAT` (3, since footprints carry their tags) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (3, since trails added `mtb:scale`) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
+- **Caches have versions:** buildings `FORMAT` (3, since footprints carry their tags) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (4, since the same request brings the landmarks) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
 - **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space — kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux.
 - **Logs:** `logs/diagnostics-<time>.log`, last 12 runs kept.
 - **Imagery cache:** `imagery/<source id>/<z>/<x>/<y>` holds tiles as the server sent them; `<y>.none` marks "no tile here" for 30 days. A rider's own provider's folder is named from a hash of its URL, so its key is never in a path. Oldest tiles go first once the folder passes 2 GB.
@@ -107,7 +108,7 @@ The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branc
 
 ## 6. Testing
 
-- `cargo test --workspace` — 91 tests: 84 core, 1 relay, 6 app (plus two app tests that need the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
+- `cargo test --workspace` — 107 tests: 98 core, 1 relay, 8 app (plus three app tests that need the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
 - **The smoke harness** is how most visual and end-to-end checking has been done: a debug build that rides (or opens a screen) by itself, saves pictures and the visible text, and quits. All the `VP_SMOKE_*` switches are documented in the wiki's [Building from source](https://github.com/pepperstm/velopopuli/wiki/Building-from-source). The most useful: `VP_SMOKE_AT` (start part-way), `VP_SMOKE_CAM=3` (overhead — good for junctions), `VP_SMOKE_WINDOW=1` (whole window with HUD), `VP_SMOKE_CLIP=6` (frames for a demo clip), `VP_SMOKE_SURFACE`, `VP_SKIP_OVERPASS`, `VP_SMOKE_REPORT`. With `"nativeRenderer": true` in the data folder's `settings.json`, the native renderer's own frame is saved too, as `<name>.native.png` — the only way to see it, since window snapshots capture just the web view.
 - The ride-start diagnostics line `[ride] surfaces … trails … berms … fords … widths …` shows what the map matching decided; a smoke run also prints each berm and ford.
 - Good test routes: Bourg d'Oisans → Alpe d'Huez (town, river, hairpins — route it with BRouter); the Trouée d'Arenberg (OSM track "Drève des Boules d'Hérin", `surface=sett`); Meylan near Grenoble (roundabouts); any city crossing (viaducts). For trails, around Finale Ligure: graded singletrack and switchbacks (berms), Ponte dell'Acqua (OSM way 143650465, a log bridge), Strada Valle del Bosco (way 113195224, a ford over the Rio dell'Ericeto); a hike near Chamonix (grades estimated from `sac_scale`); a field near Chartres (the off-map dirt track). A test route is two files in the data folder: `data/routes.json` and `data/route-<id>.json` (`{name, gpx}`).
@@ -150,6 +151,8 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Apple Health removed** for now (no desktop HealthKit; export import was clunky).
 - **Commits are under the maintainer's name only.**
 - **Buildings by region, not by country:** a handful of building traditions (`Region` in `style.rs`) chosen by country, with the Alps carved out of IT, FR and DE by latitude and longitude. Coarse on purpose: a style per country would be hundreds of palettes to tune for little gain. Mapped tags always win. Footprint height means the walls (to the eaves); a mapped `height` is to the roof top and is shared out once the roof is built.
+- **Landmarks ride along with the road tags:** one Overpass request per 20 km stretch brings the roads under the route and the landmarks around it, because the servers ration requests rather than results. Without Overpass, castles and churches come from the tiles' points of interest (no heights or outlines). Landmarks are one mesh for the whole route (like the bridges), not per chunk, so tall ones show from kilometres away; their feet sink 25 m into the ground because the distant terrain is coarser than the near. A landmark inside a building outline replaces it (lighthouse, water tower…) or tells it what it is (church, castle), so nothing is drawn twice. Turbines face a fixed west-south-westerly until there is weather to turn them.
+- **Rotors turn on the page only:** the page animates them (`rotors.ts`); the native renderer gets still blades from `world::blades` and skips the page's rotor mesh when baking props.
 - **Imagery: open licences only by default.** National orthophotos where they are open (swisstopo, IGN France, PNOA, PDOK, USGS) and Sentinel-2 cloudless **2017** (CC BY 4.0) elsewhere — the 2018 and later releases are CC BY-NC-SA, so are left out. Esri, Google and Bing are off-limits by their terms. A rider can add their own provider (tile URL with key), used under their account. Coverage is decided by country outline, not by the server's answer: swisstopo, for one, returns blurry filler outside Switzerland rather than an error. Built clean-room: BeamNG.Earth's public description was the inspiration, its code was never read.
 
 ## 10. Known traps

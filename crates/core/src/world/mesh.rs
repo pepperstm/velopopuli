@@ -40,8 +40,10 @@ impl TriMesh {
 
     /// Adds a four-sided face given its corners in order round the edge.
     pub(super) fn quad(&mut self, p: [[f64; 3]; 4], facing: [f64; 3], colors: [[f32; 3]; 4]) {
-        self.triangle([p[0], p[1], p[2]], facing, [colors[0], colors[1], colors[2]], [[0.0; 2]; 3]);
-        self.triangle([p[0], p[2], p[3]], facing, [colors[0], colors[2], colors[3]], [[0.0; 2]; 3]);
+        // The plain-wall spot of the buildings' window tile, for quads on buildings.
+        let uv = [[0.04; 2]; 3];
+        self.triangle([p[0], p[1], p[2]], facing, [colors[0], colors[1], colors[2]], uv);
+        self.triangle([p[0], p[2], p[3]], facing, [colors[0], colors[2], colors[3]], uv);
     }
 
     /// Adds one vertex as given, for surfaces that supply their own smooth normals.

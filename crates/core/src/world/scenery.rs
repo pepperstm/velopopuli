@@ -152,6 +152,9 @@ pub struct Scenery {
     /// `WAY_TAGS` once `ways` was asked for successfully (an empty answer is then a real one); 0 if not.
     #[serde(default)]
     pub way_tags: u32,
+    /// Landmarks around the route (from the Overpass API, with `ways`).
+    #[serde(default)]
+    pub sights: Vec<super::sights::Sight>,
 }
 
 impl Scenery {

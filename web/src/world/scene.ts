@@ -8,6 +8,7 @@ import { RiderModel } from './rider'
 import { Terrain } from './terrain'
 import { packNative } from './native'
 import { Precipitation, type Look } from './weather'
+import { Rotors } from './rotors'
 
 export interface WorldRival {
   id: string
@@ -130,12 +131,13 @@ function buildRoad(buffer: ArrayBuffer, n: number, section: number, dim: (sample
 }
 
 /**
- * Bridges, tunnels and whatever crosses overhead, computed in Rust: `[sunlit vertices,
- * unlit vertices]`, then sunlit positions, normals and colours; unlit positions and colours.
+ * Bridges, tunnels, whatever crosses overhead and the landmarks, computed in Rust: `[sunlit
+ * vertices, unlit vertices, rotors]`, then sunlit positions, normals and colours; unlit
+ * positions and colours; and the wind turbines' rotors (see `Rotors`).
  */
-function buildStructures(buffer: ArrayBuffer): THREE.Mesh[] {
-  const [lit, unlit] = new Uint32Array(buffer, 0, 2)
-  let offset = 8
+function buildStructures(buffer: ArrayBuffer): { meshes: THREE.Mesh[]; rotors: Float32Array } {
+  const [lit, unlit, rotors] = new Uint32Array(buffer, 0, 3)
+  let offset = 12
   const take = (count: number): THREE.BufferAttribute => {
     const view = new Float32Array(buffer, offset, count * 3)
     offset += count * 12
@@ -154,7 +156,7 @@ function buildStructures(buffer: ArrayBuffer): THREE.Mesh[] {
   }
   // Like the road, these span the whole route.
   for (const mesh of meshes) mesh.frustumCulled = false
-  return meshes
+  return { meshes, rotors: new Float32Array(buffer, offset, rotors * 7) }
 }
 
 function buildSky(): THREE.Mesh {
@@ -194,6 +196,7 @@ export class World {
   private sun = new THREE.DirectionalLight(0xfff1d6, 2.4)
   private lamp = new THREE.PointLight(0xfff4e0, 0, 32, 1.6)
   private precipitation: Precipitation | null = null
+  private rotors: Rotors | null = null
   private terrain: Terrain
   private rider = new RiderModel(0xe9ff60)
   private others = new Map<string, Other>()
@@ -246,7 +249,12 @@ export class World {
     this.scene.add(this.barriers.group)
     for (let k = 0; k < SURFACES.length; k++) surfaceTexture(k).anisotropy = this.renderer.capabilities.getMaxAnisotropy()
     const dim = (sample: number): number => 1 - 0.62 * this.cover(sample * this.route.step, 12)
-    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...buildStructures(structures))
+    const built = buildStructures(structures)
+    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...built.meshes)
+    if (built.rotors.length) {
+      this.rotors = new Rotors(built.rotors)
+      this.scene.add(this.rotors.mesh)
+    }
   }
 
   /** Everything the native renderer needs from this scene (see `native.ts`). */
@@ -256,7 +264,9 @@ export class World {
       sprite.scale.set(sprite.userData.aspect, 1, 1)
       return { sprite, rider: r.id }
     })
-    const skip = (o: THREE.Object3D): boolean => o === this.sky || o === this.terrain.group || o === this.rider.group || o === this.precipitation?.object
+    // The native renderer has its own (still) rotors from Rust.
+    const skip = (o: THREE.Object3D): boolean =>
+      o === this.sky || o === this.terrain.group || o === this.rider.group || o === this.precipitation?.object || o === this.rotors?.mesh
     return packNative(this.scene, skip, tags, l)
   }
 
@@ -463,6 +473,7 @@ export class World {
     // The rider's lamp, just ahead and above, lights the road at night.
     this.lamp.position.set(p.x + Math.sin(p.heading) * 6, p.ele + 3, p.z + Math.cos(p.heading) * 6)
     this.precipitation?.update(dt, this.camera.position, f.speed, p.heading)
+    this.rotors?.update(dt)
     this.renderer.render(this.scene, this.camera)
   }
 

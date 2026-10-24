@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use super::height::{hash2, HeightField};
 pub use super::mesh::TriMesh as BuildingMesh;
-use super::style::{look, parse_colour, region_at, BuildingTags, Look, Region, RoofShape};
+use super::sights::{cap, merlons, prism, square};
+use super::style::{look, parse_colour, region_at, BuildingTags, Look, Region, RoofShape, Steeple};
 use super::CHUNK;
 use crate::gpx::Route;
 
@@ -427,6 +428,7 @@ fn build(mesh: &mut BuildingMesh, b: &Building) {
         for tri in triangulate(&b.ring) {
             mesh.triangle(tri.map(|k| at(b.ring[k], top)), up, [roof; 3], [PLAIN; 3]);
         }
+        adorn(mesh, b, (base, mean, top), top);
         return;
     };
     // The roof reaches past the walls by the eaves' overhang, falling at its own pitch.
@@ -489,5 +491,66 @@ fn build(mesh: &mut BuildingMesh, b: &Building) {
     }
     for (t, out) in ends {
         mesh.triangle(t, out, [upper; 3], [PLAIN; 3]);
+    }
+    adorn(mesh, b, (base, mean, top), ridge);
+}
+
+/// What stands out from the roof: a castle's battlements, a church's tower. The levels are the
+/// foot of the walls, the mean ground and the eaves; `ridge` the top of the roof.
+fn adorn(mesh: &mut BuildingMesh, b: &Building, (base, mean, top): (f64, f64, f64), ridge: f64) {
+    let l = &b.look;
+    let n = b.ring.len();
+    if l.battlements && ridge <= top {
+        for i in 0..n {
+            let (a, c) = (b.ring[i], b.ring[(i + 1) % n]);
+            let len = (c.0 - a.0).hypot(c.1 - a.1).max(1e-6);
+            merlons(mesh, (a.0, a.1, top), (c.0, c.1, top), ((a.1 - c.1) / len, (c.0 - a.0) / len), l.wall);
+        }
+    }
+    let Some(steeple) = l.steeple else { return };
+    let f = b.frame.unwrap_or_else(|| Frame::fit(&b.ring));
+    if f.a < 5.0 || f.w < 2.5 {
+        return;
+    }
+    // The tower stands at the west end, as most churches face east.
+    let half = (f.w * 0.75).clamp(1.6, 3.6).min(f.a / 2.0);
+    let west = if f.at(1.0, 0.0, 0.0)[0] < f.at(-1.0, 0.0, 0.0)[0] { 1.0 } else { -1.0 };
+    let turn = f.u.1.atan2(f.u.0);
+    let spire = if hash2(b.seed, 21) < 0.35 { [0.42, 0.60, 0.52] } else { [0.30, 0.31, 0.35] };
+    let p = f.at(west * (f.a - half), 0.0, 0.0);
+    let c = (p[0], p[2]);
+    let t = half * 2.0;
+    match steeple {
+        Steeple::Spire => {
+            let shaft = (ridge + t * 0.9).max(mean + 14.0).min(mean + 45.0);
+            square(mesh, c, (base, shaft), (half, half), turn, l.wall);
+            square(mesh, c, (shaft, shaft + t * 2.4), (half + 0.2, 0.0), turn, spire);
+        }
+        Steeple::Campanile => {
+            let shaft = (ridge + t * 1.8).max(mean + 18.0).min(mean + 50.0);
+            square(mesh, c, (base, shaft), (half, half), turn, l.wall);
+            square(mesh, c, (shaft, shaft + t * 0.45), (half + 0.3, 0.0), turn, l.roof);
+        }
+        Steeple::Onion => {
+            let shaft = (ridge + t * 0.9).max(mean + 14.0).min(mean + 45.0);
+            square(mesh, c, (base, shaft), (half, half), turn, l.wall);
+            // The dome: a swelling bulb narrowing to a point, then a slim spike.
+            let profile = [(0.0, half * 0.95), (t * 0.4, half * 1.2), (t * 0.85, half * 0.55), (t * 1.15, half * 0.12), (t * 1.8, 0.0)];
+            for k in 0..profile.len() - 1 {
+                let ((y0, r0), (y1, r1)) = (profile[k], profile[k + 1]);
+                prism(mesh, c, (shaft + y0, shaft + y1), (r0, r1), 8, turn, spire);
+            }
+            cap(mesh, c, (shaft, half * 0.95), 8, turn, false, spire);
+        }
+        Steeple::Minaret => {
+            let q = f.at(west * (f.a - 1.4), f.w - 1.4, 0.0);
+            let c = (q[0], q[2]);
+            let shaft = (ridge + 10.0).max(mean + 22.0).min(mean + 60.0);
+            prism(mesh, c, (base, shaft), (1.4, 1.2), 10, 0.0, l.wall);
+            prism(mesh, c, (shaft - 4.0, shaft - 3.2), (1.9, 1.9), 10, 0.0, l.wall);
+            cap(mesh, c, (shaft - 3.2, 1.9), 10, 0.0, true, l.wall);
+            cap(mesh, c, (shaft - 4.0, 1.9), 10, 0.0, false, l.wall);
+            prism(mesh, c, (shaft, shaft + 3.5), (1.4, 0.0), 10, 0.0, spire);
+        }
     }
 }

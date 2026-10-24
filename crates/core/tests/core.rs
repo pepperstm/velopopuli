@@ -488,7 +488,7 @@ fn hairpin_ground_never_buries_the_lower_arm() {
 
 mod buildings {
     use super::*;
-    use velopopuli_core::world::{overpass_query, parse_overpass, BuildingTags, Footprint};
+    use velopopuli_core::world::{mark_footprints, overpass_query, parse_overpass, parse_sights, BuildingTags, Footprint, Sight, SightKind};
 
     /// The highest point of a building's mesh above its eaves, and how many faces look down.
     fn roof_of(lat: f64, lon: f64, tags: BuildingTags) -> (f64, usize, Vec<[f32; 3]>) {
@@ -525,6 +525,82 @@ mod buildings {
         // A hipped roof is as high as a gabled one, its ridge just shorter.
         let hipped = roof_of(51.2, 0.7, BuildingTags { roof_shape: "hipped".into(), ..house() }).0;
         assert!((hipped - kent).abs() < 0.01);
+    }
+
+    #[test]
+    fn churches_grow_towers_and_castles_battlements() {
+        let tags = |kind: &str| BuildingTags { kind: kind.into(), ..Default::default() };
+        // The same 12 × 8 m outline: as a house it tops out at its ridge; as a church it gets a
+        // spire in Kent and a bell tower in Liguria, both well above the roof.
+        let house = roof_of(51.2, 0.7, tags("house")).0;
+        let (kent, ..) = roof_of(51.2, 0.7, tags("church"));
+        let (liguria, ..) = roof_of(44.2, 8.3, tags("church"));
+        assert!(house < 5.0 && kent > 15.0 && liguria > 10.0, "house {house}, Kent {kent}, Liguria {liguria}");
+        // A castle is flat-roofed with merlons along its walls.
+        let castle = roof_of(51.2, 0.7, tags("castle")).0;
+        assert!((castle - 1.2).abs() < 0.05, "castle {castle}");
+        // A chapel too small for a tower does without.
+        let chapel = roof_of(51.2, 0.7, tags("chapel")).0;
+        assert!(chapel < 5.0, "chapel {chapel}");
+    }
+
+    #[test]
+    fn parses_landmarks_and_marks_their_buildings() {
+        let json = r#"{"elements":[
+          {"type":"node","id":1,"lat":45.01,"lon":7.01,"tags":{"power":"generator","generator:source":"wind","height":"120"}},
+          {"type":"way","id":2,"tags":{"highway":"primary"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.001,"lon":7.0}]},
+          {"type":"node","id":3,"lat":45.02,"lon":7.0,"tags":{"man_made":"tower","tower:type":"cooling"}},
+          {"type":"way","id":4,"tags":{"historic":"castle","name":"Castello"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.001,"lon":7.0},{"lat":45.001,"lon":7.001},{"lat":45.0,"lon":7.0}]},
+          {"type":"node","id":5,"lat":45.03,"lon":7.0,"tags":{"amenity":"place_of_worship","religion":"muslim"}},
+          {"type":"node","id":6,"lat":45.0002,"lon":7.0102,"tags":{"man_made":"lighthouse"}},
+          {"type":"way","id":7,"tags":{"man_made":"lighthouse"},"geometry":[{"lat":45.0002,"lon":7.0102}]},
+          {"type":"node","id":8,"lat":45.0002,"lon":7.0202,"tags":{"amenity":"place_of_worship","religion":"christian"}}
+        ]}"#;
+        let found = parse_sights(json).unwrap();
+        // The road, the cooling tower and the mosque's point (no outline to mark) are left out, and
+        // the lighthouse mapped twice is kept once.
+        assert_eq!(found.iter().map(|s| s.kind).collect::<Vec<_>>(), [SightKind::WindTurbine, SightKind::Castle, SightKind::Lighthouse, SightKind::Church]);
+        assert_eq!(found[0].height, Some(120.0));
+        assert_eq!((found[1].ring.len(), found[1].name.as_str()), (3, "Castello"));
+        assert!(parse_sights("<html>busy</html>").is_err());
+
+        // A building round the lighthouse is replaced by it; one round the church becomes a church.
+        let square = |lat: f64, lon: f64| Footprint {
+            id: (lon * 1e4) as u64,
+            height: 6.0,
+            ring: vec![[lat - 1e-4, lon - 1e-4], [lat + 1e-4, lon - 1e-4], [lat + 1e-4, lon + 1e-4], [lat - 1e-4, lon + 1e-4], [lat - 1e-4, lon - 1e-4]],
+            ..Default::default()
+        };
+        let prints = [square(45.0002, 7.0102), square(45.0002, 7.0202), square(45.05, 7.05)];
+        let (kept, models) = mark_footprints(&prints, &found);
+        assert_eq!(kept.len(), 2);
+        assert_eq!(kept[0].tags.kind, "church");
+        assert_eq!(models.iter().map(|s| s.kind).collect::<Vec<_>>(), [SightKind::WindTurbine, SightKind::Castle, SightKind::Lighthouse]);
+    }
+
+    #[test]
+    fn models_landmarks_and_turns_rotors() {
+        let route = Arc::new(build_route("flat", &straight(1000.0, |_| Some(100.0))).unwrap());
+        let z0 = route.z[100];
+        let at = |x: f64, z: f64| {
+            let (lat, lon) = route.to_lat_lon(x, z);
+            [lat, lon]
+        };
+        let sight = |kind: SightKind, x: f64, height: Option<f32>| Sight { kind, at: at(x, z0), name: String::new(), height, ring: Vec::new() };
+        let mut world = World::new(route.clone(), None, 0.0);
+        // A turbine off to the side, a lighthouse, and a turbine mapped on the road itself.
+        world.sights = vec![sight(SightKind::WindTurbine, 300.0, Some(80.0)), sight(SightKind::Lighthouse, -150.0, None), sight(SightKind::WindTurbine, 1.0, None)];
+        let ground = world.field.height(300.0, z0).0;
+        let s = world.structures();
+        assert_eq!(s.rotors.len(), 1);
+        let r = &s.rotors[0];
+        assert!((r.hub[1] - (ground + 80.0)).abs() < 0.01 && r.radius > 30.0 && r.radius < 74.0, "{r:?}");
+        assert!((r.facing[0].hypot(r.facing[1]) - 1.0).abs() < 1e-9);
+        // The tower reaches the hub; the lighthouse stands about 20 m.
+        let tops = |x0: f64, x1: f64| s.lit.positions.chunks(3).filter(|p| (p[0] as f64) > x0 && (p[0] as f64) < x1).map(|p| p[1] as f64).fold(f64::MIN, f64::max);
+        assert!(tops(290.0, 310.0) > ground + 79.0);
+        let light = tops(-160.0, -140.0) - world.field.height(-150.0, z0).0;
+        assert!((20.0..27.0).contains(&light), "lighthouse {light}");
     }
 
     #[test]
@@ -943,6 +1019,7 @@ mod scenery {
                 MappedWay { highway: "primary".into(), surface: None, width: Some(9.0), mtb: None, hiking: None, line: geo(&route, &[(0.0, 2000.0), (0.0, 2400.0)]) },
             ],
             way_tags: WAY_TAGS,
+            sights: Vec::new(),
         };
         let dem = level_ground(&route, 100.0);
         let world = World::with_map(route.clone(), Some(dem), 0.0, Some(&scenery), &[]);

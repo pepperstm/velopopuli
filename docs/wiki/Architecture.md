@@ -16,7 +16,8 @@ crates/core/      Pure Rust library, no I/O — fully unit-tested
   world/          Terrain (elevation tiles, height field, chunk/horizon/road meshes),
                   OpenStreetMap buildings, scenery (forests, water, other roads, bridges and tunnels),
                   structures (decks, bores, overbridges, log bridges), the route road's surface and width,
-                  trails (grades, berms, fords), barriers and landmarks, and imagery (which source where,
+                  trails (grades, berms, fords), barriers and landmarks (signs, and the models of turbines,
+                  towers, castles and the like), and imagery (which source where,
                   web-map tiles put together into one image per terrain chunk)
 crates/relay/     The group-ride relay server (WebSocket, stateless)
 src-tauri/        The app (Tauri 2)

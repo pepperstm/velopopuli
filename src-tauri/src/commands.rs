@@ -301,7 +301,12 @@ pub async fn ride_barriers(state: State<'_, AppState>) -> Res<Response> {
 pub async fn ride_structures(state: State<'_, AppState>) -> Res<Response> {
     let world = state.current_session()?.world.clone();
     let s = tauri::async_runtime::spawn_blocking(move || world.structures()).await.map_err(blocking_err)?;
-    Ok(Response::new(f32_bytes(&[s.lit.vertices() as u32, s.unlit.vertices() as u32], &[&s.lit.positions, &s.lit.normals, &s.lit.colors, &s.unlit.positions, &s.unlit.colors])))
+    // Rotors: hub x, y, z, facing x, z, radius, phase.
+    let rotors: Vec<f32> = s.rotors.iter().flat_map(|r| [r.hub[0], r.hub[1], r.hub[2], r.facing[0], r.facing[1], r.radius, r.phase].map(|v| v as f32)).collect();
+    Ok(Response::new(f32_bytes(
+        &[s.lit.vertices() as u32, s.unlit.vertices() as u32, s.rotors.len() as u32],
+        &[&s.lit.positions, &s.lit.normals, &s.lit.colors, &s.unlit.positions, &s.unlit.colors, &rotors],
+    )))
 }
 
 #[tauri::command]

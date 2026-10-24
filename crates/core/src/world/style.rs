@@ -214,6 +214,23 @@ pub struct Look {
     /// Roof overhang past the walls, metres.
     pub eave: f64,
     pub windows: bool,
+    /// A church's tower, and what tops it.
+    pub steeple: Option<Steeple>,
+    /// Crenellations round a flat roof: a castle.
+    pub battlements: bool,
+}
+
+/// Church towers by tradition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Steeple {
+    /// A square tower under a tall pointed spire.
+    Spire,
+    /// A tall bell tower under a low tiled pyramid (Italy, Spain).
+    Campanile,
+    /// A tower with an onion dome (Bavaria, Austria, eastern Europe).
+    Onion,
+    /// A slender round tower at one corner, for a mosque.
+    Minaret,
 }
 
 /// Broad kinds of building, from `building=*` (or the size of an unnamed one).
@@ -225,6 +242,7 @@ enum Kind {
     Industrial,
     Apartments,
     Church,
+    Castle,
     Greenhouse,
     Garage,
 }
@@ -244,6 +262,7 @@ fn kind_of(tag: &str, area: f64) -> Kind {
             }
         }
         "church" | "cathedral" | "chapel" | "mosque" | "temple" | "synagogue" | "religious" | "monastery" => Kind::Church,
+        "castle" | "fort" | "fortress" => Kind::Castle,
         "greenhouse" | "glasshouse" => Kind::Greenhouse,
         // Unknown: judge by size.
         _ => match area {
@@ -324,6 +343,8 @@ pub fn look(region: Region, tags: &BuildingTags, area: f64, seed: i32) -> Look {
         pitch: s.pitch * (0.9 + roll(6) * 0.2),
         eave: s.eave,
         windows: true,
+        steeple: None,
+        battlements: false,
     };
     match kind {
         Kind::House => {}
@@ -369,6 +390,26 @@ pub fn look(region: Region, tags: &BuildingTags, area: f64, seed: i32) -> Look {
             l.shape = RoofShape::Gabled;
             l.pitch = (s.pitch + 12.0).min(50.0);
             l.eave = 0.4;
+            // A chapel too small for a tower makes do without.
+            l.steeple = match tags.kind.as_str() {
+                "mosque" => Some(Steeple::Minaret),
+                "synagogue" | "temple" => None,
+                "chapel" if area < 150.0 => None,
+                _ if area < 90.0 => None,
+                _ => Some(match region {
+                    Region::Mediterranean | Region::Arid => Steeple::Campanile,
+                    Region::Alpine | Region::EasternEurope if roll(14) < 0.6 => Steeple::Onion,
+                    _ => Steeple::Spire,
+                }),
+            };
+        }
+        Kind::Castle => {
+            l.wall = pick(&[[170, 162, 145], [150, 145, 135], [185, 175, 155]], seed, 15);
+            l.roof = srgb([95, 92, 90]);
+            l.upper = None;
+            l.shape = RoofShape::Flat;
+            l.eave = 0.0;
+            l.battlements = true;
         }
         Kind::Greenhouse => {
             l.wall = srgb([200, 222, 215]);

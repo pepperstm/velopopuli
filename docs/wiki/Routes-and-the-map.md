@@ -39,6 +39,6 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
 ![The Arenberg cobbles](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-cobbles.jpg)
 
-- **Landmarks** — village and town signs, named summit boards, and cafés, fountains, bike shops and viewpoints by the road.
+- **Landmarks** — village and town signs, named summit boards, and cafés, fountains, bike shops and viewpoints by the road. On the skyline, up to about 3 km away: wind turbines with turning rotors, lighthouses, masts and TV towers, chimneys, water towers, windmills, castles and monuments. Churches grow a tower in the local style (spire, bell tower or onion dome), and castles mapped as buildings get battlements.
 
 Map data © OpenStreetMap contributors (ODbL). Downloads send the route's coordinates (or which map squares it passes through) to the OpenStreetMap services; buildings and scenery can be switched off in **Settings → Virtual world**.

@@ -206,6 +206,10 @@ impl Session {
         let route = Arc::new(route);
         let real_terrain = dem.is_some();
         let mut world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints);
+        // Landmark models go with the landmark signs (church towers stay: they are part of the church).
+        if !settings.look.landmarks {
+            world.sights.clear();
+        }
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
         if let Some(s) = std::env::var("VP_SMOKE_SURFACE")
             .ok()
@@ -217,6 +221,10 @@ impl Session {
         }
         let world = Arc::new(world);
         if std::env::var_os("VP_SMOKE").is_some() {
+            let mut kinds: Vec<String> = world.sights.iter().map(|s| format!("{:?}", s.kind)).collect();
+            kinds.sort();
+            kinds.dedup_by(|a, b| a == b);
+            eprintln!("Sights: {} ({})", world.sights.len(), kinds.join(", "));
             // For the automated check: where along the route the bridges and tunnels are.
             let kinds = world.field.kinds();
             let mut from = 0;

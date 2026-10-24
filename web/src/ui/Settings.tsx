@@ -647,8 +647,8 @@ export function SettingsScreen(): React.JSX.Element {
           </label>
         </div>
         <Toggle
-          label="Place names, summits and points of interest"
-          hint="Village signs, summit boards with the climb's height, cafés, viewpoints and more along the route, from OpenStreetMap."
+          label="Landmarks, place names and points of interest"
+          hint="Wind turbines, lighthouses, masts, chimneys, water towers, windmills, castles and monuments on the skyline; village signs, summit boards with the climb's height, cafés, viewpoints and more along the route. All from OpenStreetMap."
           value={settings.look.landmarks}
           onChange={(v) => look({ landmarks: v })}
         />
