@@ -488,12 +488,49 @@ fn hairpin_ground_never_buries_the_lower_arm() {
 
 mod buildings {
     use super::*;
-    use velopopuli_core::world::{overpass_query, parse_overpass, Footprint};
+    use velopopuli_core::world::{overpass_query, parse_overpass, BuildingTags, Footprint};
+
+    /// The highest point of a building's mesh above its eaves, and how many faces look down.
+    fn roof_of(lat: f64, lon: f64, tags: BuildingTags) -> (f64, usize, Vec<[f32; 3]>) {
+        let pts: Vec<RawPoint> = (0..=200).map(|i| RawPoint { lat: lat + i as f64 * 5.0 / M_PER_DEG, lon, ele: Some(100.0) }).collect();
+        let route = Arc::new(build_route("flat", &pts).unwrap());
+        let z0 = route.z[100];
+        let house = [(30.0, z0), (42.0, z0), (42.0, z0 + 8.0), (30.0, z0 + 8.0)];
+        let mut print = footprint(&route, 11, 6.0, &house);
+        print.tags = tags;
+        let world = World::new(route.clone(), None, 0.0).with_buildings(&[print]);
+        let mesh = world.chunk((36.0 / CHUNK).floor() as i32, ((z0 + 4.0) / CHUNK).floor() as i32).buildings;
+        let top = mesh.positions.chunks(3).map(|p| p[1] as f64).fold(f64::MIN, f64::max);
+        // The eaves are the top of the walls: the faces with windows on them.
+        let eaves = mesh.positions.chunks(3).zip(mesh.uvs.chunks(2)).filter(|(_, uv)| uv[0] != 0.04).map(|(p, _)| p[1] as f64).fold(f64::MIN, f64::max);
+        let down = mesh.normals.chunks(9).filter(|n| n[1] < -0.5).count();
+        (top - eaves, down, mesh.colors.chunks(3).map(|c| [c[0], c[1], c[2]]).collect())
+    }
+
+    #[test]
+    fn roofs_follow_the_region_and_the_map() {
+        let house = || BuildingTags { kind: "house".into(), roof_shape: "gabled".into(), ..Default::default() };
+        // The same 12 × 8 m house: steep in Kent, shallow in Liguria, with deep eaves in the Alps.
+        let (kent, ..) = roof_of(51.2, 0.7, house());
+        let (liguria, ..) = roof_of(44.2, 8.3, house());
+        let (_, alpine_under, alpine) = roof_of(46.6, 8.0, house());
+        assert!(kent > 3.0 && liguria < 1.6, "Kent {kent}, Liguria {liguria}");
+        assert!(alpine_under > 0);
+        // An Alpine house has timber above its ground floor: a dark brown in among the walls.
+        assert!(alpine.iter().any(|c| c[0] > c[2] * 1.4 && c[0] < 0.3), "no timber");
+        // Mapped shapes are followed: flat stays flat, and a skillion rises across the whole width.
+        let flat = roof_of(51.2, 0.7, BuildingTags { roof_shape: "flat".into(), ..house() }).0;
+        let skillion = roof_of(51.2, 0.7, BuildingTags { roof_shape: "skillion".into(), ..house() }).0;
+        assert!(flat.abs() < 0.01 && skillion > kent * 1.5, "flat {flat}, skillion {skillion}");
+        // A hipped roof is as high as a gabled one, its ridge just shorter.
+        let hipped = roof_of(51.2, 0.7, BuildingTags { roof_shape: "hipped".into(), ..house() }).0;
+        assert!((hipped - kent).abs() < 0.01);
+    }
 
     #[test]
     fn parses_overpass_ways_relations_and_heights() {
-        let json = r#"{"version":0.6,"elements":[
-          {"type":"way","id":1,"tags":{"building":"house"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0001,"lon":7.0},{"lat":45.0001,"lon":7.0001},{"lat":45.0,"lon":7.0}]},
+        let json = r##"{"version":0.6,"elements":[
+          {"type":"way","id":1,"tags":{"building":"house","roof:shape":"hipped","roof:colour":"#804020","building:material":"brick"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0001,"lon":7.0},{"lat":45.0001,"lon":7.0001},{"lat":45.0,"lon":7.0}]},
           {"type":"way","id":2,"tags":{"building":"yes","height":"12.5 m"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0001,"lon":7.0},{"lat":45.0001,"lon":7.0001},{"lat":45.0,"lon":7.0}]},
           {"type":"way","id":3,"tags":{"building":"yes","building:levels":"4"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0001,"lon":7.0},{"lat":45.0001,"lon":7.0001},{"lat":45.0,"lon":7.0}]},
           {"type":"way","id":4,"tags":{"building":"roof"},"geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0001,"lon":7.0},{"lat":45.0001,"lon":7.0001},{"lat":45.0,"lon":7.0}]},
@@ -502,11 +539,17 @@ mod buildings {
           {"type":"relation","id":7,"tags":{"building":"church","type":"multipolygon"},"members":[
             {"type":"way","ref":70,"role":"outer","geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0002,"lon":7.0},{"lat":45.0002,"lon":7.0002},{"lat":45.0,"lon":7.0}]},
             {"type":"way","ref":71,"role":"inner","geometry":[{"lat":45.0,"lon":7.0},{"lat":45.0001,"lon":7.0},{"lat":45.0001,"lon":7.0001},{"lat":45.0,"lon":7.0}]}]}
-        ]}"#;
+        ]}"##;
         let found = parse_overpass(json).unwrap();
         // The canopy, the open outline and the outline with a missing node are skipped.
-        assert_eq!(found.iter().map(|f| f.height).collect::<Vec<_>>(), [6.5, 12.5, 13.0, 14.0]);
+        // Heights are of the walls, to the eaves: typical for the kind, or from the storeys.
+        assert_eq!(found.iter().map(|f| f.height).collect::<Vec<_>>(), [5.8, 6.5, 12.5, 11.0]);
+        // A mapped height is to the top of the roof, kept to share out once the roof is known.
+        assert_eq!(found.iter().map(|f| f.total_height).collect::<Vec<_>>(), [None, Some(12.5), None, None]);
         assert_eq!(found[0].ring.len(), 4);
+        let t = &found[0].tags;
+        assert_eq!((t.kind.as_str(), t.roof_shape.as_str(), t.roof_colour, t.wall_material.as_str()), ("house", "hipped", Some([128, 64, 32]), "brick"));
+        assert_eq!(found[3].tags.kind, "church");
         assert!(parse_overpass("<html>rate limited</html>").is_err());
     }
 
@@ -524,7 +567,7 @@ mod buildings {
     fn footprint(route: &Route, id: u64, height: f32, outline: &[(f64, f64)]) -> Footprint {
         let mut ring: Vec<[f64; 2]> = outline.iter().map(|(x, z)| route.to_lat_lon(*x, *z)).map(|(lat, lon)| [lat, lon]).collect();
         ring.push(ring[0]);
-        Footprint { id, height, ring }
+        Footprint { id, height, ring, ..Default::default() }
     }
 
     #[test]
@@ -535,7 +578,9 @@ mod buildings {
         let house = [(30.0, z0), (40.0, z0), (40.0, z0 + 8.0), (30.0, z0 + 8.0)];
         let barn = [(60.0, z0), (80.0, z0), (80.0, z0 + 10.0), (70.0, z0 + 10.0), (70.0, z0 + 20.0), (60.0, z0 + 20.0)];
         let on_road = [(-4.0, z0 + 40.0), (6.0, z0 + 40.0), (6.0, z0 + 50.0), (-4.0, z0 + 50.0)];
-        let prints = [footprint(&route, 1, 6.0, &house), footprint(&route, 2, 8.0, &barn), footprint(&route, 3, 6.0, &on_road)];
+        let mut prints = [footprint(&route, 1, 6.0, &house), footprint(&route, 2, 8.0, &barn), footprint(&route, 3, 6.0, &on_road)];
+        // A gabled house; the L-shaped block is too far from a rectangle for a pitched roof.
+        prints[0].tags = BuildingTags { kind: "house".into(), roof_shape: "gabled".into(), ..Default::default() };
         let world = World::new(route.clone(), None, 0.0).with_buildings(&prints);
         assert_eq!(world.buildings.count(), 2);
         assert!(world.buildings.covers(35.0, z0 + 4.0));
@@ -544,9 +589,9 @@ mod buildings {
 
         let (cx, cz) = ((35.0 / CHUNK).floor() as i32, ((z0 + 4.0) / CHUNK).floor() as i32);
         let mesh = world.chunk(cx, cz).buildings;
-        // House: 4 walls × 2 triangles, a pitched roof of 4 and 2 gable ends. Barn: 6 walls × 2,
-        // plus its L-shaped flat roof in 3 or 4 triangles depending on how it is cut up.
-        assert!([29 * 9, 30 * 9].contains(&mesh.positions.len()), "{} floats", mesh.positions.len());
+        // House: 4 walls × 2 triangles, a pitched roof of 4 (and 4 more under its eaves) and 2
+        // gable ends. Barn: 6 walls × 2, plus its L-shaped flat roof in 3 or 4 triangles.
+        assert!([33 * 9, 34 * 9].contains(&mesh.positions.len()), "{} floats", mesh.positions.len());
         assert_eq!(mesh.normals.len(), mesh.positions.len());
         assert_eq!(mesh.colors.len(), mesh.positions.len());
         assert_eq!(mesh.uvs.len(), mesh.positions.len() / 3 * 2);
@@ -554,6 +599,12 @@ mod buildings {
         // The house's 10 m walls carry three window bays; no wall has a fraction of one.
         assert!(mesh.uvs.chunks(2).any(|uv| uv[0] == 3.0) && mesh.uvs.chunks(2).all(|uv| uv[0] == 0.04 || uv[0].fract() == 0.0));
 
+        // Eaves sit the building's height above the average ground at its corners
+        // (or just clear of the highest corner on a steep slope).
+        let eaves_for = |outline: &[(f64, f64)], height: f64| {
+            let g: Vec<f64> = outline.iter().map(|p| world.field.height(p.0, p.1).0).collect();
+            (g.iter().sum::<f64>() / g.len() as f64 + height).max(g.iter().cloned().fold(f64::MIN, f64::max) + 2.5)
+        };
         let tri = |t: usize| -> [[f64; 3]; 3] { [0, 1, 2].map(|k| [0, 1, 2].map(|c| mesh.positions[t + k * 3 + c] as f64)) };
         let mut flat_roof_area = 0.0f64;
         let mut ridge = f64::MIN;
@@ -565,8 +616,8 @@ mod buildings {
             let stored = [mesh.normals[t] as f64, mesh.normals[t + 1] as f64, mesh.normals[t + 2] as f64];
             // The stored normal agrees with the winding, so the renderer lights the outside.
             assert!(n[0] * stored[0] + n[1] * stored[1] + n[2] * stored[2] > 0.0, "triangle {} {p:?}: winding normal {n:?}, stored {stored:?}", t / 9);
-            // No face of a building looks downward.
-            assert!(stored[1] >= -1e-6);
+            // Only the underside of the eaves looks downward, and it is up at the roof.
+            assert!(stored[1] >= -1e-6 || p.iter().all(|q| q[1] > eaves_for(&house, 6.0) - 1.0), "{p:?}");
             if stored[1] > 0.999 {
                 flat_roof_area += (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0;
             } else if stored[1].abs() < 1e-6 {
@@ -584,15 +635,11 @@ mod buildings {
         // All 20 wall triangles of the two buildings, plus the house's two gable ends.
         assert!(walls_facing_out >= 21, "{walls_facing_out} wall faces point outward");
 
-        // Eaves sit the building's height above the average ground at its corners
-        // (or just clear of the highest corner on a steep slope).
-        let eaves_for = |outline: &[(f64, f64)], height: f64| {
-            let g: Vec<f64> = outline.iter().map(|p| world.field.height(p.0, p.1).0).collect();
-            (g.iter().sum::<f64>() / g.len() as f64 + height).max(g.iter().cloned().fold(f64::MIN, f64::max) + 2.5)
-        };
-        // The house is 10 × 8 m, so its ridge rises 0.32 × 8 m above the eaves.
-        let expected = (eaves_for(&house, 6.0) + 2.56).max(eaves_for(&barn, 8.0));
-        assert!(close(ridge, expected, 0.01), "highest point {ridge} expected {expected}");
+        // The house is 10 × 8 m in Piedmont, roofed at the Mediterranean pitch (18° ± 10%):
+        // its ridge rises 4 m × tan(pitch) above the eaves.
+        let eaves = eaves_for(&house, 6.0);
+        assert!(eaves_for(&barn, 8.0) < eaves + 1.0);
+        assert!(ridge > eaves + 4.0 * 16.1f64.to_radians().tan() && ridge < eaves + 4.0 * 19.9f64.to_radians().tan(), "ridge {ridge}, eaves {eaves}");
         // No tree grows through a building.
         let trees = world.chunk(cx, cz).trees;
         assert!(trees.chunks(6).all(|t| !world.buildings.covers(t[0] as f64, t[2] as f64)));

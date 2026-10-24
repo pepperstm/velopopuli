@@ -46,7 +46,8 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
                     height.rs: height field pinned to the road; dem.rs: elevation tiles; berms.rs: banked trail turns
                     mvt.rs: vector-tile decoder; scenery.rs: forests, water, other roads, route↔map matching, Kerb lookups
                     roads.rs: draping other roads on terrain; structures.rs: decks, bores, overbridges
-                    buildings.rs: OSM footprints → meshes; surface.rs: route surface/width/markings from OSM tags
+                    buildings.rs: OSM footprints → meshes (walls, roofs over a fitted rectangle); style.rs: regional
+                    building styles, building kinds, OSM roof/colour/material tags → a Look; surface.rs: route surface/width/markings from OSM tags
                     barriers.rs: race barriers; landmarks.rs: signs, summits, POIs
                     imagery.rs: imagery sources per country, web-map tiles → one image per chunk, far-mesh colours
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
@@ -75,7 +76,7 @@ How a ride flows end to end is in the wiki's [Architecture](https://github.com/p
 
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
 - `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
-- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (3, since trails added `mtb:scale`) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
+- **Caches have versions:** buildings `FORMAT` (3, since footprints carry their tags) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (3, since trails added `mtb:scale`) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
 - **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space — kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux.
 - **Logs:** `logs/diagnostics-<time>.log`, last 12 runs kept.
 - **Imagery cache:** `imagery/<source id>/<z>/<x>/<y>` holds tiles as the server sent them; `<y>.none` marks "no tile here" for 30 days. A rider's own provider's folder is named from a hash of its URL, so its key is never in a path. Oldest tiles go first once the folder passes 2 GB.
@@ -148,6 +149,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **GitHub reporting opens a pre-filled issue in the browser** rather than signing in from the app: a device-flow sign-in was started and dropped in favour of the simpler approach.
 - **Apple Health removed** for now (no desktop HealthKit; export import was clunky).
 - **Commits are under the maintainer's name only.**
+- **Buildings by region, not by country:** a handful of building traditions (`Region` in `style.rs`) chosen by country, with the Alps carved out of IT, FR and DE by latitude and longitude. Coarse on purpose: a style per country would be hundreds of palettes to tune for little gain. Mapped tags always win. Footprint height means the walls (to the eaves); a mapped `height` is to the roof top and is shared out once the roof is built.
 - **Imagery: open licences only by default.** National orthophotos where they are open (swisstopo, IGN France, PNOA, PDOK, USGS) and Sentinel-2 cloudless **2017** (CC BY 4.0) elsewhere — the 2018 and later releases are CC BY-NC-SA, so are left out. Esri, Google and Bing are off-limits by their terms. A rider can add their own provider (tile URL with key), used under their account. Coverage is decided by country outline, not by the server's answer: swisstopo, for one, returns blurry filler outside Switzerland rather than an error. Built clean-room: BeamNG.Earth's public description was the inspiration, its code was never read.
 
 ## 10. Known traps
@@ -156,6 +158,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Tauri sync commands run on the main thread**: never block one waiting for something that completes on the main thread (e.g. a WebKit snapshot) — that deadlocks. See how `smoke_done` hands off to `snapshot::window_png`.
 - **upload-artifact keeps the common parent path** of its inputs, so files land at different depths per OS; the release job finds relay binaries with `find`.
 - **Vector-tile streets carry no `surface`**, only `kind`/`tracktype` — surface and width needed Overpass.
+- **Sentinel-2 in towns:** at 10 m a pixel a town is a blur of roof colour, so coarse imagery loses most of its warm colours (`COARSE_GREY` in `imagery.rs`); greens are left alone.
 - **Imagery is drawn by the page only:** the native renderer builds its own chunks and far mesh straight from `World`, so it shows none of it yet (chunk images come from `terrain_imagery`, far colours from `terrain_far`).
 - **Fonts on canvas:** barrier banners are drawn on a canvas in Manrope; `Ride.tsx` waits for `document.fonts.load` before building the world, or the banner falls back to a system font.
 - **The native renderer is fed partly from the page** (`native.ts`: textures, text labels, props baked from the three.js scene, rider poses) and partly from Rust meshes; anything added to the three.js scene that native should also show must be either baked or reimplemented in `native/mod.rs` (barriers, road surfaces and precipitation are reimplemented there).

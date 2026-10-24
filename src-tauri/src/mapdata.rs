@@ -47,7 +47,7 @@ const MAX_BUILDINGS: usize = 80_000;
 /// data is retried sooner, in the hope of getting the detailed version next time.
 const MAX_AGE_MS: u64 = 180 * 86_400_000;
 const MAX_AGE_OUTLINES_MS: u64 = 14 * 86_400_000;
-const FORMAT: u32 = 2;
+const FORMAT: u32 = 3;
 const SCENERY_FORMAT: u32 = 4;
 
 #[derive(Serialize, Deserialize)]

@@ -168,10 +168,17 @@ pub struct ChunkImage {
 pub const NEAR_PX: usize = 256;
 pub const FAR_PX: usize = 128;
 
+/// Providers whose deepest zoom is shallower than this are "coarse" (Sentinel-2 at 10 m),
+/// and lose up to `COARSE_GREY` of their warm colours.
+const COARSE_BELOW: u8 = 15;
+const COARSE_GREY: f64 = 0.7;
+
 /// Reads colours off the tiles of several providers at once, each at its own zoom, fetching
 /// every tile once. Where a provider lacks a tile the last provider stands in.
 struct Sampler<F> {
     zooms: Vec<u8>,
+    /// Providers too coarse to show streets: a town comes out as a blur of roof colour.
+    coarse: Vec<bool>,
     tiles: HashMap<(usize, u32, u32), Option<Arc<Tile>>>,
     fetch: F,
     used: Vec<bool>,
@@ -180,7 +187,13 @@ struct Sampler<F> {
 impl<F: FnMut(usize, u8, u32, u32) -> Option<Arc<Tile>>> Sampler<F> {
     /// For pixels of `metres` at latitude `lat`.
     fn new(providers: &[Provider], metres: f64, lat: f64, fetch: F) -> Self {
-        Self { zooms: providers.iter().map(|p| zoom_for(metres, lat, p.max_zoom)).collect(), tiles: HashMap::new(), fetch, used: vec![false; providers.len()] }
+        Self {
+            zooms: providers.iter().map(|p| zoom_for(metres, lat, p.max_zoom)).collect(),
+            coarse: providers.iter().map(|p| p.max_zoom < COARSE_BELOW).collect(),
+            tiles: HashMap::new(),
+            fetch,
+            used: vec![false; providers.len()],
+        }
     }
 
     /// Bilinear sample of provider `p` at a point; `None` if a tile is missing.
@@ -208,8 +221,15 @@ impl<F: FnMut(usize, u8, u32, u32) -> Option<Arc<Tile>>> Sampler<F> {
     fn colour(&mut self, p: usize, lat: f64, lon: f64) -> Option<[f64; 3]> {
         let fallback = self.zooms.len() - 1;
         for p in [p, fallback] {
-            if let Some(c) = self.one(p, lat, lon) {
+            if let Some(mut c) = self.one(p, lat, lon) {
                 self.used[p] = true;
+                if self.coarse[p] {
+                    // Warm colour (roofs blurred together) taken out, so a town reads as paving
+                    // rather than pink; greens and blues are left alone.
+                    let grey = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
+                    let warm = ((c[0] - c[1]) / 25.0).clamp(0.0, 1.0);
+                    c = c.map(|v| v + (grey - v) * COARSE_GREY * warm);
+                }
                 return Some(c);
             }
         }
