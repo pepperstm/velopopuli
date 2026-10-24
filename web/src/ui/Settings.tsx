@@ -601,6 +601,27 @@ export function SettingsScreen(): React.JSX.Element {
           value={settings.scenery}
           onChange={(v) => update((s) => ({ ...s, scenery: v }))}
         />
+        <Toggle
+          label="Satellite and aerial imagery on the ground"
+          hint="Covers the ground near the route with real imagery, downloaded as you ride and kept for next time: national aerial photos in Switzerland, France, Spain, the Netherlands and the US, and Sentinel-2 satellite imagery everywhere else."
+          value={settings.look.imagery}
+          onChange={(v) => look({ imagery: v })}
+        />
+        {settings.look.imagery && (
+          <label className="field">
+            <span>Your own imagery provider (optional)</span>
+            <input
+              type="password"
+              value={settings.look.imageryUrl}
+              placeholder="https://…/{z}/{x}/{y}.jpg?access_token=…"
+              onChange={(e) => look({ imageryUrl: e.target.value.trim() })}
+            />
+            <small>
+              A tile URL with {'{z}'}, {'{x}'} and {'{y}'}, including your key, from a provider you have an account with (Mapbox, MapTiler and others). It is
+              used under your account and its terms instead of the open sources.
+            </small>
+          </label>
+        )}
         <div className="fields">
           <label className="field">
             <span>Time of day</span>

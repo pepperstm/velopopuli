@@ -50,6 +50,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const [loading, setLoading] = useState('Loading route…')
   const [error, setError] = useState('')
   const [hud, setHud] = useState<RideState | null>(null)
+  const [credits, setCredits] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const finishing = useRef(false)
   const units = settings.units
@@ -115,7 +116,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           started.covered,
           (i) => `${i} ${imperial ? 'mi' : 'km'}`,
           imperial ? 1609.344 : 1000,
-          started.landmarks
+          started.landmarks,
+          setCredits
         )
         worldRef.current = world
         const native = settingsRef.current.nativeRenderer && (await api.native.available())
@@ -305,6 +307,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   return (
     <div className="ride">
       <canvas ref={canvasRef} className="world" />
+      {credits.length > 0 && <div className="imagery-credits">Imagery: {credits.join(' · ')}</div>}
 
       {loading && (
         <div className="ride-overlay solid">

@@ -170,11 +170,16 @@ pub struct WorldLook {
     /// Street-level photos from Mapillary (needs a free client token).
     pub photos: bool,
     pub mapillary_token: String,
+    /// Satellite and aerial imagery on the ground.
+    pub imagery: bool,
+    /// The rider's own imagery provider: a tile URL with `{z}`, `{x}` and `{y}` (and their key).
+    /// Empty for the open sources.
+    pub imagery_url: String,
 }
 
 impl Default for WorldLook {
     fn default() -> Self {
-        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new() }
+        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new(), imagery: true, imagery_url: String::new() }
     }
 }
 

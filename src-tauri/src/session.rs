@@ -163,6 +163,8 @@ struct RideState<'a> {
 pub struct Session {
     pub route_id: String,
     pub world: Arc<World>,
+    /// Imagery for the ground, if it is on and the route is a real place.
+    pub imagery: Option<Arc<crate::imagery::Imagery>>,
     engine: Arc<Mutex<RideEngine>>,
     settings: Arc<Mutex<Settings>>,
     stop: Arc<AtomicBool>,
@@ -364,9 +366,11 @@ impl Session {
         );
         devices.command_trainer(TrainerCommand::UserConfig { rider_kg: settings.rider.weight_kg, bike_kg: settings.rider.bike_kg });
 
+        let imagery = (settings.look.imagery && real_place).then(|| crate::imagery::Imagery::new(http.clone(), store.dir(), world.route.clone(), &settings.look.imagery_url));
         let session = Arc::new(Session {
             route_id: route_id.to_string(),
             world,
+            imagery,
             engine: Arc::new(Mutex::new(engine)),
             settings: Arc::new(Mutex::new(settings)),
             stop: Arc::new(AtomicBool::new(false)),

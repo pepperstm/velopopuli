@@ -134,6 +134,75 @@ interface Chunk {
   roads: THREE.Mesh | null
   /** Vertex positions, kept for ground-height lookups. */
   positions: Float32Array
+  /** Imagery on the ground: its size in pixels (0 for none yet, −1 for none to be had), and whether a request is out. */
+  imagery: { size: number; busy: boolean; material: THREE.MeshLambertMaterial | null }
+}
+
+/** Chunk image sizes (as `world::imagery`): fine within `NEAR_RING` chunks of the rider, coarse beyond. */
+const NEAR_PX = 256
+const FAR_PX = 128
+const NEAR_RING = 2
+/** Imagery requests out at once: few, so the nearest chunks get theirs first. */
+const IMAGERY_IN_FLIGHT = 3
+
+/**
+ * Fine mottling, repeated every few metres over imagery, so the ground close by has grain
+ * even where the imagery is coarse (Sentinel-2 is 10 m a pixel). Mid-grey on average.
+ */
+function detailTexture(): THREE.Texture {
+  const size = 128
+  const data = new Uint8Array(size * size * 4)
+  let seed = 7
+  const rand = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < size * size; i++) {
+    const v = 128 + (rand() - 0.5) * 70
+    data.set([v, v, v, 255], i * 4)
+  }
+  const t = new THREE.DataTexture(data, size, size, THREE.RGBAFormat)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.magFilter = THREE.LinearFilter
+  t.minFilter = THREE.LinearMipmapLinearFilter
+  t.generateMipmaps = true
+  t.needsUpdate = true
+  return t
+}
+
+/** Imagery is a little dull beside the painted world; lifted by this much. */
+const IMAGERY_GAIN = 1.15
+/** Detail repeats per chunk side (240 m): every 4 m. */
+const DETAIL_REPEAT = 60
+
+/**
+ * Ground with imagery on it. A photo taken from above smears down a cliff, so where the
+ * ground is steep it gives way to the ground's own colours (`steep`: 0 flat, 1 sheer).
+ */
+function imageryMaterial(texture: THREE.Texture, detail: THREE.Texture): THREE.MeshLambertMaterial {
+  const m = new THREE.MeshLambertMaterial({ map: texture, vertexColors: true })
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.detail = { value: detail }
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float steep;\nvarying float vSteep;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSteep = steep;')
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSteep;\nuniform sampler2D detail;').replace(
+      '#include <color_fragment>',
+      `diffuseColor.rgb *= ${IMAGERY_GAIN.toFixed(2)} * (0.5 + texture2D(detail, vMapUv * ${DETAIL_REPEAT.toFixed(1)}).r);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vColor.rgb, vSteep);`
+    )
+  }
+  m.customProgramCacheKey = () => 'imagery'
+  return m
+}
+
+/** Splits a `terrain_imagery` reply into its credits and pixels; `null` if there is no image. */
+function decodeImagery(buf: ArrayBuffer): { size: number; credits: string[]; rgba: Uint8Array } | null {
+  if (buf.byteLength < 8) return null
+  const [size, text] = new Uint32Array(buf, 0, 2)
+  const credits = new TextDecoder()
+    .decode(new Uint8Array(buf, 8, text))
+    .split('\n')
+    .filter(Boolean)
+  const start = 8 + Math.ceil(text / 4) * 4
+  return { size, credits, rgba: new Uint8Array(buf, start, size * size * 4) }
 }
 
 const key = (cx: number, cz: number): string => `${cx},${cz}`
@@ -165,8 +234,15 @@ export class Terrain {
   private farBusy = false
   private centre = { cx: 0, cz: 0 }
   private disposed = false
+  private credits = new Set<string>()
+  private detail = detailTexture()
+  private imageryBusy = 0
 
-  constructor(private layout: WorldLayout) {
+  /** `onCredits` hears the imagery credits whenever one is added. */
+  constructor(
+    private layout: WorldLayout,
+    private onCredits: (credits: string[]) => void = () => undefined
+  ) {
     this.indices = gridIndices(layout.cells)
     const farGeo = new THREE.BufferGeometry()
     const farVerts = (layout.farCells + 1) ** 2
@@ -213,6 +289,87 @@ export class Terrain {
         this.release(c)
         this.chunks.delete(k)
       }
+    }
+    this.pumpImagery()
+  }
+
+  /** Starts imagery for the nearest chunks that lack it, or have only the coarse kind up close. */
+  private pumpImagery(): void {
+    while (this.imageryBusy < IMAGERY_IN_FLIGHT) {
+      let best: { cx: number; cz: number; c: Chunk; d: number } | null = null
+      for (const [k, c] of this.chunks) {
+        if (c.imagery.busy || c.imagery.size < 0) continue
+        const [cx, cz] = k.split(',').map(Number)
+        if (c.imagery.size !== 0 && !(c.imagery.size < NEAR_PX && this.near(cx, cz))) continue
+        const d = Math.hypot(cx - this.centre.cx, cz - this.centre.cz)
+        if (!best || d < best.d) best = { cx, cz, c, d }
+      }
+      if (!best) return
+      void this.loadImagery(best.cx, best.cz, best.c)
+    }
+  }
+
+  private near(cx: number, cz: number): boolean {
+    return Math.max(Math.abs(cx - this.centre.cx), Math.abs(cz - this.centre.cz)) <= NEAR_RING
+  }
+
+  /** Puts imagery on a chunk's ground, sharper if it is near; keeps its own colours if there is none. */
+  private async loadImagery(cx: number, cz: number, c: Chunk): Promise<void> {
+    if (c.imagery.busy) return
+    c.imagery.busy = true
+    this.imageryBusy++
+    try {
+      const size = this.near(cx, cz) ? NEAR_PX : FAR_PX
+      const img = decodeImagery(await api.ride.imagery(cx, cz, size))
+      // Nothing to be had here (imagery off, or offline): the ground keeps its own colours.
+      if (!img) {
+        if (c.imagery.size === 0) c.imagery.size = -1
+        return
+      }
+      // Gone while it was fetched.
+      if (this.disposed || this.chunks.get(key(cx, cz)) !== c) return
+      const texture = new THREE.DataTexture(img.rgba, img.size, img.size, THREE.RGBAFormat)
+      texture.colorSpace = THREE.SRGBColorSpace
+      texture.magFilter = THREE.LinearFilter
+      texture.minFilter = THREE.LinearMipmapLinearFilter
+      texture.generateMipmaps = true
+      texture.anisotropy = 8
+      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+      texture.needsUpdate = true
+      const geo = c.mesh.geometry
+      if (!geo.getAttribute('uv')) {
+        // The image spans the chunk exactly, rows running along +z.
+        const { chunk } = this.layout
+        const p = c.positions
+        const normals = geo.getAttribute('normal').array
+        const count = p.length / 3
+        const uv = new Float32Array(count * 2)
+        const steep = new Float32Array(count)
+        for (let i = 0; i < count; i++) {
+          uv[i * 2] = p[i * 3] / chunk - cx
+          uv[i * 2 + 1] = p[i * 3 + 2] / chunk - cz
+          // From about 30° the photo gives way, and is gone by about 50°.
+          steep[i] = THREE.MathUtils.smoothstep(1 - normals[i * 3 + 1] ** 2, 0.25, 0.6)
+        }
+        geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+        geo.setAttribute('steep', new THREE.BufferAttribute(steep, 1))
+      }
+      const old = c.imagery.material
+      c.imagery.material = imageryMaterial(texture, this.detail)
+      c.mesh.material = c.imagery.material
+      if (old) {
+        old.map?.dispose()
+        old.dispose()
+      }
+      c.imagery.size = img.size
+      const before = this.credits.size
+      for (const credit of img.credits) this.credits.add(credit)
+      if (this.credits.size !== before) this.onCredits([...this.credits])
+    } catch (err) {
+      if (!this.disposed) void api.log(`imagery ${cx},${cz} failed: ${err}`)
+    } finally {
+      c.imagery.busy = false
+      this.imageryBusy--
     }
   }
 
@@ -289,7 +446,8 @@ export class Terrain {
         roads.renderOrder = 1
         this.group.add(roads)
       }
-      this.chunks.set(k, { mesh, trees, buildings, water, roads, positions: data.positions })
+      const chunk: Chunk = { mesh, trees, buildings, water, roads, positions: data.positions, imagery: { size: 0, busy: false, material: null } }
+      this.chunks.set(k, chunk)
     } catch (err) {
       if (!this.disposed) void api.log(`terrain chunk ${k} failed: ${err}`)
     } finally {
@@ -346,6 +504,11 @@ export class Terrain {
   private release(c: Chunk): void {
     this.group.remove(c.mesh)
     c.mesh.geometry.dispose()
+    if (c.imagery.material) {
+      c.imagery.material.map?.dispose()
+      c.imagery.material.dispose()
+      c.imagery.material = null
+    }
     if (c.trees) {
       this.group.remove(c.trees)
       c.trees.dispose()
@@ -370,6 +533,7 @@ export class Terrain {
     this.chunks.clear()
     this.far.geometry.dispose()
     this.ground.dispose()
+    this.detail.dispose()
     this.treeGeometry.dispose()
     this.treeMaterial.dispose()
     this.buildingMaterial.map?.dispose()

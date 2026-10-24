@@ -15,6 +15,7 @@
 Everything comes from open data and is downloaded once per route, then kept on your computer.
 
 - **Terrain** from open elevation tiles, out to the horizon. Near the road the ground is shaped to the route's own elevation so the road never floats or sinks.
+- **Imagery on the ground** — real aerial photos in Switzerland, France, Spain, the Netherlands and the US, and Sentinel-2 satellite imagery everywhere else, downloaded as you ride and kept for next time. Sharp near you (about a metre a pixel), coarser further out; the distant hills take their colours from it too. Steep slopes keep their painted rock, as a photo from above can't show a cliff face. The credits for the imagery in view are at the bottom left. Turn it off, or use your own provider (a tile URL with `{z}`, `{x}` and `{y}` and your key, e.g. from Mapbox or MapTiler), under **Settings → Virtual world**.
 - **Buildings** from OpenStreetMap, within about 350 m of the road — with mapped heights where the detailed source (Overpass) answers, otherwise estimated.
 - **Forests, lakes, rivers, the surrounding roads and railways, bridges and tunnels** from OpenStreetMap's vector tiles, about a kilometre either side. Where your route crosses a mapped bridge or tunnel, you ride over the deck or through the bore.
 - **Your road itself** is drawn as a closed race road, set apart from the map's road network by crowd barriers. It takes the real road's character from OpenStreetMap tags:

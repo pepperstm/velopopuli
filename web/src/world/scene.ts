@@ -214,7 +214,9 @@ export class World {
     private covered: [number, number][],
     kmLabel: (km: number) => string,
     markerSpacing: number,
-    private landmarks: Landmark[] = []
+    private landmarks: Landmark[] = [],
+    /** Hears the imagery credits as they grow. */
+    onCredits: (credits: string[]) => void = () => undefined
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -225,7 +227,7 @@ export class World {
     this.sun.position.set(0.5, 1, 0.35)
     this.scene.add(this.sun, this.lamp)
 
-    this.terrain = new Terrain(layout)
+    this.terrain = new Terrain(layout, onCredits)
     this.scene.add(this.terrain.group)
     this.scene.add(this.rider.group)
     this.addMarkers(kmLabel, markerSpacing)
