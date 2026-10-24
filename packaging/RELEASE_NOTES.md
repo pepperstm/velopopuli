@@ -2,11 +2,13 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
-## What's new in 0.3.0
+## What's new in 0.3.5
 
-- **Virtual gears** (optional): leave the bike in one gear and shift with keys, a Bluetooth remote or on-screen buttons. Set up your own chainrings and cassette or pick a preset; the trainer's resistance changes so each gear feels real. Riders who shift their bike's own gears don't need to change anything. [How it works](https://github.com/pepperstm/velopopuli/wiki/Virtual-gears)
-- **Now licensed under the GNU GPL v3 or later**, so VeloPopuli and anything built from it stays open source. Earlier versions have been relicensed too.
-- For contributors: a contribution guide, project handoff notes, issue and pull-request templates, and automatic formatting checks.
+- **Road surfaces you can feel** (optional): concrete, gravel, cobbles and earth roll heavier than tarmac, so you slow on screen and the trainer gets harder by the same force. Turn it off under **Settings → Trainer & physics → Feel the road surface**.
+- **Mountain-bike trails:** ride graded singletrack, paths and bridleways from OpenStreetMap. Harder grades roll heavier and have a speed limit; trails are narrow with no barriers, look like worn singletrack, bank into berms on tight turns, cross streams on log bridges and splash through fords where there is no bridge.
+- **Find waymarked mountain-bike routes** in an area and ride one.
+- **Off the mapped roads**, a route rides a dirt track instead of tarmac.
+- The trail and surface feel is new and hasn't yet been tuned on real trainers — feedback welcome.
 
 ## Download
 

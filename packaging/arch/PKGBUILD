@@ -1,7 +1,7 @@
 # Maintainer: Graham Barber <pepperstm at me dot com>
 # Packages the official Debian build of VeloPopuli for Arch Linux (and Manjaro, EndeavourOS…).
 pkgname=velopopuli-bin
-pkgver=0.3.0
+pkgver=0.3.5
 pkgrel=1
 pkgdesc="The people's indoor ride: ride real GPX routes in 3D on your smart trainer"
 arch=('x86_64')

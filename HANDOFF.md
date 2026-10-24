@@ -12,7 +12,7 @@ A free, open-source indoor-cycling app: import any GPX route, ride it on a smart
 
 It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding GPX routes over winter), was rewritten the same day from Electron/TypeScript into Rust + Tauri for low overhead, renamed "Velo Populi" and then "VeloPopuli" to match the website.
 
-## 2. Where it stands (October 2026, v0.3.0)
+## 2. Where it stands (October 2026, v0.3.5)
 
 **Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks, weather), the virtual-gear maths, diagnostics, the relay. 79 automated tests (plus one that needs the network and is skipped by default), plus visual checks through the automated smoke harness (section 6).
 
