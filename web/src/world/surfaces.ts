@@ -3,10 +3,10 @@ import * as THREE from 'three'
 /**
  * Textures for the route's road, one per look (`Surface as u8` in Rust: asphalt, concrete,
  * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road;
- * then 6, the planks of a log bridge on a trail; 7, singletrack, a narrow earth trail). Across: the gravel shoulder on the outer 20/256ths
+ * then 6, the planks of a log bridge on a trail; 7, singletrack, a narrow earth trail; 8, the stones of a ford's bed). Across: the gravel shoulder on the outer 20/256ths
  * each side (stretched down the embankment), the surface between. Along: 12 m per repeat.
  */
-export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber', 'singletrack'] as const
+export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber', 'singletrack', 'ford'] as const
 
 /** Deterministic noise, so both renderers get the same picture. */
 function random(seed: number): () => number {
@@ -188,6 +188,27 @@ function draw(surface: number): HTMLCanvasElement {
         // Worn pale on top where tyres cross it.
         ctx.fillStyle = 'rgba(150,118,84,0.5)'
         for (const [x, y] of line) ctx.fillRect(x, y - 1, 2, 1)
+      }
+      return c
+    }
+    case 'ford': {
+      // Rounded stones, wet and dark, with silt between: a ford's bed, seen through its water.
+      const [c, ctx] = canvas(256, 256)
+      shoulders(ctx, 256, 256, '#4f5a3a')
+      ctx.fillStyle = '#4a4438'
+      ctx.fillRect(20, 0, 216, 256)
+      for (let i = 0; i < 420; i++) {
+        const r = 3 + rnd() * 7
+        const x = 20 + r + rnd() * (216 - 2 * r)
+        const y = rnd() * 256
+        const g = 70 + rnd() * 60
+        ctx.fillStyle = `rgb(${g},${g * 0.95},${g * 0.86})`
+        ctx.beginPath()
+        ctx.ellipse(x, y, r, r * (0.6 + rnd() * 0.3), rnd() * Math.PI, 0, Math.PI * 2)
+        ctx.fill()
+        // A wet glint on top.
+        ctx.fillStyle = 'rgba(220,226,222,0.35)'
+        ctx.fillRect(x - r * 0.3, y - r * 0.4, r * 0.5, 1.5)
       }
       return c
     }

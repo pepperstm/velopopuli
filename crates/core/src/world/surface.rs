@@ -208,6 +208,8 @@ pub const UNMARKED: u8 = 5;
 pub const TIMBER: u8 = 6;
 /// …or `SINGLETRACK` for a narrow earth trail: one worn line rather than a track's two ruts.
 pub const SINGLETRACK: u8 = 7;
+/// …or `FORD` for the stones of a ford's bed, under its water.
+pub const FORD: u8 = 8;
 /// Earth trails narrower than this are singletrack; the off-map dirt track (3 m) is wider.
 pub const SINGLETRACK_WIDTH: f64 = 2.5;
 

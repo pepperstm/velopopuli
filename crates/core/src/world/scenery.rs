@@ -316,6 +316,8 @@ pub struct SceneryCounts {
     /// Other roads, paths and railways drawn, and how many of their bridges.
     pub roads: usize,
     pub road_bridges: usize,
+    /// Places where the route's trail fords a stream.
+    pub fords: usize,
 }
 
 /// Scenery placed in a route's local frame.
@@ -344,6 +346,8 @@ pub struct Scene {
     pub trails: Vec<Option<super::surface::Trail>>,
     /// The trail's cross-slope (rise per metre across) per route sample: berms on tight turns.
     pub banks: Vec<f64>,
+    /// The route samples where a trail fords a stream, in order.
+    pub fords: Vec<usize>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
     pub counts: SceneryCounts,
@@ -965,6 +969,9 @@ impl Scene {
         let road = route_road(route, &beside, &nearest_kind, &scenery.ways, &covered);
         (scene.surfaces, scene.widths, scene.marked, scene.trails) = (road.surfaces, road.widths, road.marked, road.trails);
         scene.banks = super::berms::banks(route, &scene.trails, &scene.widths, &scene.kinds);
+        let streams: Vec<Vec<(f64, f64)>> = scenery.waterways.iter().filter(|w| w.kind == WaterwayKind::Stream).map(|w| local(&w.line)).collect();
+        scene.fords = super::fords::fords(route, &streams, &scene.trails, &scene.kinds);
+        scene.counts.fords = scene.fords.len();
         for road in &roads {
             scene.add_road(&beside, road, &nearest_road);
         }
