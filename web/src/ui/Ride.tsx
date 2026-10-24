@@ -100,6 +100,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           grade: block(5),
           width: data.byteLength >= n * 56 ? block(6) : new Float64Array(n).fill(6.5),
           bank: data.byteLength >= n * 64 ? block(7) : new Float64Array(n),
+          dip: data.byteLength >= n * 72 ? block(8) : new Float64Array(n),
           climbs: started.climbs
         }
         const canvas = canvasRef.current!
@@ -331,6 +332,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               </span>
               {hud.trail && (
                 <span>
+                  {hud.ford && 'Ford · '}
                   {hud.trail.grade === null ? 'Trail' : hud.trail.estimated ? `Trail · about S${hud.trail.grade}` : `MTB trail · S${hud.trail.grade}`}
                 </span>
               )}

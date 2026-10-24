@@ -78,10 +78,10 @@ impl World {
     }
 
     /// How far above the trail's centre-line height the surface is at `offset` metres across,
-    /// at sample `i`: the inside edge stays put and the outside edge rises.
+    /// at sample `i`: the inside edge stays put and the outside edge rises; less any dip (a ford).
     pub fn surface_lift(&self, i: usize, offset: f64) -> f64 {
         let slope = self.bank(i);
-        slope.abs() * self.half_width(i) + offset * slope
+        slope.abs() * self.half_width(i) + offset * slope - self.dip(i)
     }
 
     /// As `bank` and `surface_lift`, smoothly between samples, at `distance` metres along the

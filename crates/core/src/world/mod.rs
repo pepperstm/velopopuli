@@ -6,6 +6,7 @@ mod barriers;
 mod berms;
 mod buildings;
 mod dem;
+mod fords;
 mod height;
 mod landmarks;
 mod mesh;
@@ -18,6 +19,7 @@ mod surface;
 pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
+pub use fords::{FORD_DEPTH, FORD_MAX_SPEED, FORD_REACH, FORD_ROLLING};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
 pub use landmarks::{landmarks, Landmark};
 pub use mesh::TriMesh;
@@ -25,7 +27,8 @@ pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, L
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
 pub use surface::{
-    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, TIMBER, UNMARKED, WAY_TAGS,
+    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, FORD, SINGLETRACK,
+    SINGLETRACK_WIDTH, TIMBER, UNMARKED, WAY_TAGS,
 };
 
 use std::sync::Arc;
@@ -111,6 +114,8 @@ pub struct World {
 /// Depth of water over a lake or river bed, and how far its surface lies below the banks.
 const WATER_DEPTH: f64 = 1.6;
 const WATER_DROP: f64 = 0.5;
+/// Near a ford (within this many metres), a stream is brought down to the ford's water level.
+const FORD_STREAM_M: f64 = 15.0;
 // Water colours, authored in sRGB: open water, and the shallows at the edge.
 const WATER: [f64; 3] = [0.17, 0.36, 0.47];
 const SHALLOWS: [f64; 3] = [0.30, 0.50, 0.55];
@@ -313,13 +318,17 @@ impl World {
             for s in strips {
                 let mid = ((s.a.0 + s.b.0) / 2.0, (s.a.1 + s.b.1) / 2.0);
                 let k = (((mid.1 - z0) / cell).round() as usize + m).min(pad - 1) * pad + (((mid.0 - x0) / cell).round() as usize + m).min(pad - 1);
+                // Near a ford, the stream comes down to the ford's water level and runs on across
+                // the trail, over its dipped bed and under its surface either side.
+                let ford = self.scene.fords.iter().copied().find(|&f| (self.route.x[f] - mid.0).hypot(self.route.z[f] - mid.1) < FORD_STREAM_M);
+                let cap = ford.map_or(f64::INFINITY, |f| self.ford_level(f));
                 // Not where a lake already covers it, nor across the road (a culvert), nor over a tunnel.
-                if wet[k] || trench[k] || open[k] < 7.0 {
+                if wet[k] || trench[k] || (open[k] < 7.0 && ford.is_none()) {
                     continue;
                 }
                 let corner = |p: (f64, f64), n: (f64, f64), side: f64| {
                     let (x, z) = (p.0 + n.0 * s.half * side, p.1 + n.1 * s.half * side);
-                    [x as f32, (on_mesh(&h, pad, (x - x0) / cell + m as f64, (z - z0) / cell + m as f64) + 0.3) as f32, z as f32]
+                    [x as f32, (on_mesh(&h, pad, (x - x0) / cell + m as f64, (z - z0) / cell + m as f64) + 0.3).min(cap) as f32, z as f32]
                 };
                 let (a0, a1, b0, b1) = (corner(s.a, s.na, -1.0), corner(s.a, s.na, 1.0), corner(s.b, s.nb, -1.0), corner(s.b, s.nb, 1.0));
                 // Wound to face upward, like the lake sheets.
@@ -456,6 +465,9 @@ impl World {
         let looks = (0..n)
             .map(|i| match self.scene.surfaces.get(i) {
                 _ if self.timber(i) => TIMBER,
+                // Stones under the water, from a sample before the crossing to one after.
+                _ if self.scene.fords.iter().any(|&f| f.abs_diff(i) <= 1) => FORD,
+                Some(Surface::Dirt) if self.scene.trails.get(i).is_some_and(Option::is_some) && self.half_width(i) * 2.0 < SINGLETRACK_WIDTH => SINGLETRACK,
                 Some(Surface::Asphalt) if !self.scene.marked.get(i).copied().unwrap_or(true) => UNMARKED,
                 Some(s) => *s as u8,
                 None => 0,

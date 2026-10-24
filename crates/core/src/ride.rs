@@ -12,7 +12,7 @@ use crate::physics::{step_speed, wind_coefficient, PhysicsParams};
 use crate::segments::{Segment, SegmentBest, SegmentSource, SPLIT_M};
 use crate::types::{PersonalBest, Settings, TrainerSettings};
 use crate::workout::{StepKind, Workout, WorkoutPos};
-use crate::world::{Surface, Trail};
+use crate::world::{Surface, Trail, FORD_MAX_SPEED, FORD_ROLLING};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RideInput {
@@ -155,6 +155,8 @@ pub struct RideEngine {
     surfaces: Vec<Surface>,
     /// Where the route is on a trail, per route sample; empty means road all the way.
     trails: Vec<Option<Trail>>,
+    /// Whether each route sample is in a ford; empty means none.
+    fords: Vec<bool>,
     road_surfaces: bool,
     cda: f64,
     ftp: f64,
@@ -242,6 +244,7 @@ impl RideEngine {
             params,
             surfaces: Vec::new(),
             trails: Vec::new(),
+            fords: Vec::new(),
             road_surfaces: settings.physics.road_surfaces,
             cda: settings.physics.cda,
             ftp: settings.rider.ftp,
@@ -540,6 +543,21 @@ impl RideEngine {
         self.trails = trails;
     }
 
+    /// Where the route fords streams: whether each route sample is in a ford.
+    pub fn set_fords(&mut self, fords: Vec<bool>) {
+        self.fords = fords;
+    }
+
+    /// Whether the rider is riding through a ford.
+    pub fn ford(&self) -> bool {
+        self.ford_at(self.distance)
+    }
+
+    fn ford_at(&self, distance: f64) -> bool {
+        let i = (distance / self.route.step).round().max(0.0) as usize;
+        self.fords.get(i).copied().unwrap_or(false)
+    }
+
     /// The trail the rider is on, if any.
     pub fn trail(&self) -> Option<Trail> {
         self.trail_at(self.distance)
@@ -564,14 +582,16 @@ impl RideEngine {
     /// resistance, and a graded trail's speed limit.
     fn params_at(&self, distance: f64, mass: f64) -> PhysicsParams {
         let trail_limit = self.trail_at(distance).and_then(Trail::max_speed).unwrap_or(f64::INFINITY);
-        PhysicsParams { mass, crr: self.crr_at(distance), max_speed: self.params.max_speed.min(trail_limit), ..self.params }
+        let ford_limit = if self.ford_at(distance) { FORD_MAX_SPEED } else { f64::INFINITY };
+        PhysicsParams { mass, crr: self.crr_at(distance), max_speed: self.params.max_speed.min(trail_limit).min(ford_limit), ..self.params }
     }
 
     /// Rolling resistance at a distance along the route.
     fn crr_at(&self, distance: f64) -> f64 {
         if self.road_surfaces {
-            // A graded trail's roots and rocks decide; otherwise what it's made of.
-            let factor = self.trail_at(distance).and_then(Trail::rolling_factor).unwrap_or_else(|| self.surface_at(distance).rolling_factor());
+            // Water and stones in a ford; a graded trail's roots and rocks; otherwise what it's made of.
+            let trail = || self.trail_at(distance).and_then(Trail::rolling_factor).unwrap_or_else(|| self.surface_at(distance).rolling_factor());
+            let factor = if self.ford_at(distance) { FORD_ROLLING.max(trail()) } else { trail() };
             self.params.crr * factor
         } else {
             self.params.crr

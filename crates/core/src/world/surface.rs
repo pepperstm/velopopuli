@@ -206,6 +206,12 @@ pub fn highway_marked(highway: &str) -> bool {
 pub const UNMARKED: u8 = 5;
 /// …or `TIMBER` for the planks of a log bridge on a trail.
 pub const TIMBER: u8 = 6;
+/// …or `SINGLETRACK` for a narrow earth trail: one worn line rather than a track's two ruts.
+pub const SINGLETRACK: u8 = 7;
+/// …or `FORD` for the stones of a ford's bed, under its water.
+pub const FORD: u8 = 8;
+/// Earth trails narrower than this are singletrack; the off-map dirt track (3 m) is wider.
+pub const SINGLETRACK_WIDTH: f64 = 2.5;
 
 /// Width in metres from a `width` tag ("5", "5.5 m", "6m") or, failing that, a `lanes` tag.
 pub fn tagged_width(width: Option<&str>, lanes: Option<&str>) -> Option<f64> {

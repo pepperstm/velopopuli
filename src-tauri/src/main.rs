@@ -150,6 +150,7 @@ fn main() {
             commands::native_camera,
             commands::native_look,
             commands::native_capture,
+            commands::native_saving,
             commands::native_available,
             commands::ride_finish,
             commands::ride_abort,

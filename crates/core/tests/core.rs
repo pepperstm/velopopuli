@@ -1038,9 +1038,9 @@ mod scenery {
         );
         let i = (1000.0 / route.step) as usize;
         assert_eq!(logs.field.kinds()[i], BRIDGE);
-        // Planks on the trail's bridge, earth either side of it; the road's bridge keeps its surface.
+        // Planks on the trail's bridge, singletrack either side of it; the road's bridge keeps its surface.
         assert_eq!(logs.road().looks[i], velopopuli_core::world::TIMBER);
-        assert_eq!(logs.road().looks[(900.0 / route.step) as usize], Surface::Dirt as u8);
+        assert_eq!(logs.road().looks[(900.0 / route.step) as usize], velopopuli_core::world::SINGLETRACK);
         assert_ne!(concrete.road().looks[i], velopopuli_core::world::TIMBER);
         // How far from the route's line anything on the bridge reaches.
         let reach = |w: &World| {
@@ -1064,6 +1064,55 @@ mod scenery {
     }
 
     #[test]
+    fn a_trail_fords_a_stream() {
+        // 3 km of graded singletrack on flat ground; a stream crosses it at 1000 m, another
+        // crosses at a slant (40°) at 1800 m, and a third runs alongside it from 2000 to 2400 m,
+        // 1 m off. Then the same on a road.
+        let route = Arc::new(build_route("ford", &straight(3000.0, |_| Some(100.0))).unwrap());
+        let scenery = |trail: bool| Scenery {
+            tiles: corridor_tiles(&route, 500.0).into_iter().map(|(x, y)| [x, y]).collect(),
+            waterways: vec![
+                Waterway { kind: WaterwayKind::Stream, line: geo(&route, &[(-60.0, 1000.0), (60.0, 1000.0)]) },
+                Waterway { kind: WaterwayKind::Stream, line: geo(&route, &[(-15.0, 1782.0), (15.0, 1818.0)]) },
+                Waterway { kind: WaterwayKind::Stream, line: geo(&route, &[(1.0, 2000.0), (1.0, 2400.0)]) },
+            ],
+            roads: vec![Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(0.0, 0.0), (0.0, 3000.0)]) }],
+            ways: if trail { vec![MappedWay { highway: "path".into(), surface: None, width: None, mtb: Some(1), hiking: None, line: geo(&route, &[(0.0, 0.0), (0.0, 3000.0)]) }] } else { Vec::new() },
+            way_tags: WAY_TAGS,
+            ..Default::default()
+        };
+        let world = World::with_map(route.clone(), Some(level_ground(&route, 100.0)), 0.0, Some(&scenery(true)), &[]);
+        let i = (1000.0 / route.step).round() as usize;
+        // A ford at each crossing; nothing where the stream runs beside the trail.
+        assert_eq!(world.fords().len(), 2, "{:?}", world.fords());
+        let f = world.fords()[0];
+        assert!(f.abs_diff(i) <= 1, "{f} vs {i}");
+        assert!(world.fords()[1].abs_diff((1800.0 / route.step).round() as usize) <= 1);
+        assert_eq!(world.scene.counts.fords, 2);
+        // The trail dips there, its bed is stones, and riders sink with it.
+        assert_eq!(world.dip(f), velopopuli_core::world::FORD_DEPTH);
+        assert_eq!(world.dip(f + 3), 0.0);
+        assert_eq!(world.road().looks[f], velopopuli_core::world::FORD);
+        assert_eq!(world.road().looks[f + 3], velopopuli_core::world::SINGLETRACK);
+        let road = world.road();
+        let y = |s: usize| road.positions[(s * ROAD_SECTION + 2) * 3 + 1] as f64;
+        assert!((y(f + 4) - y(f) - velopopuli_core::world::FORD_DEPTH).abs() < 1e-3, "{} {}", y(f), y(f + 4));
+        assert!((world.bank_at(f as f64 * route.step, 0.0).1 + velopopuli_core::world::FORD_DEPTH).abs() < 1e-9);
+        // The stream runs across the trail: above its dipped bed, below its surface either side.
+        let (cx, cz) = ((route.x[f] / CHUNK).floor() as i32, (route.z[f] / CHUNK).floor() as i32);
+        let water = world.chunk(cx, cz).water;
+        let over: Vec<f64> = water.chunks(3).filter(|p| (p[0] as f64 - route.x[f]).hypot(p[2] as f64 - route.z[f]) < 4.0).map(|p| p[1] as f64).collect();
+        assert!(!over.is_empty());
+        assert!(over.iter().all(|&h| h > y(f) && h < y(f + 4)), "{over:?} between {} and {}", y(f), y(f + 4));
+        // A rider is slowed through it, and only near it.
+        let wet = world.in_ford();
+        assert!(wet[f] && wet[f + 1] && !wet[f + 3]);
+        // A road over the same stream keeps its culvert.
+        let road = World::with_map(route.clone(), Some(level_ground(&route, 100.0)), 0.0, Some(&scenery(false)), &[]);
+        assert!(road.fords().is_empty());
+    }
+
+    #[test]
     fn leaves_the_mapped_roads_on_a_dirt_track() {
         // 3 km: a lane from 0 to 1000 m, a 60 m gap, the lane again to 1500 m, nothing mapped
         // from 1500 to 2500 m, then the lane to the end.
@@ -1078,6 +1127,7 @@ mod scenery {
         assert_eq!(s[at(2000.0)], Surface::Dirt);
         assert_eq!(world.scene.trails[at(2000.0)], Some(Trail::default()));
         assert!((w[at(2000.0)] - 3.0).abs() < 0.05, "{}", w[at(2000.0)]);
+        // A track, not singletrack: it is wider, with two ruts.
         assert_eq!(world.road().looks[at(2000.0)], Surface::Dirt as u8);
         // On the lane, and across the short gap in it, still tarmac.
         assert_eq!(s[at(500.0)], Surface::Asphalt);

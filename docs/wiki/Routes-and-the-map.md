@@ -24,13 +24,15 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
   When the tags can't be fetched, surface and width are guessed from the road class, and fetching is tried again a day later.
 
-  **Trails** — an unpaved path or bridleway, a walking trail mapped as a footway (unpaved, or with a hiking grade), steps, or anything graded for mountain bikes (`mtb:scale` S0–S6, or `mtb:scale:imba`), is ridden as a trail: earth unless the map says otherwise, 1.5 m wide unless a width is mapped, no centre line and no crowd barriers. Paved shared paths and town pavements are ridden like a lane.
+  **Trails** — an unpaved path or bridleway, a walking trail mapped as a footway (unpaved, or with a hiking grade), steps, or anything graded for mountain bikes (`mtb:scale` S0–S6, or `mtb:scale:imba`), is ridden as a trail: earth unless the map says otherwise, 1.5 m wide unless a width is mapped, no centre line and no crowd barriers. A narrow earth trail looks like singletrack — one worn line, with roots and stones across it — where a wider dirt track has two wheel ruts. Paved shared paths and town pavements are ridden like a lane.
 
   Where a trail has no mountain-bike grade, one is estimated from its hiking grade (`sac_scale`): hiking → S0, mountain hiking → S1, demanding mountain hiking → S2, alpine hiking → S3, harder → S4. Steps count as S2. The HUD shows **MTB trail · S2** for a mapped grade, **Trail · about S2** for an estimated one, or **Trail** when there's neither.
 
   **Berms** — tight turns on trails with a mapped mountain-bike grade are banked: the outside edge rises (up to 35°, and never more than a metre), the inside stays at ground level, and riders lean into the turn with it. A bend counts as tight from a radius of about 30 m, fully banked from 12 m — measured on the route as ridden, whose corners are rounded off a little. Walking paths and farm tracks stay flat.
 
   **Log bridges** — where a trail crosses a mapped bridge, it's a timber one: a plank deck barely wider than the trail, logs underneath, a wooden handrail on posts each side, and timber trestles under a longer span. Roads keep their concrete bridges.
+
+  **Fords** — where a trail crosses a mapped stream with no bridge, it goes through the water: the trail dips about 30 cm, its bed is wet stones, and the stream runs on across it, shallow at the edges and deepest in the middle. Riding through is about as heavy as an S2 trail and held to 12 km/h for a few metres either side; the HUD shows **Ford**. Roads over streams keep their culverts.
 
   **Off the mapped roads** — where your route crosses a field, a beach or a trail nobody has mapped, for 100 m or more, you ride a 3 m dirt track. Shorter gaps (junctions, a GPS trace wandering off the road) keep the road either side, and where no map data could be loaded nothing is assumed: the road stays tarmac.
 
