@@ -310,10 +310,40 @@ pub async fn terrain_chunk(state: State<'_, AppState>, cx: i32, cz: i32) -> Res<
     tauri::async_runtime::spawn_blocking(move || grid_response(world.chunk(cx, cz))).await.map_err(blocking_err)
 }
 
+/// A chunk's ground image. Layout: `[size, credits length]` as u32, the credits (UTF-8, one
+/// per line, padded to four bytes), then `size × size` RGBA. Empty if there is no imagery.
+#[tauri::command]
+pub async fn terrain_imagery(state: State<'_, AppState>, cx: i32, cz: i32, size: u32) -> Res<Response> {
+    let Some(imagery) = state.current_session()?.imagery.clone() else { return Ok(Response::new(Vec::new())) };
+    let size = if size as usize >= velopopuli_core::world::NEAR_PX { velopopuli_core::world::NEAR_PX } else { velopopuli_core::world::FAR_PX };
+    let Some(img) = imagery.chunk(cx, cz, size).await else { return Ok(Response::new(Vec::new())) };
+    let mut credits = img.credits.join("\n").into_bytes();
+    let text = credits.len();
+    credits.resize(text.div_ceil(4) * 4, b' ');
+    let mut out = Vec::with_capacity(8 + credits.len() + img.rgba.len());
+    out.extend_from_slice(&(img.size as u32).to_le_bytes());
+    out.extend_from_slice(&(text as u32).to_le_bytes());
+    out.extend_from_slice(&credits);
+    out.extend_from_slice(&img.rgba);
+    Ok(Response::new(out))
+}
+
+/// How long the distant landscape waits for its imagery colours before going without.
+const FAR_IMAGERY_WAIT: std::time::Duration = std::time::Duration::from_secs(4);
+
 #[tauri::command]
 pub async fn terrain_far(state: State<'_, AppState>, cx: f64, cz: f64) -> Res<Response> {
-    let world = state.current_session()?.world.clone();
-    tauri::async_runtime::spawn_blocking(move || grid_response(world.far(cx, cz))).await.map_err(blocking_err)
+    let session = state.current_session()?;
+    let world = session.world.clone();
+    let mut mesh = tauri::async_runtime::spawn_blocking(move || world.far(cx, cz)).await.map_err(blocking_err)?;
+    // Coloured from coarse imagery, so the distance matches the imagery close by.
+    if let Some(imagery) = session.imagery.clone() {
+        let points = mesh.positions.as_chunks::<3>().0.iter().map(|p| (p[0] as f64, p[2] as f64)).collect();
+        if let Ok(Some(colours)) = tokio::time::timeout(FAR_IMAGERY_WAIT, imagery.far(points, velopopuli_core::world::FAR_CELL)).await {
+            mesh.colors = colours.into_iter().flatten().collect();
+        }
+    }
+    Ok(grid_response(mesh))
 }
 
 #[tauri::command]

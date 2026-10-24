@@ -8,6 +8,7 @@ mod buildings;
 mod dem;
 mod fords;
 mod height;
+mod imagery;
 mod landmarks;
 mod mesh;
 mod mvt;
@@ -21,6 +22,7 @@ pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Foo
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
 pub use fords::{FORD_DEPTH, FORD_MAX_SPEED, FORD_REACH, FORD_ROLLING};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
+pub use imagery::{chunk_image, far_colours, provider_at, providers, tile_url, zoom_for, ChunkImage, Provider, Tile, FAR_PX, NEAR_PX};
 pub use landmarks::{landmarks, Landmark};
 pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
