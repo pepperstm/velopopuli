@@ -48,44 +48,9 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 
 ## How it is built
 
-About two thirds of the code is Rust, and everything that computes or talks to hardware is in it:
+About two thirds of the code is Rust, and everything that computes or talks to hardware is in it: route building, physics, the ride simulation, workouts, the Bluetooth and ANT+ protocols and the 3D world's meshes are a library with no I/O and its own tests (`crates/core`); the app around it is Tauri 2 (`src-tauri`); the group-ride relay is a small server of its own (`crates/relay`). The full map of the code, and how a ride flows through it, is on the wiki's [Architecture](https://github.com/pepperstm/velopopuli/wiki/Architecture) page.
 
-```
-crates/core/      Pure Rust library, no I/O — fully unit-tested
-  gpx, physics    GPX → resampled route, smoothing, gradients, climb detection; speed-from-power model
-  ride, gamify    The ride simulation and recorder; XP, levels, badges, streaks
-  workout         Zwift .zwo and .erg/.mrc workouts; built-in sessions
-  fitness         Power curve, FTP estimate, zones, training load
-  segments        Strava segments and other rides matched onto the route; ghosts; photos
-  fit             FIT activity encoder
-  devices/        Bluetooth GATT and ANT+ protocol encode/decode; the sensor hub
-  world/          Terrain: elevation tiles, height field, chunk / horizon / road meshes;
-                  OpenStreetMap buildings (Overpass JSON and vector-tile decoding, extrusion);
-                  scenery (forests, water, the surrounding roads, matching the route to mapped bridges and tunnels)
-                  and structures (bridge decks and piers, tunnel bores and portals, overbridges)
-src-tauri/        The app (Rust, Tauri 2)
-  devices/        Bluetooth via the OS stack (btleplug); ANT+ USB stick via libusb; demo rider
-  session         50 Hz simulation loop, trainer control, saving rides
-  native/         The optional native renderer (wgpu → Metal) and its shaders
-  group, smart    Group-ride client; fan and light control
-  library, geo    Workouts, ghosts, segments, goal; place search and route planning
-  terrain, mapdata, photos, strava, store, secrets
-crates/relay/     The group-ride relay server (WebSocket, stateless)
-web/              The window contents (TypeScript, React, three.js)
-  world/          Uploads the meshes Rust produced to the GPU; camera; rider models
-  ui/             Screens and the ride HUD
-```
-
-The web layer contains no ride logic: it receives state from Rust about 20 times a second, glides between updates, and draws. Terrain meshes are generated on Rust worker threads, so building landscape never stalls a frame. The window is the operating system's own webview (WebKit on macOS/Linux, WebView2 on Windows) rather than a bundled browser.
-
-Measured on an Apple Silicon Mac, against the earlier Electron/TypeScript prototype of the same app:
-
-| | Electron prototype | Rust + system webview |
-| --- | --- | --- |
-| App bundle | 290 MB | **17 MB** (11 MB before the native renderer was added) |
-| Memory during a ride with real terrain | not measured | ~95 MB app + ~140 MB system webview processes |
-
-**Native renderer (experimental, macOS).** Settings → Virtual world → *Native renderer* draws the 3D world straight on the GPU (Metal, through wgpu) in a view beneath the web page, which then only shows the HUD. It draws everything the built-in renderer does, with the same lighting, fog, time of day and weather, rain and snow (computed on the GPU, so they cost the CPU nothing) and the riders' road shadows. It holds 60 fps and pauses while the window is covered. In a debug build with the window in front, both renderers used about the same CPU while the native one drew about 1.6 times as many frames (it was not yet capped at 60). A like-for-like release-build comparison is still to be done. Windows and Linux need a different way to put the GPU view under the web page, so there it is not offered yet.
+The web layer (`web/`, TypeScript, React, three.js) contains no ride logic: it receives state from Rust about 20 times a second, glides between updates, and draws. Terrain meshes are generated on Rust worker threads, so building landscape never stalls a frame. The window is the operating system's own webview (WebKit on macOS/Linux, WebView2 on Windows) rather than a bundled browser, which keeps the app to about 17 MB.
 
 ## Project status
 
