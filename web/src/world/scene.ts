@@ -5,9 +5,10 @@ import { api } from '../bridge'
 import { bankAt, halfWidthAt, sampleAt, type Route, type RoutePos } from '../core/gpx'
 import type { Landmark, WorldLayout } from '../types'
 import { RiderModel } from './rider'
-import { Terrain } from './terrain'
+import { ROAD_WET, Terrain } from './terrain'
+import { weathered, weatherUniforms } from './weathered'
 import { packNative } from './native'
-import { Precipitation, type Look } from './weather'
+import { Precipitation, windVector, type Look } from './weather'
 import { Rotors } from './rotors'
 
 export interface WorldRival {
@@ -123,7 +124,9 @@ function buildRoad(buffer: ArrayBuffer, n: number, section: number, dim: (sample
   // One draw group per stretch of surface; the quads after sample i start at index i·(section−1)·6.
   const perSample = (section - 1) * 6
   for (const [from, to, surface] of surfaceRuns(surfaces)) geo.addGroup(from * perSample, (Math.min(to, n - 1) - from) * perSample, surface)
-  const materials = SURFACES.map((_, s) => new THREE.MeshLambertMaterial({ map: surfaceTexture(s), side: THREE.DoubleSide, vertexColors: true }))
+  const materials = SURFACES.map((_, s) =>
+    weathered(new THREE.MeshLambertMaterial({ map: surfaceTexture(s), side: THREE.DoubleSide, vertexColors: true }), ROAD_WET, null)
+  )
   const mesh = new THREE.Mesh(geo, materials)
   // One mesh spans the whole route, so its bounding sphere is useless for culling.
   mesh.frustumCulled = false
@@ -197,6 +200,7 @@ export class World {
   private lamp = new THREE.PointLight(0xfff4e0, 0, 32, 1.6)
   private precipitation: Precipitation | null = null
   private rotors: Rotors | null = null
+  private wind: Look['wind'] = null
   private terrain: Terrain
   private rider = new RiderModel(0xe9ff60)
   private others = new Map<string, Other>()
@@ -253,6 +257,7 @@ export class World {
     this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...built.meshes)
     if (built.rotors.length) {
       this.rotors = new Rotors(built.rotors)
+      if (this.wind) this.rotors.setWind(this.wind.speed, this.wind.from)
       this.scene.add(this.rotors.mesh)
     }
   }
@@ -292,9 +297,13 @@ export class World {
       this.precipitation = null
     }
     if (l.precipitation !== 'none') {
-      this.precipitation = new Precipitation(l.precipitation)
+      this.precipitation = new Precipitation(l.precipitation, l.intensity, windVector(l.wind))
       this.scene.add(this.precipitation.object)
     }
+    weatherUniforms.wet.value = l.wet
+    weatherUniforms.snow.value = l.snow
+    this.wind = l.wind
+    if (l.wind) this.rotors?.setWind(l.wind.speed, l.wind.from)
   }
 
   /** Renders a frame and returns it as a PNG data URL (for the automated check). */

@@ -111,7 +111,7 @@ mod physics {
     use super::*;
 
     fn settle(power: f64, grade: f64) -> f64 {
-        let p = PhysicsParams { mass: 84.0, crr: 0.004, cda: 0.32, max_speed: 25.0 };
+        let p = PhysicsParams { mass: 84.0, crr: 0.004, cda: 0.32, max_speed: 25.0, headwind: 0.0 };
         let mut v = 0.0;
         for _ in 0..6000 {
             v = step_speed(v, power, grade, 0.0, &p, 0.1);
@@ -125,6 +125,19 @@ mod physics {
         assert!(flat > 33.0 && flat < 38.0, "flat {flat}");
         let climb = settle(250.0, 0.08);
         assert!(climb > 11.0 && climb < 14.0, "climb {climb}");
+    }
+
+    #[test]
+    fn a_headwind_slows_and_a_tailwind_pushes() {
+        let at = |headwind: f64| {
+            let p = PhysicsParams { mass: 84.0, crr: 0.004, cda: 0.32, max_speed: 25.0, headwind };
+            (0..6000).fold(0.0, |v, _| step_speed(v, 250.0, 0.0, 0.0, &p, 0.1)) * 3.6
+        };
+        let (into, calm, with) = (at(5.0), at(0.0), at(-5.0));
+        assert!(into < calm - 6.0 && with > calm + 6.0, "into {into}, calm {calm}, with {with}");
+        // A gale from behind blows a coasting rider along.
+        let p = PhysicsParams { mass: 84.0, crr: 0.004, cda: 0.32, max_speed: 25.0, headwind: -12.0 };
+        assert!((0..600).fold(1.0, |v, _| step_speed(v, 0.0, 0.0, 0.0, &p, 0.1)) > 3.0);
     }
 
     #[test]
@@ -231,6 +244,26 @@ mod ride {
 
     fn flat() -> Arc<Route> {
         Arc::new(build_route("flat", &straight(3000.0, |_| Some(100.0))).unwrap())
+    }
+
+    #[test]
+    fn the_wind_is_felt_as_much_as_the_setting_says() {
+        // The route runs north. A northerly is a headwind, a southerly a tailwind.
+        let ride = |wind: Option<(f64, f64)>, effect: f64| {
+            let mut clock = 1_700_000_000_000;
+            let mut engine = RideEngine::new(flat(), &settings(), None);
+            (engine.wind, engine.wind_effect) = (wind, effect);
+            run(&mut engine, 60, 200.0, &mut clock);
+            (engine.distance, engine.wind_angle())
+        };
+        let (calm, none) = ride(None, 1.0);
+        let (into, ahead) = ride(Some((8.0, 0.0)), 1.0);
+        let (with, behind) = ride(Some((8.0, 180.0)), 1.0);
+        let (seen, _) = ride(Some((8.0, 0.0)), 0.0);
+        let (half, _) = ride(Some((8.0, 0.0)), 0.5);
+        assert!(into < half && half < calm && with > calm + 30.0, "into {into}, half {half}, calm {calm}, with {with}");
+        assert_eq!(seen, calm);
+        assert!(none.is_none() && ahead.is_some_and(|a| a.abs() < 1.0) && behind.is_some_and(|a| a.abs() > 179.0), "{ahead:?} {behind:?}");
     }
 
     #[test]

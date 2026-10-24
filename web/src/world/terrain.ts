@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { weathered } from './weathered'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { api } from '../bridge'
 import type { WorldLayout } from '../types'
@@ -172,6 +173,12 @@ const IMAGERY_GAIN = 1.15
 /** Detail repeats per chunk side (240 m): every 4 m. */
 const DETAIL_REPEAT = 60
 
+/** How much rain darkens the ground, and roads (which shine darker still when wet). */
+const GROUND_WET = 0.12
+/** Snow settles on ground sloping less than about 50°, and covers it below about 25°. */
+const GROUND_SNOW = 0.62
+export const ROAD_WET = 0.35
+
 /**
  * Ground with imagery on it. A photo taken from above smears down a cliff, so where the
  * ground is steep it gives way to the ground's own colours (`steep`: 0 flat, 1 sheer).
@@ -190,7 +197,7 @@ function imageryMaterial(texture: THREE.Texture, detail: THREE.Texture): THREE.M
     )
   }
   m.customProgramCacheKey = () => 'imagery'
-  return m
+  return weathered(m, GROUND_WET, GROUND_SNOW)
 }
 
 /** Splits a `terrain_imagery` reply into its credits and pixels; `null` if there is no image. */
@@ -212,23 +219,27 @@ export class Terrain {
   private chunks = new Map<string, Chunk>()
   private pending = new Set<string>()
   private indices: Uint16Array
-  private ground = new THREE.MeshLambertMaterial({ vertexColors: true })
+  private ground = weathered(new THREE.MeshLambertMaterial({ vertexColors: true }), GROUND_WET, GROUND_SNOW)
   private treeGeometry = buildTreeGeometry()
-  private treeMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
-  private buildingMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: windowTexture() })
+  private treeMaterial = weathered(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 0, 0.15)
+  private buildingMaterial = weathered(new THREE.MeshLambertMaterial({ vertexColors: true, map: windowTexture() }), 0.08, 0.4)
   // Slightly see-through, with a sheen where the sun catches it.
   private waterMaterial = new THREE.MeshPhongMaterial({ vertexColors: true, transparent: true, opacity: 0.86, shininess: 90, specular: 0x8899aa })
   // Roads lie on the ground and are painted over it, lesser ways first: they are drawn after
   // everything solid and leave the depth buffer alone, so they can't flicker against the
   // ground or against each other where they meet.
-  private roadMaterial = new THREE.MeshLambertMaterial({
-    vertexColors: true,
-    map: waysTexture(),
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4
-  })
+  private roadMaterial = weathered(
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      map: waysTexture(),
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -4
+    }),
+    ROAD_WET,
+    null
+  )
   private far: THREE.Mesh
   private farAt = ''
   private farBusy = false

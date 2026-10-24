@@ -31,6 +31,8 @@ Power (with W/kg and zone), speed, heart rate and cadence on the left, with what
 
 Dawn, day, evening, dusk or night (with a lamp on the bike), or the real clock; clear, cloudy, rain, fog or snow — or the live weather at the route. **Settings → Virtual world**.
 
+Live weather is what is happening at the route now, looked up again every quarter of an hour: how cloudy it is, haze out to the reported visibility, rain or snow as hard as it is falling, roads dark after rain, snow lying on the ground, and the wind. The wind turns wind turbines to face it and slants the rain, and it is felt: a headwind slows you, a tailwind pushes, and your trainer is told about it too. **Wind** under the weather setting chooses how much of it you feel, from **felt as it is** to **only seen**. The HUD shows the wind's speed under the gradient, with an arrow for which way it blows.
+
 | | |
 |---|---|
 | ![Dusk in the rain](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-dusk-rain.jpg) | ![Night](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-night.jpg) |

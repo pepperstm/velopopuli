@@ -144,7 +144,7 @@ fn main() {
             commands::geo_classics,
             commands::geo_mtb_routes,
             commands::geo_mtb_route,
-            commands::weather_now,
+            commands::ride_weather,
             commands::ride_photos,
             commands::photo_image,
             commands::native_start,

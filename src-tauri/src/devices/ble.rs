@@ -342,7 +342,7 @@ impl Link {
         let Some((ch, dialect)) = control else { return };
         let write_type = if ch.properties.contains(CharPropFlags::WRITE) { WriteType::WithResponse } else { WriteType::WithoutResponse };
         let packets: Vec<Vec<u8>> = match (dialect, cmd) {
-            (Dialect::Ftms, TrainerCommand::Simulation { grade, crr, cw }) => vec![ftms_simulation(grade, crr, cw).to_vec()],
+            (Dialect::Ftms, TrainerCommand::Simulation { grade, crr, cw, wind }) => vec![ftms_simulation(grade, crr, cw, wind).to_vec()],
             (Dialect::Ftms, TrainerCommand::TargetPower(w)) => vec![ftms_target_power(w).to_vec()],
             (Dialect::Ftms, TrainerCommand::UserConfig { .. }) => vec![],
             // Each FE-C page travels as a whole ANT "acknowledged data" message on channel 5.

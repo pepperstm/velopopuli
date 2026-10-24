@@ -145,8 +145,9 @@ pub fn ftms_target_power(watts: f64) -> [u8; 3] {
     [0x05, w[0], w[1]]
 }
 
-/// FTMS control point: Set Indoor Bike Simulation Parameters (no wind).
-pub fn ftms_simulation(grade: f64, crr: f64, cw: f64) -> [u8; 7] {
+/// FTMS control point: Set Indoor Bike Simulation Parameters. `wind` is the headwind in m/s.
+pub fn ftms_simulation(grade: f64, crr: f64, cw: f64, wind: f64) -> [u8; 7] {
+    let w = ((wind * 1000.0).round().clamp(-32_000.0, 32_000.0) as i16).to_le_bytes();
     let g = ((grade * 10_000.0).round().clamp(-4000.0, 4000.0) as i16).to_le_bytes();
-    [0x11, 0, 0, g[0], g[1], (crr * 10_000.0).round().clamp(0.0, 255.0) as u8, (cw * 100.0).round().clamp(0.0, 255.0) as u8]
+    [0x11, w[0], w[1], g[0], g[1], (crr * 10_000.0).round().clamp(0.0, 255.0) as u8, (cw * 100.0).round().clamp(0.0, 255.0) as u8]
 }

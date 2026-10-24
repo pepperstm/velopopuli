@@ -663,6 +663,11 @@ textarea {
 .hud-grade {
   align-items: flex-end;
 }
+.hud-wind i {
+  display: inline-block;
+  font-style: normal;
+  margin-right: 4px;
+}
 .hud-grade b {
   font-size: 30px;
   line-height: 1;

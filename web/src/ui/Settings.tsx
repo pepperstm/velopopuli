@@ -646,6 +646,17 @@ export function SettingsScreen(): React.JSX.Element {
             </select>
           </label>
         </div>
+        {settings.look.weather === 'live' && (
+          <label className="field">
+            <span>
+              Wind: {settings.look.windEffect === 0 ? 'only seen' : settings.look.windEffect === 100 ? 'felt as it is' : `${settings.look.windEffect}% felt`}
+            </span>
+            <input type="range" min={0} max={100} step={10} value={settings.look.windEffect} onChange={(e) => look({ windEffect: Number(e.target.value) })} />
+            <small>
+              How much the real wind slows you into it and pushes you along with it (your trainer too). At 0 it is only seen: rain slanting, turbines turning.
+            </small>
+          </label>
+        )}
         <Toggle
           label="Landmarks, place names and points of interest"
           hint="Wind turbines, lighthouses, masts, chimneys, water towers, windmills, castles and monuments on the skyline; village signs, summit boards with the climb's height, cafés, viewpoints and more along the route. All from OpenStreetMap."

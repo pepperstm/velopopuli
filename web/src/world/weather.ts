@@ -100,6 +100,71 @@ export interface Look {
   sun: { color: THREE.Color; intensity: number; dir: THREE.Vector3 }
   lamp: number
   precipitation: 'none' | 'rain' | 'snow'
+  /** How hard it is raining or snowing: about 0.25 for drizzle, 1 steady, 1.6 a downpour. */
+  intensity: number
+  /** How wet the roads are, 0–1. */
+  wet: number
+  /** How much snow lies on the ground, 0–1. */
+  snow: number
+  /** The wind at 10 m, if known: m/s, and degrees clockwise from north that it blows from. */
+  wind: { speed: number; from: number } | null
+}
+
+/** The weather at the route now, as the app reads it from Open-Meteo. */
+export interface Conditions {
+  code: number
+  temperature: number
+  /** 0–1. */
+  cloudCover: number
+  /** mm an hour. */
+  rain: number
+  /** cm an hour. */
+  snowfall: number
+  /** Metres. */
+  visibility: number
+  /** m/s at 10 m. */
+  windSpeed: number
+  windGusts: number
+  /** Degrees clockwise from north. */
+  windFrom: number
+  /** Metres. */
+  snowDepth: number
+  wet: boolean
+}
+
+/** The real weather, drawn: cloud, haze, rain or snow and their strength, wet roads, lying snow, wind. */
+export function lookFromConditions(time: Exclude<TimeOfDay, 'clock'>, c: Conditions): Look {
+  const kind = weatherFromCode(c.code)
+  const base = look(time, kind === 'fog' ? 'cloudy' : kind)
+  const t = TIMES[time]
+  const falling = c.snowfall > 0 || kind === 'snow' ? 'snow' : c.rain > 0 || kind === 'rain' ? 'rain' : 'none'
+  const overcast = Math.min(0.9, c.cloudCover * 0.75 + (falling !== 'none' ? 0.15 : 0))
+  const grey = new THREE.Color(time === 'night' ? 0x14181f : time === 'dusk' ? 0x4a4a52 : 0x9aa3ad)
+  const horizon = new THREE.Color(t.horizon).lerp(grey.clone().offsetHSL(0, 0, 0.06), overcast)
+  // Fog thins out to nothing at about the reported visibility.
+  const far = Math.max(120, Math.min(8500, c.visibility))
+  const rate = falling === 'snow' ? c.snowfall * 4 : c.rain
+  return {
+    ...base,
+    zenith: new THREE.Color(t.zenith).lerp(grey, overcast),
+    horizon,
+    fog: { color: horizon.clone(), near: Math.max(5, far * 0.04), far },
+    sun: { ...base.sun, intensity: t.sun * (1 - 0.7 * c.cloudCover) },
+    lamp: t.lamp + (far < 1000 || rate > 2 ? 0.6 : 0),
+    precipitation: falling,
+    intensity: falling === 'none' ? 0 : Math.min(1.6, Math.max(0.25, 0.25 + Math.log10(1 + rate) * 0.9)),
+    wet: c.wet || falling === 'rain' ? 1 : 0,
+    snow: Math.min(1, c.snowDepth / 0.05),
+    wind: { speed: c.windSpeed, from: c.windFrom }
+  }
+}
+
+/** The wind as it moves the air near the ground, in the scene's x (east) and z (south), m/s. */
+export function windVector(wind: Look['wind']): { x: number; z: number } {
+  if (!wind) return { x: 0, z: 0 }
+  const a = (wind.from * Math.PI) / 180
+  const near = wind.speed * 0.6
+  return { x: -Math.sin(a) * near, z: Math.cos(a) * near }
 }
 
 /** Combines a time of day with the weather into colours, light levels and haze. */
@@ -125,7 +190,11 @@ export function look(time: Exclude<TimeOfDay, 'clock'>, weather: Exclude<Weather
     hemi: { sky: new THREE.Color(t.hemiSky), ground: new THREE.Color(t.hemiGround), intensity: t.hemi * (weather === 'clear' ? 1 : 1.1) },
     sun: { color: new THREE.Color(t.sunColor), intensity: t.sun * sunScale, dir: new THREE.Vector3(...t.sunDir).normalize() },
     lamp: t.lamp + (weather === 'fog' || weather === 'rain' ? 0.6 : 0),
-    precipitation: weather === 'rain' ? 'rain' : weather === 'snow' ? 'snow' : 'none'
+    precipitation: weather === 'rain' ? 'rain' : weather === 'snow' ? 'snow' : 'none',
+    intensity: weather === 'rain' || weather === 'snow' ? 0.7 : 0,
+    wet: weather === 'rain' ? 1 : 0,
+    snow: weather === 'snow' ? 0.8 : 0,
+    wind: null
   }
 }
 
@@ -137,8 +206,16 @@ export class Precipitation {
   private size = 70
   private height = 40
 
-  constructor(private kind: 'rain' | 'snow') {
-    this.count = kind === 'rain' ? 6000 : 4000
+  /** The wind's push on the falling rain or snow, m/s in x and z. */
+  private wind = { x: 0, z: 0 }
+
+  constructor(
+    private kind: 'rain' | 'snow',
+    intensity = 0.7,
+    wind: { x: number; z: number } = { x: 0, z: 0 }
+  ) {
+    this.wind = wind
+    this.count = Math.round(((kind === 'rain' ? 6000 : 4000) * Math.min(1.6, Math.max(0.2, intensity))) / 0.7)
     const vertsPer = kind === 'rain' ? 2 : 1
     this.positions = new Float32Array(this.count * 3 * vertsPer)
     for (let i = 0; i < this.count; i++) this.seed(i, Math.random() * this.height)
@@ -156,8 +233,10 @@ export class Precipitation {
     const x = (Math.random() - 0.5) * this.size
     const z = (Math.random() - 0.5) * this.size
     if (this.kind === 'rain') {
+      // A streak along the way the drop is moving: down, and with the wind.
       const k = i * 6
-      this.positions.set([x, y, z, x + 0.02, y + 0.7, z], k)
+      const slant = 0.7 / 14
+      this.positions.set([x, y, z, x + 0.02 - this.wind.x * slant, y + 0.7, z - this.wind.z * slant], k)
     } else {
       this.positions.set([x, y, z], i * 3)
     }
@@ -169,8 +248,8 @@ export class Precipitation {
     const fall = (this.kind === 'rain' ? 14 : 1.2) * dt
     // Riding into it: everything streams back past the rider.
     const back = speed * dt
-    const bx = -Math.sin(heading) * back
-    const bz = -Math.cos(heading) * back
+    const bx = -Math.sin(heading) * back + this.wind.x * dt
+    const bz = -Math.cos(heading) * back + this.wind.z * dt
     const half = this.size / 2
     const wrap = (v: number): number => (v < -half ? v + this.size : v > half ? v - this.size : v)
     const per = this.kind === 'rain' ? 2 : 1

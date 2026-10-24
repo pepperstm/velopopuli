@@ -116,6 +116,18 @@ struct GearHud {
     label: String,
 }
 
+/// The wind as the HUD shows it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WindHud {
+    /// At 10 m, as a forecast gives it, m/s.
+    speed: f64,
+    /// Where it comes from relative to the rider's heading, degrees: 0 ahead, 90 from the right.
+    angle: f64,
+    /// The headwind the rider is feeling (with the wind-effect setting), m/s; negative from behind.
+    felt: f64,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RideState<'a> {
@@ -158,6 +170,8 @@ struct RideState<'a> {
     segment: Option<SegmentLive>,
     segment_result: Option<&'a SegmentResult>,
     group_status: Option<String>,
+    /// The wind, when the weather is live.
+    wind: Option<WindHud>,
 }
 
 pub struct Session {
@@ -406,7 +420,11 @@ impl Session {
 
     /// Applies settings changed mid-ride (trainer mode, ERG target, difficulty).
     pub fn update_settings(&self, settings: Settings) {
-        self.engine.lock().unwrap().set_ftp(settings.rider.ftp);
+        {
+            let mut engine = self.engine.lock().unwrap();
+            engine.set_ftp(settings.rider.ftp);
+            engine.wind_effect = settings.look.wind_effect as f64 / 100.0;
+        }
         *self.settings.lock().unwrap() = settings;
     }
 
@@ -627,12 +645,12 @@ fn run(
                         let s = settings.lock().unwrap();
                         (s.physics.crr, s.gears.clone(), s.rider.weight_kg + s.rider.bike_kg)
                     };
-                    let (grade, cw) = (engine.trainer_grade(&trainer), engine.wind_coefficient());
+                    let (grade, cw, wind) = (engine.trainer_grade(&trainer), engine.wind_coefficient(), engine.headwind_at(engine.distance));
                     // Virtual gears: the gradient that makes the trainer feel like the chosen gear.
                     let list = gearing::gears(&gear_set);
                     let grade =
                         if list.is_empty() { grade } else { gearing::effective_grade(&gear_set, &list, engine.gear.min(list.len() - 1), engine.speed, &gearing::Load { grade, crr, cw, mass }) };
-                    TrainerCommand::Simulation { grade, crr, cw }
+                    TrainerCommand::Simulation { grade, crr, cw, wind }
                 }
             };
             let gear_note = {
@@ -750,6 +768,7 @@ fn run(
                 segment: engine.segment_live(),
                 segment_result: engine.last_segment_result.as_ref().filter(|_| show_segment),
                 group_status: group.as_ref().map(|g| g.status()),
+                wind: engine.wind.zip(engine.wind_angle()).map(|((speed, _), angle)| WindHud { speed, angle, felt: engine.headwind_at(engine.distance) }),
             };
             let _ = app.emit("ride:state", &state);
         }
@@ -759,7 +778,7 @@ fn run(
         crate::diag::event("ride", format!("end distance_m={:.0} elapsed_s={:.0}", e.distance, e.elapsed));
     }
     // Leave the trainer on a flat road rather than stuck on the last gradient.
-    devices.command_trainer(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.2 });
+    devices.command_trainer(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.2, wind: 0.0 });
     if let Some(smart) = smart {
         smart.stop();
     }

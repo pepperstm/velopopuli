@@ -51,11 +51,13 @@ pub struct Readings {
 /// A command for a controllable trainer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TrainerCommand {
-    /// Simulate a road: gradient as a fraction, rolling resistance, wind coefficient in kg/m.
+    /// Simulate a road: gradient as a fraction, rolling resistance, wind coefficient in kg/m,
+    /// and the headwind in m/s (negative from behind).
     Simulation {
         grade: f64,
         crr: f64,
         cw: f64,
+        wind: f64,
     },
     /// ERG mode: hold this many watts.
     TargetPower(f64),
