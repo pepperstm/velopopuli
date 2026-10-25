@@ -165,16 +165,24 @@ pub struct WorldLook {
     pub time_of_day: String,
     /// "clear", "cloudy", "rain", "fog", "snow" or "live" (the weather at the route now).
     pub weather: String,
-    /// Place names, summits and points of interest along the route.
+    /// Landmarks, place names, summits and points of interest along the route.
     pub landmarks: bool,
     /// Street-level photos from Mapillary (needs a free client token).
     pub photos: bool,
     pub mapillary_token: String,
+    /// Satellite and aerial imagery on the ground.
+    pub imagery: bool,
+    /// The rider's own imagery provider: a tile URL with `{z}`, `{x}` and `{y}` (and their key).
+    /// Empty for the open sources.
+    pub imagery_url: String,
+    /// With live weather, how much the wind slows or speeds the rider, percent: 100 is the real
+    /// effect, 0 leaves it to be seen (rain slanting, turbines turning) but not felt.
+    pub wind_effect: u8,
 }
 
 impl Default for WorldLook {
     fn default() -> Self {
-        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new() }
+        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new(), imagery: true, imagery_url: String::new(), wind_effect: 100 }
     }
 }
 

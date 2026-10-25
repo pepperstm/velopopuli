@@ -9,6 +9,9 @@ pub struct PhysicsParams {
     pub cda: f64,
     /// Top speed cap in m/s — stands in for braking on descents, since corners aren't modelled.
     pub max_speed: f64,
+    /// Wind against the rider, m/s (negative: from behind). Drag goes with the speed of the air
+    /// past the rider, not of the road.
+    pub headwind: f64,
 }
 
 const G: f64 = 9.80665;
@@ -32,7 +35,8 @@ pub fn step_speed(mut v: f64, power: f64, grade: f64, elevation: f64, p: &Physic
         remaining -= h;
         // Dividing by a floor speed caps the drive force from a standstill.
         let drive = power * DRIVETRAIN_EFFICIENCY / v.max(1.5);
-        let resist = p.mass * G * (sin + p.crr * cos) + 0.5 * rho * p.cda * v * v;
+        let air = v + p.headwind;
+        let resist = p.mass * G * (sin + p.crr * cos) + 0.5 * rho * p.cda * air * air.abs();
         v = (v + (drive - resist) / (p.mass + ROTATING_MASS) * h).clamp(0.0, p.max_speed);
     }
     v

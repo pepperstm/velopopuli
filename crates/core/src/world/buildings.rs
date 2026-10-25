@@ -7,15 +7,25 @@ use serde::{Deserialize, Serialize};
 
 use super::height::{hash2, HeightField};
 pub use super::mesh::TriMesh as BuildingMesh;
+use super::sights::{cap, merlons, prism, square};
+use super::style::{look, parse_colour, region_at, BuildingTags, Look, Region, RoofShape, Steeple};
 use super::CHUNK;
 use crate::gpx::Route;
 
-/// A building outline as mapped: a closed ring of `[lat, lon]` and a height in metres.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A building outline as mapped: a closed ring of `[lat, lon]`, the height of its walls in
+/// metres, and what else the map says of it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Footprint {
     pub id: u64,
+    /// Height of the walls to the eaves (the roof comes on top).
     pub height: f32,
     pub ring: Vec<[f64; 2]>,
+    #[serde(default)]
+    pub tags: BuildingTags,
+    /// The mapped height to the top of the roof, where there is one: the walls are then
+    /// whatever the roof leaves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_height: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -57,21 +67,32 @@ fn leading_number(s: &str) -> Option<f32> {
     s[..end].parse().ok()
 }
 
-/// Height in metres from the mapped tags, falling back to a typical height for the building type.
+/// Height of the walls in metres from the mapped tags, falling back to a typical one for the building type.
 fn height_from_tags(tags: &HashMap<String, String>) -> f32 {
-    if let Some(h) = tags.get("height").and_then(|v| leading_number(v)) {
-        return h.clamp(2.5, 150.0);
-    }
     if let Some(levels) = tags.get("building:levels").and_then(|v| leading_number(v)) {
-        return (levels * 3.0 + 1.0).clamp(2.5, 150.0);
+        return (levels * STOREY as f32 + 0.5).clamp(2.5, 150.0);
     }
     match tags.get("building").map(String::as_str).unwrap_or("yes") {
-        "garage" | "garages" | "shed" | "hut" | "cabin" | "carport" | "kiosk" | "greenhouse" | "static_caravan" => 3.0,
-        "house" | "detached" | "semidetached_house" | "bungalow" | "farm" | "terrace" | "chalet" => 6.5,
-        "residential" | "barn" | "farm_auxiliary" | "retail" | "supermarket" | "industrial" | "warehouse" | "school" => 8.0,
-        "apartments" | "hotel" | "office" | "commercial" | "hospital" | "university" | "public" | "civic" => 13.0,
-        "church" | "cathedral" | "chapel" | "mosque" | "temple" => 14.0,
-        _ => 7.0,
+        "garage" | "garages" | "shed" | "hut" | "cabin" | "carport" | "kiosk" | "greenhouse" | "static_caravan" => 2.6,
+        "house" | "detached" | "semidetached_house" | "bungalow" | "farm" | "terrace" | "chalet" => 5.8,
+        "barn" | "farm_auxiliary" | "stable" | "cowshed" => 5.0,
+        "residential" | "retail" | "supermarket" | "industrial" | "warehouse" | "school" => 7.5,
+        "apartments" | "hotel" | "office" | "commercial" | "hospital" | "university" | "public" | "civic" => 12.5,
+        "church" | "cathedral" | "chapel" | "mosque" | "temple" => 11.0,
+        _ => 6.5,
+    }
+}
+
+/// The tags that shape how a building looks.
+fn building_tags(tags: &HashMap<String, String>) -> BuildingTags {
+    let get = |k: &str| tags.get(k).map(|v| v.trim().to_ascii_lowercase()).unwrap_or_default();
+    BuildingTags {
+        kind: get("building"),
+        roof_shape: get("roof:shape"),
+        wall_colour: tags.get("building:colour").and_then(|v| parse_colour(v)),
+        roof_colour: tags.get("roof:colour").and_then(|v| parse_colour(v)),
+        wall_material: get("building:material"),
+        roof_material: get("roof:material"),
     }
 }
 
@@ -93,13 +114,15 @@ pub fn parse_overpass(json: &str) -> Result<Vec<Footprint>, String> {
             continue;
         }
         let height = height_from_tags(&e.tags);
+        let tags = building_tags(&e.tags);
+        let total_height = e.tags.get("height").and_then(|v| leading_number(v)).map(|h| h.clamp(2.5, 150.0));
         if let Some(ring) = closed_ring(&e.geometry) {
-            out.push(Footprint { id: e.id, height, ring });
+            out.push(Footprint { id: e.id, height, ring, tags: tags.clone(), total_height });
         }
         // Multipolygons: each closed outer ring becomes a block; courtyards are ignored.
         for (k, m) in e.members.iter().enumerate().filter(|(_, m)| m.role == "outer") {
             if let Some(ring) = closed_ring(&m.geometry) {
-                out.push(Footprint { id: e.id.wrapping_mul(31).wrapping_add(k as u64), height, ring });
+                out.push(Footprint { id: e.id.wrapping_mul(31).wrapping_add(k as u64), height, ring, tags: tags.clone(), total_height });
             }
         }
     }
@@ -121,10 +144,71 @@ struct Building {
     /// Terrain height under each outline vertex.
     ground: Vec<f64>,
     height: f64,
+    /// The mapped height to the roof top, if any.
+    total: Option<f64>,
     centre: (f64, f64),
     radius: f64,
     seed: i32,
+    look: Look,
+    /// The rectangle a pitched roof is built over; `None` for a flat roof.
+    frame: Option<Frame>,
 }
+
+/// A rectangle fitted round an outline: centre, unit vector along its longer side, and half
+/// its length and width.
+#[derive(Debug, Clone, Copy)]
+struct Frame {
+    centre: (f64, f64),
+    u: (f64, f64),
+    a: f64,
+    w: f64,
+}
+
+impl Frame {
+    /// The smallest rectangle round the outline with a side along one of its walls.
+    fn fit(ring: &[(f64, f64)]) -> Frame {
+        let n = ring.len();
+        let mut best: Option<(f64, Frame)> = None;
+        for i in 0..n {
+            let (p, q) = (ring[i], ring[(i + 1) % n]);
+            let len = (q.0 - p.0).hypot(q.1 - p.1);
+            if len < 0.5 {
+                continue;
+            }
+            let u = ((q.0 - p.0) / len, (q.1 - p.1) / len);
+            let v = (-u.1, u.0);
+            let (mut s0, mut s1, mut r0, mut r1) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+            for &(x, z) in ring {
+                let (s, r) = (x * u.0 + z * u.1, x * v.0 + z * v.1);
+                (s0, s1, r0, r1) = (s0.min(s), s1.max(s), r0.min(r), r1.max(r));
+            }
+            let area = (s1 - s0) * (r1 - r0);
+            if best.as_ref().is_some_and(|b| b.0 <= area) {
+                continue;
+            }
+            let (sm, rm) = ((s0 + s1) / 2.0, (r0 + r1) / 2.0);
+            let centre = (sm * u.0 + rm * v.0, sm * u.1 + rm * v.1);
+            let (a, w) = ((s1 - s0) / 2.0, (r1 - r0) / 2.0);
+            // The long side along u.
+            let frame = if a >= w { Frame { centre, u, a, w } } else { Frame { centre, u: v, a: w, w: a } };
+            best = Some((area, frame));
+        }
+        best.map(|b| b.1).unwrap_or(Frame { centre: ring[0], u: (1.0, 0.0), a: 0.5, w: 0.5 })
+    }
+
+    /// A point `s` along and `r` across the rectangle.
+    fn at(&self, s: f64, r: f64, y: f64) -> [f64; 3] {
+        let v = (-self.u.1, self.u.0);
+        [self.centre.0 + s * self.u.0 + r * v.0, y, self.centre.1 + s * self.u.1 + r * v.1]
+    }
+}
+
+/// Pitched roofs only go on outlines this close to their rectangle (L-shapes and the like
+/// get one over the whole), and no wider than this across.
+const ROOF_FILL: f64 = 0.85;
+const ROOF_SPAN: f64 = 26.0;
+/// The tallest a roof gets, metres.
+const ROOF_RISE: f64 = 9.0;
 
 fn signed_area(ring: &[(f64, f64)]) -> f64 {
     let n = ring.len();
@@ -173,9 +257,6 @@ fn inside(ring: &[(f64, f64)], x: f64, z: f64) -> bool {
     hit
 }
 
-// Wall and roof colours, authored in sRGB.
-const WALLS: [[f64; 3]; 6] = [[0.86, 0.82, 0.74], [0.80, 0.74, 0.66], [0.90, 0.88, 0.84], [0.74, 0.70, 0.66], [0.84, 0.76, 0.62], [0.70, 0.62, 0.56]];
-const ROOFS: [[f64; 3]; 4] = [[0.55, 0.27, 0.20], [0.36, 0.36, 0.40], [0.45, 0.33, 0.28], [0.50, 0.50, 0.50]];
 /// Storey height, and the rough width of one window bay, in metres.
 const STOREY: f64 = 3.0;
 const BAY: f64 = 3.2;
@@ -206,6 +287,8 @@ impl Buildings {
             None => true,
         };
         let mut out = Buildings::default();
+        // The region is looked up once per few kilometres: borders only matter that finely.
+        let mut regions: HashMap<(i32, i32), Region> = HashMap::new();
         for f in footprints {
             let mut ring: Vec<(f64, f64)> = f.ring.iter().map(|p| route.to_local(p[0], p[1])).collect();
             if ring.len() > 1 && ring.first() == ring.last() {
@@ -247,7 +330,17 @@ impl Buildings {
                 continue;
             }
             let radius = ring.iter().map(|p| (p.0 - centre.0).hypot(p.1 - centre.1)).fold(0.0, f64::max);
-            let building = Building { ground: ground.iter().map(|g| g.0).collect(), ring, height: f.height as f64, centre, radius, seed: (f.id ^ (f.id >> 32)) as i32 };
+            let seed = (f.id ^ (f.id >> 32)) as i32;
+            let [lat, lon] = f.ring[0];
+            let region = *regions.entry(((lat * 20.0).floor() as i32, (lon * 20.0).floor() as i32)).or_insert_with(|| region_at(lat, lon));
+            let mut look = look(region, &f.tags, area.abs(), seed);
+            let frame = Frame::fit(&ring);
+            let pitched = look.shape != RoofShape::Flat && area.abs() / (4.0 * frame.a * frame.w) >= ROOF_FILL && frame.w * 2.0 <= ROOF_SPAN;
+            if !pitched {
+                look.shape = RoofShape::Flat;
+            }
+            let frame = pitched.then_some(frame);
+            let building = Building { ground: ground.iter().map(|g| g.0).collect(), ring, height: f.height as f64, total: f.total_height.map(f64::from), centre, radius, seed, look, frame };
             out.by_chunk.entry(chunk_of(centre.0, centre.1)).or_default().push(building);
             out.count += 1;
         }
@@ -274,60 +367,190 @@ impl Buildings {
         let mut mesh = BuildingMesh::default();
         let Some(list) = self.by_chunk.get(&(cx, cz)) else { return mesh };
         for b in list {
-            let n = b.ring.len();
-            let lowest = b.ground.iter().cloned().fold(f64::INFINITY, f64::min);
-            let highest = b.ground.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let mean = b.ground.iter().sum::<f64>() / n as f64;
-            // On a slope the walls reach down past the lowest corner. The eaves sit a
-            // building's height above the average ground, so the uphill side is dug in
-            // (as real hillside buildings are) but always shows at least a low wall.
-            let (base, top) = (lowest - 1.5, (mean + b.height).max(highest + 2.5));
-            let linear = |c: [f64; 3], k: f64| c.map(|v| ((v * k).clamp(0.0, 1.0)).powf(2.2) as f32);
-            // A slight per-building brightness shift keeps a terrace from reading as one slab.
-            let shade = 0.92 + hash2(b.seed, 7) * 0.16;
-            let wall = WALLS[(hash2(b.seed, 1) * WALLS.len() as f64) as usize % WALLS.len()];
-            let area = signed_area(&b.ring);
-            let roof = if area > 600.0 { ROOFS[3] } else { ROOFS[(hash2(b.seed, 2) * 3.0) as usize % 3] };
-            // Darker at the foot, lighter at the eaves: cheap depth without textures.
-            let (wall_top, wall_base, roof) = (linear(wall, shade), linear(wall, shade * 0.8), linear(roof, shade));
-
-            let at = |p: (f64, f64), y: f64| [p.0, y, p.1];
-            for i in 0..n {
-                let (a, c) = (b.ring[i], b.ring[(i + 1) % n]);
-                // The ring has positive area in (x, z), which puts "outside" on this side of each edge.
-                let out = [c.1 - a.1, 0.0, a.0 - c.0];
-                // A whole number of window bays per wall, so no window is cut by a corner.
-                let bays = ((c.0 - a.0).hypot(c.1 - a.1) / BAY).round().max(1.0) as f32;
-                let down = ((top - base) / STOREY) as f32;
-                mesh.triangle([at(a, base), at(c, base), at(c, top)], out, [wall_base, wall_base, wall_top], [[0.0, down], [bays, down], [bays, 0.0]]);
-                mesh.triangle([at(a, base), at(c, top), at(a, top)], out, [wall_base, wall_top, wall_top], [[0.0, down], [bays, 0.0], [0.0, 0.0]]);
-            }
-
-            let up = [0.0, 1.0, 0.0];
-            if n == 4 && area < 450.0 {
-                // A simple house: pitched roof with the ridge along its longer side.
-                let long = |i: usize| (b.ring[(i + 1) % 4].0 - b.ring[i].0).hypot(b.ring[(i + 1) % 4].1 - b.ring[i].1);
-                let r = if long(0) >= long(1) { 0 } else { 1 };
-                let q = |i: usize| b.ring[(i + r) % 4];
-                let mid = |a: (f64, f64), c: (f64, f64)| ((a.0 + c.0) / 2.0, (a.1 + c.1) / 2.0);
-                let ridge = top + (long(r + 1) * 0.32).min(3.2);
-                let (m1, m2) = (at(mid(q(1), q(2)), ridge), at(mid(q(3), q(0)), ridge));
-                let eave = |i: usize| at(q(i), top);
-                for (a, c, ra, rc) in [(eave(0), eave(1), m2, m1), (eave(2), eave(3), m1, m2)] {
-                    mesh.triangle([a, c, rc], up, [roof; 3], [PLAIN; 3]);
-                    mesh.triangle([a, rc, ra], up, [roof; 3], [PLAIN; 3]);
-                }
-                // The triangular gable ends, in the wall colour.
-                for (i, m) in [(1, m1), (3, m2)] {
-                    let (a, c) = (q(i), q((i + 1) % 4));
-                    mesh.triangle([at(a, top), at(c, top), m], [c.1 - a.1, 0.0, a.0 - c.0], [wall_top; 3], [PLAIN; 3]);
-                }
-            } else {
-                for tri in triangulate(&b.ring) {
-                    mesh.triangle(tri.map(|k| at(b.ring[k], top)), up, [roof; 3], [PLAIN; 3]);
-                }
-            }
+            build(&mut mesh, b);
         }
         mesh
+    }
+}
+
+/// One building: its walls, then its roof.
+fn build(mesh: &mut BuildingMesh, b: &Building) {
+    let n = b.ring.len();
+    let l = &b.look;
+    let lowest = b.ground.iter().cloned().fold(f64::INFINITY, f64::min);
+    let highest = b.ground.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let mean = b.ground.iter().sum::<f64>() / n as f64;
+    let tan = l.pitch.to_radians().tan();
+    // How high the roof rises above the eaves.
+    let rise = match (l.shape, b.frame) {
+        (RoofShape::Flat, _) | (_, None) => 0.0,
+        (RoofShape::Skillion, Some(f)) => (2.0 * f.w * tan).min(ROOF_RISE),
+        (_, Some(f)) => (f.w * tan).min(ROOF_RISE),
+    };
+    // A mapped overall height leaves the walls whatever the roof doesn't take.
+    let walls = b.total.map_or(b.height, |t| (t - rise).max(2.5));
+    // On a slope the walls reach down past the lowest corner. The eaves sit the walls' height
+    // above the average ground, so the uphill side is dug in (as real hillside buildings are)
+    // but always shows at least a low wall.
+    let (base, top) = (lowest - 1.5, (mean + walls).max(highest + 2.5));
+    let linear = |c: [f64; 3], k: f64| c.map(|v| ((v * k).clamp(0.0, 1.0)).powf(2.2) as f32);
+    // A slight per-building brightness shift keeps a terrace from reading as one slab.
+    let shade = 0.92 + hash2(b.seed, 7) * 0.16;
+    // Darker at the foot, lighter at the eaves: cheap depth without textures.
+    let (wall_top, wall_base) = (linear(l.wall, shade), linear(l.wall, shade * 0.8));
+    // A chalet's timber starts above its ground floor.
+    let split = l.upper.filter(|_| top - mean > STOREY + 1.5).map(|c| ((mean + STOREY + 0.3).max(base + 1.0), linear(c, shade)));
+    let upper = split.map_or(wall_top, |s| s.1);
+    let roof = linear(l.roof, shade);
+    let under = linear(l.roof, shade * 0.45);
+    // Window rows count down from the eaves; walls without windows use a plain spot on the tile.
+    let uv = |bays: f32, y: f64| if l.windows { [bays, ((top - y) / STOREY) as f32] } else { PLAIN };
+
+    let at = |p: (f64, f64), y: f64| [p.0, y, p.1];
+    for i in 0..n {
+        let (a, c) = (b.ring[i], b.ring[(i + 1) % n]);
+        // The ring has positive area in (x, z), which puts "outside" on this side of each edge.
+        let out = [c.1 - a.1, 0.0, a.0 - c.0];
+        // A whole number of window bays per wall, so no window is cut by a corner.
+        let bays = ((c.0 - a.0).hypot(c.1 - a.1) / BAY).round().max(1.0) as f32;
+        let bands = match split {
+            Some((y, timber)) => vec![(base, y, wall_base, wall_top), (y, top, timber, timber)],
+            None => vec![(base, top, wall_base, wall_top)],
+        };
+        for (y0, y1, c0, c1) in bands {
+            mesh.triangle([at(a, y0), at(c, y0), at(c, y1)], out, [c0, c0, c1], [uv(0.0, y0), uv(bays, y0), uv(bays, y1)]);
+            mesh.triangle([at(a, y0), at(c, y1), at(a, y1)], out, [c0, c1, c1], [uv(0.0, y0), uv(bays, y1), uv(0.0, y1)]);
+        }
+    }
+
+    let up = [0.0, 1.0, 0.0];
+    let Some(f) = b.frame.filter(|_| rise > 0.0) else {
+        for tri in triangulate(&b.ring) {
+            mesh.triangle(tri.map(|k| at(b.ring[k], top)), up, [roof; 3], [PLAIN; 3]);
+        }
+        adorn(mesh, b, (base, mean, top), top);
+        return;
+    };
+    // The roof reaches past the walls by the eaves' overhang, falling at its own pitch.
+    let o = l.eave;
+    let (e, w) = (f.a + o, f.w + o);
+    let slope = if l.shape == RoofShape::Skillion { rise / (2.0 * f.w) } else { rise / f.w };
+    let ye = top - o * slope;
+    let ridge = top + rise;
+    let mut faces: Vec<Vec<[f64; 3]>> = Vec::new();
+    // Gable ends and the like, in the walls' (upper) colour: (points, outward).
+    let mut ends: Vec<([[f64; 3]; 3], [f64; 3])> = Vec::new();
+    let along = |sign: f64| {
+        let p = f.at(sign, 0.0, 0.0);
+        let c = f.at(0.0, 0.0, 0.0);
+        [p[0] - c[0], 0.0, p[2] - c[2]]
+    };
+    match l.shape {
+        RoofShape::Gabled => {
+            for r in [1.0, -1.0] {
+                faces.push(vec![f.at(-e, r * w, ye), f.at(e, r * w, ye), f.at(e, 0.0, ridge), f.at(-e, 0.0, ridge)]);
+            }
+            for s in [1.0, -1.0] {
+                ends.push(([f.at(s * f.a, -f.w, top), f.at(s * f.a, f.w, top), f.at(s * f.a, 0.0, ridge)], along(s)));
+            }
+        }
+        RoofShape::Hipped | RoofShape::Pyramidal => {
+            let r = if l.shape == RoofShape::Hipped { (f.a - f.w).max(0.0) } else { 0.0 };
+            for side in [1.0, -1.0] {
+                faces.push(vec![f.at(-e, side * w, ye), f.at(e, side * w, ye), f.at(r, 0.0, ridge), f.at(-r, 0.0, ridge)]);
+                faces.push(vec![f.at(side * e, -w, ye), f.at(side * e, w, ye), f.at(side * r, 0.0, ridge)]);
+            }
+        }
+        RoofShape::Skillion => {
+            // High along the −r side, falling to the eaves on the +r side.
+            let y = |r: f64| top + (f.w - r) * slope;
+            faces.push(vec![f.at(-e, w, y(w)), f.at(e, w, y(w)), f.at(e, -w, y(-w)), f.at(-e, -w, y(-w))]);
+            for s in [1.0, -1.0] {
+                ends.push(([f.at(s * f.a, -f.w, top), f.at(s * f.a, f.w, top), f.at(s * f.a, -f.w, top + rise)], along(s)));
+            }
+            let back = f.at(0.0, -1.0, 0.0);
+            let c = f.at(0.0, 0.0, 0.0);
+            let out = [back[0] - c[0], 0.0, back[2] - c[2]];
+            for t in [[f.at(-f.a, -f.w, top), f.at(f.a, -f.w, top), f.at(f.a, -f.w, top + rise)], [f.at(-f.a, -f.w, top), f.at(f.a, -f.w, top + rise), f.at(-f.a, -f.w, top + rise)]] {
+                ends.push((t, out));
+            }
+        }
+        RoofShape::Flat => {}
+    }
+    for face in &faces {
+        let fan = |mesh: &mut BuildingMesh, facing: [f64; 3], colour: [f32; 3]| {
+            for k in 1..face.len() - 1 {
+                mesh.triangle([face[0], face[k], face[k + 1]], facing, [colour; 3], [PLAIN; 3]);
+            }
+        };
+        fan(mesh, up, roof);
+        // The underside of the eaves, seen from below.
+        if o > 0.05 {
+            fan(mesh, [0.0, -1.0, 0.0], under);
+        }
+    }
+    for (t, out) in ends {
+        mesh.triangle(t, out, [upper; 3], [PLAIN; 3]);
+    }
+    adorn(mesh, b, (base, mean, top), ridge);
+}
+
+/// What stands out from the roof: a castle's battlements, a church's tower. The levels are the
+/// foot of the walls, the mean ground and the eaves; `ridge` the top of the roof.
+fn adorn(mesh: &mut BuildingMesh, b: &Building, (base, mean, top): (f64, f64, f64), ridge: f64) {
+    let l = &b.look;
+    let n = b.ring.len();
+    if l.battlements && ridge <= top {
+        for i in 0..n {
+            let (a, c) = (b.ring[i], b.ring[(i + 1) % n]);
+            let len = (c.0 - a.0).hypot(c.1 - a.1).max(1e-6);
+            merlons(mesh, (a.0, a.1, top), (c.0, c.1, top), ((a.1 - c.1) / len, (c.0 - a.0) / len), l.wall);
+        }
+    }
+    let Some(steeple) = l.steeple else { return };
+    let f = b.frame.unwrap_or_else(|| Frame::fit(&b.ring));
+    if f.a < 5.0 || f.w < 2.5 {
+        return;
+    }
+    // The tower stands at the west end, as most churches face east.
+    let half = (f.w * 0.75).clamp(1.6, 3.6).min(f.a / 2.0);
+    let west = if f.at(1.0, 0.0, 0.0)[0] < f.at(-1.0, 0.0, 0.0)[0] { 1.0 } else { -1.0 };
+    let turn = f.u.1.atan2(f.u.0);
+    let spire = if hash2(b.seed, 21) < 0.35 { [0.42, 0.60, 0.52] } else { [0.30, 0.31, 0.35] };
+    let p = f.at(west * (f.a - half), 0.0, 0.0);
+    let c = (p[0], p[2]);
+    let t = half * 2.0;
+    match steeple {
+        Steeple::Spire => {
+            let shaft = (ridge + t * 0.9).max(mean + 14.0).min(mean + 45.0);
+            square(mesh, c, (base, shaft), (half, half), turn, l.wall);
+            square(mesh, c, (shaft, shaft + t * 2.4), (half + 0.2, 0.0), turn, spire);
+        }
+        Steeple::Campanile => {
+            let shaft = (ridge + t * 1.8).max(mean + 18.0).min(mean + 50.0);
+            square(mesh, c, (base, shaft), (half, half), turn, l.wall);
+            square(mesh, c, (shaft, shaft + t * 0.45), (half + 0.3, 0.0), turn, l.roof);
+        }
+        Steeple::Onion => {
+            let shaft = (ridge + t * 0.9).max(mean + 14.0).min(mean + 45.0);
+            square(mesh, c, (base, shaft), (half, half), turn, l.wall);
+            // The dome: a swelling bulb narrowing to a point, then a slim spike.
+            let profile = [(0.0, half * 0.95), (t * 0.4, half * 1.2), (t * 0.85, half * 0.55), (t * 1.15, half * 0.12), (t * 1.8, 0.0)];
+            for k in 0..profile.len() - 1 {
+                let ((y0, r0), (y1, r1)) = (profile[k], profile[k + 1]);
+                prism(mesh, c, (shaft + y0, shaft + y1), (r0, r1), 8, turn, spire);
+            }
+            cap(mesh, c, (shaft, half * 0.95), 8, turn, false, spire);
+        }
+        Steeple::Minaret => {
+            let q = f.at(west * (f.a - 1.4), f.w - 1.4, 0.0);
+            let c = (q[0], q[2]);
+            let shaft = (ridge + 10.0).max(mean + 22.0).min(mean + 60.0);
+            prism(mesh, c, (base, shaft), (1.4, 1.2), 10, 0.0, l.wall);
+            prism(mesh, c, (shaft - 4.0, shaft - 3.2), (1.9, 1.9), 10, 0.0, l.wall);
+            cap(mesh, c, (shaft - 3.2, 1.9), 10, 0.0, true, l.wall);
+            cap(mesh, c, (shaft - 4.0, 1.9), 10, 0.0, false, l.wall);
+            prism(mesh, c, (shaft, shaft + 3.5), (1.4, 0.0), 10, 0.0, spire);
+        }
     }
 }

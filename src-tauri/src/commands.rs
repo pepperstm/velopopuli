@@ -12,6 +12,7 @@ use tauri_plugin_opener::OpenerExt;
 use velopopuli_core::gamify::{Badge, BADGES};
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Route};
 use velopopuli_core::types::{RideSummary, RouteMeta, Settings};
+use velopopuli_core::weather::{conditions_url, parse_conditions, Conditions};
 use velopopuli_core::world::GridMesh;
 
 use crate::devices::DevicesSnapshot;
@@ -301,7 +302,12 @@ pub async fn ride_barriers(state: State<'_, AppState>) -> Res<Response> {
 pub async fn ride_structures(state: State<'_, AppState>) -> Res<Response> {
     let world = state.current_session()?.world.clone();
     let s = tauri::async_runtime::spawn_blocking(move || world.structures()).await.map_err(blocking_err)?;
-    Ok(Response::new(f32_bytes(&[s.lit.vertices() as u32, s.unlit.vertices() as u32], &[&s.lit.positions, &s.lit.normals, &s.lit.colors, &s.unlit.positions, &s.unlit.colors])))
+    // Rotors: hub x, y, z, facing x, z, radius, phase.
+    let rotors: Vec<f32> = s.rotors.iter().flat_map(|r| [r.hub[0], r.hub[1], r.hub[2], r.facing[0], r.facing[1], r.radius, r.phase].map(|v| v as f32)).collect();
+    Ok(Response::new(f32_bytes(
+        &[s.lit.vertices() as u32, s.unlit.vertices() as u32, s.rotors.len() as u32],
+        &[&s.lit.positions, &s.lit.normals, &s.lit.colors, &s.unlit.positions, &s.unlit.colors, &rotors],
+    )))
 }
 
 #[tauri::command]
@@ -310,10 +316,40 @@ pub async fn terrain_chunk(state: State<'_, AppState>, cx: i32, cz: i32) -> Res<
     tauri::async_runtime::spawn_blocking(move || grid_response(world.chunk(cx, cz))).await.map_err(blocking_err)
 }
 
+/// A chunk's ground image. Layout: `[size, credits length]` as u32, the credits (UTF-8, one
+/// per line, padded to four bytes), then `size × size` RGBA. Empty if there is no imagery.
+#[tauri::command]
+pub async fn terrain_imagery(state: State<'_, AppState>, cx: i32, cz: i32, size: u32) -> Res<Response> {
+    let Some(imagery) = state.current_session()?.imagery.clone() else { return Ok(Response::new(Vec::new())) };
+    let size = if size as usize >= velopopuli_core::world::NEAR_PX { velopopuli_core::world::NEAR_PX } else { velopopuli_core::world::FAR_PX };
+    let Some(img) = imagery.chunk(cx, cz, size).await else { return Ok(Response::new(Vec::new())) };
+    let mut credits = img.credits.join("\n").into_bytes();
+    let text = credits.len();
+    credits.resize(text.div_ceil(4) * 4, b' ');
+    let mut out = Vec::with_capacity(8 + credits.len() + img.rgba.len());
+    out.extend_from_slice(&(img.size as u32).to_le_bytes());
+    out.extend_from_slice(&(text as u32).to_le_bytes());
+    out.extend_from_slice(&credits);
+    out.extend_from_slice(&img.rgba);
+    Ok(Response::new(out))
+}
+
+/// How long the distant landscape waits for its imagery colours before going without.
+const FAR_IMAGERY_WAIT: std::time::Duration = std::time::Duration::from_secs(4);
+
 #[tauri::command]
 pub async fn terrain_far(state: State<'_, AppState>, cx: f64, cz: f64) -> Res<Response> {
-    let world = state.current_session()?.world.clone();
-    tauri::async_runtime::spawn_blocking(move || grid_response(world.far(cx, cz))).await.map_err(blocking_err)
+    let session = state.current_session()?;
+    let world = session.world.clone();
+    let mut mesh = tauri::async_runtime::spawn_blocking(move || world.far(cx, cz)).await.map_err(blocking_err)?;
+    // Coloured from coarse imagery, so the distance matches the imagery close by.
+    if let Some(imagery) = session.imagery.clone() {
+        let points = mesh.positions.as_chunks::<3>().0.iter().map(|p| (p[0] as f64, p[2] as f64)).collect();
+        if let Ok(Some(colours)) = tokio::time::timeout(FAR_IMAGERY_WAIT, imagery.far(points, velopopuli_core::world::FAR_CELL)).await {
+            mesh.colors = colours.into_iter().flatten().collect();
+        }
+    }
+    Ok(grid_response(mesh))
 }
 
 #[tauri::command]
@@ -812,13 +848,16 @@ pub async fn photo_image(state: State<'_, AppState>, url: String) -> Res<String>
     photos::image(&state.http, &url).await
 }
 
-/// The WMO weather code at a place right now, from Open-Meteo.
+/// The weather at a place right now, from Open-Meteo. During a ride its wind is also handed
+/// to the riders (how much they feel of it is the wind-effect setting).
 #[tauri::command]
-pub async fn weather_now(state: State<'_, AppState>, lat: f64, lon: f64) -> Res<u32> {
-    let url = format!("https://api.open-meteo.com/v1/forecast?latitude={lat:.4}&longitude={lon:.4}&current=weather_code");
-    let res = state.http.get(url).timeout(std::time::Duration::from_secs(8)).send().await.map_err(|e| format!("Could not reach the weather service: {e}"))?;
-    let json: Value = res.json().await.map_err(|e| e.to_string())?;
-    json["current"]["weather_code"].as_u64().map(|c| c as u32).ok_or_else(|| "The weather service gave no reading.".into())
+pub async fn ride_weather(state: State<'_, AppState>, lat: f64, lon: f64) -> Res<Conditions> {
+    let res = state.http.get(conditions_url(lat, lon)).timeout(std::time::Duration::from_secs(8)).send().await.map_err(|e| format!("Could not reach the weather service: {e}"))?;
+    let conditions = parse_conditions(&res.text().await.map_err(|e| e.to_string())?)?;
+    if let Ok(session) = state.current_session() {
+        session.engine().lock().unwrap().wind = Some((conditions.wind_speed, conditions.wind_from));
+    }
+    Ok(conditions)
 }
 
 #[tauri::command]

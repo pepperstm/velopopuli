@@ -5,9 +5,11 @@ import { api } from '../bridge'
 import { bankAt, halfWidthAt, sampleAt, type Route, type RoutePos } from '../core/gpx'
 import type { Landmark, WorldLayout } from '../types'
 import { RiderModel } from './rider'
-import { Terrain } from './terrain'
+import { ROAD_WET, Terrain } from './terrain'
+import { weathered, weatherUniforms } from './weathered'
 import { packNative } from './native'
-import { Precipitation, type Look } from './weather'
+import { Precipitation, windVector, type Look } from './weather'
+import { Rotors } from './rotors'
 
 export interface WorldRival {
   id: string
@@ -122,7 +124,9 @@ function buildRoad(buffer: ArrayBuffer, n: number, section: number, dim: (sample
   // One draw group per stretch of surface; the quads after sample i start at index i·(section−1)·6.
   const perSample = (section - 1) * 6
   for (const [from, to, surface] of surfaceRuns(surfaces)) geo.addGroup(from * perSample, (Math.min(to, n - 1) - from) * perSample, surface)
-  const materials = SURFACES.map((_, s) => new THREE.MeshLambertMaterial({ map: surfaceTexture(s), side: THREE.DoubleSide, vertexColors: true }))
+  const materials = SURFACES.map((_, s) =>
+    weathered(new THREE.MeshLambertMaterial({ map: surfaceTexture(s), side: THREE.DoubleSide, vertexColors: true }), ROAD_WET, null)
+  )
   const mesh = new THREE.Mesh(geo, materials)
   // One mesh spans the whole route, so its bounding sphere is useless for culling.
   mesh.frustumCulled = false
@@ -130,12 +134,13 @@ function buildRoad(buffer: ArrayBuffer, n: number, section: number, dim: (sample
 }
 
 /**
- * Bridges, tunnels and whatever crosses overhead, computed in Rust: `[sunlit vertices,
- * unlit vertices]`, then sunlit positions, normals and colours; unlit positions and colours.
+ * Bridges, tunnels, whatever crosses overhead and the landmarks, computed in Rust: `[sunlit
+ * vertices, unlit vertices, rotors]`, then sunlit positions, normals and colours; unlit
+ * positions and colours; and the wind turbines' rotors (see `Rotors`).
  */
-function buildStructures(buffer: ArrayBuffer): THREE.Mesh[] {
-  const [lit, unlit] = new Uint32Array(buffer, 0, 2)
-  let offset = 8
+function buildStructures(buffer: ArrayBuffer): { meshes: THREE.Mesh[]; rotors: Float32Array } {
+  const [lit, unlit, rotors] = new Uint32Array(buffer, 0, 3)
+  let offset = 12
   const take = (count: number): THREE.BufferAttribute => {
     const view = new Float32Array(buffer, offset, count * 3)
     offset += count * 12
@@ -154,7 +159,7 @@ function buildStructures(buffer: ArrayBuffer): THREE.Mesh[] {
   }
   // Like the road, these span the whole route.
   for (const mesh of meshes) mesh.frustumCulled = false
-  return meshes
+  return { meshes, rotors: new Float32Array(buffer, offset, rotors * 7) }
 }
 
 function buildSky(): THREE.Mesh {
@@ -194,6 +199,8 @@ export class World {
   private sun = new THREE.DirectionalLight(0xfff1d6, 2.4)
   private lamp = new THREE.PointLight(0xfff4e0, 0, 32, 1.6)
   private precipitation: Precipitation | null = null
+  private rotors: Rotors | null = null
+  private wind: Look['wind'] = null
   private terrain: Terrain
   private rider = new RiderModel(0xe9ff60)
   private others = new Map<string, Other>()
@@ -214,7 +221,9 @@ export class World {
     private covered: [number, number][],
     kmLabel: (km: number) => string,
     markerSpacing: number,
-    private landmarks: Landmark[] = []
+    private landmarks: Landmark[] = [],
+    /** Hears the imagery credits as they grow. */
+    onCredits: (credits: string[]) => void = () => undefined
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -225,7 +234,7 @@ export class World {
     this.sun.position.set(0.5, 1, 0.35)
     this.scene.add(this.sun, this.lamp)
 
-    this.terrain = new Terrain(layout)
+    this.terrain = new Terrain(layout, onCredits)
     this.scene.add(this.terrain.group)
     this.scene.add(this.rider.group)
     this.addMarkers(kmLabel, markerSpacing)
@@ -244,7 +253,13 @@ export class World {
     this.scene.add(this.barriers.group)
     for (let k = 0; k < SURFACES.length; k++) surfaceTexture(k).anisotropy = this.renderer.capabilities.getMaxAnisotropy()
     const dim = (sample: number): number => 1 - 0.62 * this.cover(sample * this.route.step, 12)
-    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...buildStructures(structures))
+    const built = buildStructures(structures)
+    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...built.meshes)
+    if (built.rotors.length) {
+      this.rotors = new Rotors(built.rotors)
+      if (this.wind) this.rotors.setWind(this.wind.speed, this.wind.from)
+      this.scene.add(this.rotors.mesh)
+    }
   }
 
   /** Everything the native renderer needs from this scene (see `native.ts`). */
@@ -254,7 +269,9 @@ export class World {
       sprite.scale.set(sprite.userData.aspect, 1, 1)
       return { sprite, rider: r.id }
     })
-    const skip = (o: THREE.Object3D): boolean => o === this.sky || o === this.terrain.group || o === this.rider.group || o === this.precipitation?.object
+    // The native renderer has its own (still) rotors from Rust.
+    const skip = (o: THREE.Object3D): boolean =>
+      o === this.sky || o === this.terrain.group || o === this.rider.group || o === this.precipitation?.object || o === this.rotors?.mesh
     return packNative(this.scene, skip, tags, l)
   }
 
@@ -280,9 +297,13 @@ export class World {
       this.precipitation = null
     }
     if (l.precipitation !== 'none') {
-      this.precipitation = new Precipitation(l.precipitation)
+      this.precipitation = new Precipitation(l.precipitation, l.intensity, windVector(l.wind))
       this.scene.add(this.precipitation.object)
     }
+    weatherUniforms.wet.value = l.wet
+    weatherUniforms.snow.value = l.snow
+    this.wind = l.wind
+    if (l.wind) this.rotors?.setWind(l.wind.speed, l.wind.from)
   }
 
   /** Renders a frame and returns it as a PNG data URL (for the automated check). */
@@ -461,6 +482,7 @@ export class World {
     // The rider's lamp, just ahead and above, lights the road at night.
     this.lamp.position.set(p.x + Math.sin(p.heading) * 6, p.ele + 3, p.z + Math.cos(p.heading) * 6)
     this.precipitation?.update(dt, this.camera.position, f.speed, p.heading)
+    this.rotors?.update(dt)
     this.renderer.render(this.scene, this.camera)
   }
 

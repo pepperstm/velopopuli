@@ -601,6 +601,27 @@ export function SettingsScreen(): React.JSX.Element {
           value={settings.scenery}
           onChange={(v) => update((s) => ({ ...s, scenery: v }))}
         />
+        <Toggle
+          label="Satellite and aerial imagery on the ground"
+          hint="Covers the ground near the route with real imagery, downloaded as you ride and kept for next time: national aerial photos in Switzerland, France, Spain, the Netherlands and the US, and Sentinel-2 satellite imagery everywhere else."
+          value={settings.look.imagery}
+          onChange={(v) => look({ imagery: v })}
+        />
+        {settings.look.imagery && (
+          <label className="field">
+            <span>Your own imagery provider (optional)</span>
+            <input
+              type="password"
+              value={settings.look.imageryUrl}
+              placeholder="https://…/{z}/{x}/{y}.jpg?access_token=…"
+              onChange={(e) => look({ imageryUrl: e.target.value.trim() })}
+            />
+            <small>
+              A tile URL with {'{z}'}, {'{x}'} and {'{y}'}, including your key, from a provider you have an account with (Mapbox, MapTiler and others). It is
+              used under your account and its terms instead of the open sources.
+            </small>
+          </label>
+        )}
         <div className="fields">
           <label className="field">
             <span>Time of day</span>
@@ -625,9 +646,20 @@ export function SettingsScreen(): React.JSX.Element {
             </select>
           </label>
         </div>
+        {settings.look.weather === 'live' && (
+          <label className="field">
+            <span>
+              Wind: {settings.look.windEffect === 0 ? 'only seen' : settings.look.windEffect === 100 ? 'felt as it is' : `${settings.look.windEffect}% felt`}
+            </span>
+            <input type="range" min={0} max={100} step={10} value={settings.look.windEffect} onChange={(e) => look({ windEffect: Number(e.target.value) })} />
+            <small>
+              How much the real wind slows you into it and pushes you along with it (your trainer too). At 0 it is only seen: rain slanting, turbines turning.
+            </small>
+          </label>
+        )}
         <Toggle
-          label="Place names, summits and points of interest"
-          hint="Village signs, summit boards with the climb's height, cafés, viewpoints and more along the route, from OpenStreetMap."
+          label="Landmarks, place names and points of interest"
+          hint="Wind turbines, lighthouses, masts, chimneys, water towers, windmills, castles and monuments on the skyline; village signs, summit boards with the climb's height, cafés, viewpoints and more along the route. All from OpenStreetMap."
           value={settings.look.landmarks}
           onChange={(v) => look({ landmarks: v })}
         />

@@ -15,7 +15,8 @@
 Everything comes from open data and is downloaded once per route, then kept on your computer.
 
 - **Terrain** from open elevation tiles, out to the horizon. Near the road the ground is shaped to the route's own elevation so the road never floats or sinks.
-- **Buildings** from OpenStreetMap, within about 350 m of the road — with mapped heights where the detailed source (Overpass) answers, otherwise estimated.
+- **Imagery on the ground** — real aerial photos in Switzerland, France, Spain, the Netherlands and the US, and Sentinel-2 satellite imagery everywhere else, downloaded as you ride and kept for next time. Sharp near you (about a metre a pixel), coarser further out; the distant hills take their colours from it too. Steep slopes keep their painted rock, as a photo from above can't show a cliff face. The credits for the imagery in view are at the bottom left. Turn it off, or use your own provider (a tile URL with `{z}`, `{x}` and `{y}` and your key, e.g. from Mapbox or MapTiler), under **Settings → Virtual world**.
+- **Buildings** from OpenStreetMap, within about 350 m of the road — with mapped heights where the detailed source (Overpass) answers, otherwise estimated. They are built in the local style: Mediterranean terracotta and render, Alpine chalets with timber upper floors and deep eaves, British brick and slate, Scandinavian painted timber, North American siding, and so on, with barns, industrial halls, apartment blocks and churches each shaped their own way. Mapped roof shapes, colours and materials are followed.
 - **Forests, lakes, rivers, the surrounding roads and railways, bridges and tunnels** from OpenStreetMap's vector tiles, about a kilometre either side. Where your route crosses a mapped bridge or tunnel, you ride over the deck or through the bore.
 - **Your road itself** is drawn as a closed race road, set apart from the map's road network by crowd barriers. It takes the real road's character from OpenStreetMap tags:
   - **Surface** — tarmac, concrete, cobbles, gravel or dirt (`surface` tag);
@@ -38,6 +39,6 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
 ![The Arenberg cobbles](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-cobbles.jpg)
 
-- **Landmarks** — village and town signs, named summit boards, and cafés, fountains, bike shops and viewpoints by the road.
+- **Landmarks** — village and town signs, named summit boards, and cafés, fountains, bike shops and viewpoints by the road. On the skyline, up to about 3 km away: wind turbines with turning rotors, lighthouses, masts and TV towers, chimneys, water towers, windmills, castles and monuments. Churches grow a tower in the local style (spire, bell tower or onion dome), and castles mapped as buildings get battlements.
 
 Map data © OpenStreetMap contributors (ODbL). Downloads send the route's coordinates (or which map squares it passes through) to the OpenStreetMap services; buildings and scenery can be switched off in **Settings → Virtual world**.

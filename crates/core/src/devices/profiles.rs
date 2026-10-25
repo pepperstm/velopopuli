@@ -136,9 +136,10 @@ pub fn fec_track_resistance(grade: f64, crr: f64) -> [u8; 8] {
     [0x33, 0xff, 0xff, 0xff, 0xff, g[0], g[1], scaled(crr / 0.00005, 0.0, 254.0) as u8]
 }
 
-/// FE-C page 50: wind resistance coefficient (kg/m), no wind, no drafting.
-pub fn fec_wind_resistance(cw: f64) -> [u8; 8] {
-    [0x32, 0xff, 0xff, 0xff, 0xff, scaled(cw / 0.01, 0.0, 186.0) as u8, 127, 100]
+/// FE-C page 50: wind resistance coefficient (kg/m) and the headwind (m/s; km/h offset by
+/// 127 on the wire), no drafting.
+pub fn fec_wind_resistance(cw: f64, wind: f64) -> [u8; 8] {
+    [0x32, 0xff, 0xff, 0xff, 0xff, scaled(cw / 0.01, 0.0, 186.0) as u8, scaled(wind * 3.6 + 127.0, 0.0, 254.0) as u8, 100]
 }
 
 /// FE-C page 49: target power (ERG mode), 0.25 W units.
@@ -158,7 +159,7 @@ pub fn fec_user_config(rider_kg: f64, bike_kg: f64) -> [u8; 8] {
 /// The FE-C pages that carry out a trainer command.
 pub fn fec_pages(cmd: super::TrainerCommand) -> Vec<[u8; 8]> {
     match cmd {
-        super::TrainerCommand::Simulation { grade, crr, cw } => vec![fec_track_resistance(grade, crr), fec_wind_resistance(cw)],
+        super::TrainerCommand::Simulation { grade, crr, cw, wind } => vec![fec_track_resistance(grade, crr), fec_wind_resistance(cw, wind)],
         super::TrainerCommand::TargetPower(w) => vec![fec_target_power(w)],
         super::TrainerCommand::UserConfig { rider_kg, bike_kg } => vec![fec_user_config(rider_kg, bike_kg)],
     }

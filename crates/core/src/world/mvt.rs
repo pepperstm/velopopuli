@@ -381,7 +381,7 @@ pub fn parse_tile(bytes: &[u8], zoom: u32, tx: u32, ty: u32) -> Option<MapTile> 
                         let id = ((tx as u64) << 40) ^ ((ty as u64) << 20) ^ ((index as u64) << 4) ^ k as u64;
                         let mut outline: Vec<[f64; 2]> = float(&ring).into_iter().map(to_lat_lon).collect();
                         outline.push(outline[0]);
-                        found.footprints.push(Footprint { id, height: estimated_height(area * unit_m * unit_m, (id ^ (id >> 32)) as i32), ring: outline });
+                        found.footprints.push(Footprint { id, height: estimated_height(area * unit_m * unit_m, (id ^ (id >> 32)) as i32), ring: outline, ..Default::default() });
                     }
                 }
                 ("land" | "water_polygons", POLYGON) => {

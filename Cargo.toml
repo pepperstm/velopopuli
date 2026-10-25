@@ -11,3 +11,7 @@ strip = true
 # Terrain meshing and the ride simulation are hot loops; keep them fast in dev builds too.
 [profile.dev.package.velopopuli-core]
 opt-level = 2
+
+# Imagery tiles are decoded as the rider moves; unoptimised, a tile takes a tenth of a second.
+[profile.dev.package.zune-jpeg]
+opt-level = 3

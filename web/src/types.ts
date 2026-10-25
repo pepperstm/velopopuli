@@ -15,7 +15,17 @@ export interface Settings {
   stravaAutoUpload: boolean
   exportDir: string
   goal: { name: string; distanceKm: number; deadline: string; from: string }
-  look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string }
+  look: {
+    timeOfDay: TimeOfDay
+    weather: Weather
+    landmarks: boolean
+    photos: boolean
+    mapillaryToken: string
+    imagery: boolean
+    imageryUrl: string
+    /** With live weather, how much of the wind the rider feels, percent (0: only seen). */
+    windEffect: number
+  }
   smart: {
     kind: 'none' | 'homeassistant' | 'shelly' | 'tasmota' | 'webhook'
     url: string
@@ -72,7 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stravaAutoUpload: false,
   exportDir: '',
   goal: { name: 'Winter miles', distanceKm: 1000, deadline: '', from: '' },
-  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },
+  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '', imagery: true, imageryUrl: '', windEffect: 100 },
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
   nativeRenderer: false,
@@ -400,4 +410,9 @@ export interface RideState {
   segment: SegmentLive | null
   segmentResult: SegmentResult | null
   groupStatus: string | null
+  /**
+   * The wind, with live weather: speed at 10 m (m/s), where it comes from relative to the
+   * rider (degrees, 0 ahead, 90 from the right), and the headwind felt (m/s, negative behind).
+   */
+  wind: { speed: number; angle: number; felt: number } | null
 }

@@ -175,8 +175,9 @@ pub struct MappedWay {
     pub line: Vec<[f64; 2]>,
 }
 
-/// Version of what `MappedWay` holds; caches from older versions are fetched again.
-pub const WAY_TAGS: u32 = 3;
+/// Version of what `MappedWay` holds (and, since 4, the landmarks fetched with them); caches
+/// from older versions are fetched again.
+pub const WAY_TAGS: u32 = 4;
 
 /// Usual carriageway width in metres for an OpenStreetMap `highway` class.
 pub fn highway_width(highway: &str) -> Option<f64> {
@@ -226,10 +227,15 @@ pub const MAX_WIDTH: f64 = 11.0;
 
 /// The Overpass QL query for every road within `radius_m` of a stretch of the route.
 pub fn way_query(route: &Route, from: usize, to: usize, radius_m: f64, spacing_m: f64) -> String {
+    format!("[out:json][timeout:25];way[\"highway\"](around:{radius_m:.0},{});out tags geom;", query_line(route, from, to, spacing_m))
+}
+
+/// A stretch of the route as Overpass `around` takes it: `lat,lon` pairs every `spacing_m`.
+pub(super) fn query_line(route: &Route, from: usize, to: usize, spacing_m: f64) -> String {
     let stride = ((spacing_m / route.step).round() as usize).max(1);
     let mut line: Vec<String> = (from..to).step_by(stride).map(|i| format!("{:.5},{:.5}", route.lat[i], route.lon[i])).collect();
     line.push(format!("{:.5},{:.5}", route.lat[to - 1], route.lon[to - 1]));
-    format!("[out:json][timeout:25];way[\"highway\"](around:{radius_m:.0},{});out tags geom;", line.join(","))
+    line.join(",")
 }
 
 #[derive(Deserialize)]

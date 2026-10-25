@@ -21,6 +21,7 @@ import type {
   Settings,
   StravaStatus
 } from './types'
+import type { Conditions } from './world/weather'
 
 /** Subscribes to a backend event; returns a synchronous unsubscribe. */
 function on<T>(event: string, cb: (payload: T) => void): () => void {
@@ -58,6 +59,8 @@ export const api = {
   },
   ride: {
     start: (request: RideRequest) => invoke<RideInit>('ride_start', { request }),
+    /** The weather at a place now; its wind also goes to the ride under way. */
+    weather: (lat: number, lon: number) => invoke<Conditions>('ride_weather', { lat, lon }),
     intensity: (delta: number) => invoke<void>('ride_intensity', { delta }),
     skipStep: () => invoke<void>('ride_skip_step'),
     shift: (delta: number) => invoke<void>('ride_shift', { delta }),
@@ -66,6 +69,7 @@ export const api = {
     structures: () => invoke<ArrayBuffer>('ride_structures'),
     barriers: () => invoke<ArrayBuffer>('ride_barriers'),
     chunk: (cx: number, cz: number) => invoke<ArrayBuffer>('terrain_chunk', { cx, cz }),
+    imagery: (cx: number, cz: number, size: number) => invoke<ArrayBuffer>('terrain_imagery', { cx, cz, size }),
     far: (cx: number, cz: number) => invoke<ArrayBuffer>('terrain_far', { cx, cz }),
     togglePause: () => invoke<void>('ride_toggle_pause'),
     updateSettings: (settings: Settings) => invoke<void>('ride_update_settings', { settings }),
@@ -110,7 +114,6 @@ export const api = {
     capture: () => invoke<[number, string | null]>('native_capture'),
     saving: () => invoke<boolean>('native_saving')
   },
-  weatherNow: (lat: number, lon: number) => invoke<number>('weather_now', { lat, lon }),
   stravaActivities: () => invoke<StravaActivity[]>('strava_activities'),
   fitness: () => invoke<FitnessOverview>('fitness_overview'),
   geo: {

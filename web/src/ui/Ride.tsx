@@ -6,7 +6,8 @@ import { api, smokeHooks, useSettings } from '../state'
 import type { RideInit, RideRequest, RideState, RideSummary } from '../types'
 import { WorkoutShape } from './Workouts'
 import { World } from '../world/scene'
-import { look, timeFromHour, weatherFromCode } from '../world/weather'
+import { look, lookFromConditions, timeFromHour } from '../world/weather'
+import { nativeLook } from '../world/native'
 import { MiniMap } from './MiniMap'
 import { StreetPhoto } from './StreetPhoto'
 import { ProfileChart } from './ProfileChart'
@@ -34,6 +35,15 @@ function zone(power: number, ftp: number): number {
   return [0.55, 0.75, 0.9, 1.05, 1.2, 1.5].filter((l) => r >= l).length + 1
 }
 
+/** How often live weather is looked up again during a ride. */
+const WEATHER_EVERY_MS = 15 * 60_000
+
+/** Headwind, tailwind or crosswind, from where the wind comes relative to the rider (degrees, 0 ahead). */
+function windWord(angle: number): string {
+  const a = Math.abs(angle)
+  return a < 45 ? 'headwind' : a > 135 ? 'tailwind' : 'crosswind'
+}
+
 export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX.Element {
   const routeId = request.routeId
   const { settings, update } = useSettings()
@@ -50,6 +60,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const [loading, setLoading] = useState('Loading route…')
   const [error, setError] = useState('')
   const [hud, setHud] = useState<RideState | null>(null)
+  const [credits, setCredits] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const finishing = useRef(false)
   const units = settings.units
@@ -75,6 +86,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
     let disposed = false
     let raf = 0
     let pump = 0
+    let weatherTimer = 0
     let observer: ResizeObserver | null = null
     let offState: (() => void) | null = null
     const offLoading = api.ride.onLoading(setLoading)
@@ -115,7 +127,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           started.covered,
           (i) => `${i} ${imperial ? 'mi' : 'km'}`,
           imperial ? 1609.344 : 1000,
-          started.landmarks
+          started.landmarks,
+          setCredits
         )
         worldRef.current = world
         const native = settingsRef.current.nativeRenderer && (await api.native.available())
@@ -123,12 +136,10 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         if (disposed) return
         const lookCfg = settingsRef.current.look
         const time = lookCfg.timeOfDay === 'clock' ? timeFromHour(started.hour) : lookCfg.timeOfDay
-        let weather = lookCfg.weather === 'live' ? 'clear' : lookCfg.weather
-        if (lookCfg.weather === 'live') {
-          // The weather there right now; if it can't be had, a clear day.
-          weather = await api.weatherNow(started.centre[0], started.centre[1]).then(weatherFromCode, () => 'clear' as const)
-        }
-        const theLook = look(time, weather)
+        // The weather there right now (its wind reaches the riders too); if it can't be had, a clear day.
+        const live = lookCfg.weather === 'live'
+        const conditions = live ? await api.ride.weather(started.centre[0], started.centre[1]).catch(() => null) : null
+        const theLook = conditions ? lookFromConditions(time, conditions) : look(time, lookCfg.weather === 'live' ? 'clear' : lookCfg.weather)
         world.setLook(theLook)
         if (native) {
           // The GPU draws the world natively beneath this page; the page only shows the HUD.
@@ -141,6 +152,20 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             void api.log(`native renderer unavailable, using the built-in one: ${errorText(err)}`)
             await world.load()
           }
+        }
+        // Live weather is looked up again every quarter of an hour.
+        if (live) {
+          weatherTimer = window.setInterval(() => {
+            void api.ride
+              .weather(started.centre[0], started.centre[1])
+              .then((c) => {
+                if (disposed) return
+                const l = lookFromConditions(time, c)
+                world.setLook(l)
+                if (nativeRef.current) void api.native.look(nativeLook(l))
+              })
+              .catch(() => undefined)
+          }, WEATHER_EVERY_MS)
         }
         observer = new ResizeObserver(() => world.resize(canvas.clientWidth, canvas.clientHeight))
         observer.observe(canvas)
@@ -224,6 +249,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
       disposed = true
       cancelAnimationFrame(raf)
       window.clearInterval(pump)
+      window.clearInterval(weatherTimer)
       observer?.disconnect()
       offState?.()
       offLoading()
@@ -305,6 +331,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   return (
     <div className="ride">
       <canvas ref={canvasRef} className="world" />
+      {credits.length > 0 && <div className="imagery-credits">Imagery: {credits.join(' · ')}</div>}
 
       {loading && (
         <div className="ride-overlay solid">
@@ -330,6 +357,12 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               <span>
                 {fmtEle(hud.ele, units)} · ↗ {fmtEle(hud.ascent, units)}
               </span>
+              {hud.wind && hud.wind.speed >= 0.5 && (
+                <span className="hud-wind" title={hud.wind.felt === 0 ? 'Wind (only seen: see Settings → Virtual world)' : 'Wind'}>
+                  <i style={{ transform: `rotate(${hud.wind.angle + 180}deg)` }}>↑</i>
+                  {Math.round(speedValue(hud.wind.speed, units))} {speedUnit(units)} {windWord(hud.wind.angle)}
+                </span>
+              )}
               {hud.trail && (
                 <span>
                   {hud.ford && 'Ford · '}

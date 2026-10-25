@@ -55,9 +55,11 @@ mod bluetooth {
     fn ftms_control_point_commands() {
         assert_eq!(ftms_target_power(250.0), [0x05, 0xfa, 0x00]);
         // +5.5% grade, crr 0.004, cw 0.51 kg/m
-        assert_eq!(ftms_simulation(0.055, 0.004, 0.51), [0x11, 0, 0, 0x26, 0x02, 40, 51]);
+        assert_eq!(ftms_simulation(0.055, 0.004, 0.51, 0.0), [0x11, 0, 0, 0x26, 0x02, 40, 51]);
+        // A 2.5 m/s headwind, in mm/s.
+        assert_eq!(ftms_simulation(0.0, 0.004, 0.51, 2.5)[1..3], [0xc4, 0x09]);
         // −3% grade is two's complement
-        let down = ftms_simulation(-0.03, 0.004, 0.5);
+        let down = ftms_simulation(-0.03, 0.004, 0.5, 0.0);
         assert_eq!(i16::from_le_bytes([down[3], down[4]]), -300);
     }
 }
@@ -146,10 +148,12 @@ mod ant_profiles {
         assert_eq!(fec_track_resistance(-0.1, 0.004)[5..7], [0x38, 0x4a]);
         // 200 W = 800 quarter-watts
         assert_eq!(fec_target_power(200.0), [0x31, 0xff, 0xff, 0xff, 0xff, 0xff, 0x20, 0x03]);
-        assert_eq!(fec_wind_resistance(0.51), [0x32, 0xff, 0xff, 0xff, 0xff, 51, 127, 100]);
+        assert_eq!(fec_wind_resistance(0.51, 0.0), [0x32, 0xff, 0xff, 0xff, 0xff, 51, 127, 100]);
+        // A 5 m/s tailwind is −18 km/h.
+        assert_eq!(fec_wind_resistance(0.51, -5.0)[6], 109);
         // 75 kg rider = 7500 (0x1D4C); 10 kg bike = 200 (0x0C8) → nibble 8, byte 0x0C
         assert_eq!(fec_user_config(75.0, 10.0), [0x37, 0x4c, 0x1d, 0xff, 0x8f, 0x0c, 70, 0x00]);
-        assert_eq!(fec_pages(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.51 }).len(), 2);
+        assert_eq!(fec_pages(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.51, wind: 0.0 }).len(), 2);
     }
 }
 

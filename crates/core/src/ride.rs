@@ -144,6 +144,10 @@ pub struct RideEngine {
     pub workout_time: f64,
     /// Scales the workout's targets (1.0 = as written).
     pub intensity: f64,
+    /// The wind where the route is, if known: speed at 10 m (m/s) and where it blows from (degrees).
+    pub wind: Option<(f64, f64)>,
+    /// How much of the wind the riders feel: 1 is all of it, 0 none (it is only drawn).
+    pub wind_effect: f64,
     /// The virtual gear (index into `gearing::gears`), when virtual gears are on.
     pub gear: usize,
     /// Set on a shift, so the new resistance is sent straight away.
@@ -185,7 +189,13 @@ impl RideEngine {
     }
 
     pub fn with_options(route: Arc<Route>, settings: &Settings, pb: Option<PersonalBest>, options: RideOptions) -> Self {
-        let params = PhysicsParams { mass: settings.rider.weight_kg + settings.rider.bike_kg, crr: settings.physics.crr, cda: settings.physics.cda, max_speed: settings.physics.max_speed_kph / 3.6 };
+        let params = PhysicsParams {
+            mass: settings.rider.weight_kg + settings.rider.bike_kg,
+            crr: settings.physics.crr,
+            cda: settings.physics.cda,
+            max_speed: settings.physics.max_speed_kph / 3.6,
+            headwind: 0.0,
+        };
         let mut rivals = Vec::new();
         if pb.as_ref().is_some_and(|p| p.trace.len() > 1) {
             let trace = Arc::new(pb.as_ref().unwrap().trace.clone());
@@ -239,6 +249,8 @@ impl RideEngine {
             workout: options.workout,
             workout_time: 0.0,
             intensity: 1.0,
+            wind: None,
+            wind_effect: settings.look.wind_effect as f64 / 100.0,
             gear: crate::gearing::start_gear(&settings.gears, &crate::gearing::gears(&settings.gears)),
             gear_shifted: false,
             params,
@@ -583,7 +595,33 @@ impl RideEngine {
     fn params_at(&self, distance: f64, mass: f64) -> PhysicsParams {
         let trail_limit = self.trail_at(distance).and_then(Trail::max_speed).unwrap_or(f64::INFINITY);
         let ford_limit = if self.ford_at(distance) { FORD_MAX_SPEED } else { f64::INFINITY };
-        PhysicsParams { mass, crr: self.crr_at(distance), max_speed: self.params.max_speed.min(trail_limit).min(ford_limit), ..self.params }
+        PhysicsParams { mass, crr: self.crr_at(distance), max_speed: self.params.max_speed.min(trail_limit).min(ford_limit), headwind: self.headwind_at(distance), ..self.params }
+    }
+
+    /// Which way the route runs at a distance along it, as a unit `(east, north)`.
+    fn direction_at(&self, distance: f64) -> (f64, f64) {
+        let r = &self.route;
+        let a = ((distance / r.step) as usize).min(r.n.saturating_sub(2));
+        let b = (a + 1).min(r.n - 1);
+        let (east, north) = (r.x[b] - r.x[a], r.z[a] - r.z[b]);
+        let len = east.hypot(north).max(1e-9);
+        (east / len, north / len)
+    }
+
+    /// The headwind felt at a distance along the route, m/s (negative from behind), scaled by `wind_effect`.
+    pub fn headwind_at(&self, distance: f64) -> f64 {
+        let Some((speed, from)) = self.wind else { return 0.0 };
+        let (east, north) = self.direction_at(distance);
+        crate::weather::headwind(speed, from, east, north) * self.wind_effect.clamp(0.0, 1.0)
+    }
+
+    /// Where the wind comes from relative to the way the rider is heading: degrees, 0 dead
+    /// ahead, 90 from the right, ±180 from behind. `None` if there is no wind to speak of.
+    pub fn wind_angle(&self) -> Option<f64> {
+        let (_, from) = self.wind.filter(|w| w.0 > 0.2)?;
+        let (east, north) = self.direction_at(self.distance);
+        let bearing = east.atan2(north).to_degrees();
+        Some((from - bearing + 540.0).rem_euclid(360.0) - 180.0)
     }
 
     /// Rolling resistance at a distance along the route.

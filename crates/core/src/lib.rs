@@ -3,6 +3,7 @@
 //! sensor protocols and generating the landscape. No I/O happens here, so all
 //! of it is unit-testable and independent of the app shell.
 
+pub mod countries;
 pub mod devices;
 pub mod fit;
 pub mod fitness;
@@ -14,5 +15,6 @@ pub mod ride;
 pub mod segments;
 pub mod types;
 pub mod waymarked;
+pub mod weather;
 pub mod workout;
 pub mod world;

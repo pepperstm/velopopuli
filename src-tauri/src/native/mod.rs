@@ -1400,7 +1400,12 @@ impl SceneMeshes {
                 (from as u32 * per_sample, (to.min(n - 1).saturating_sub(from)) as u32 * per_sample, texture)
             })
             .collect();
-        let s = world.structures();
+        let mut s = world.structures();
+        // Wind turbine rotors stand still here; the page turns them.
+        let white = [0.86, 0.87, 0.87];
+        for r in std::mem::take(&mut s.rotors) {
+            velopopuli_core::world::blades(&mut s.lit, &r, 3, r.phase, (r.radius * 0.045, r.radius * 0.012), white);
+        }
         let shift = |v: &[Vertex]| -> Vec<Vertex> { v.iter().map(|q| Vertex { pos: [(q.pos[0] as f64 - origin[0]) as f32, q.pos[1], (q.pos[2] as f64 - origin[1]) as f32], ..*q }).collect() };
         SceneMeshes {
             route_road: Mesh::new(device, &road_verts, Some(&idx)),

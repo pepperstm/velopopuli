@@ -11,17 +11,22 @@ crates/core/      Pure Rust library, no I/O — fully unit-tested
   segments        Strava segments and other rides matched onto the route; ghosts; photos
   fit             FIT activity encoder
   waymarked       Waymarked mountain-bike routes: listing an area, joining a route's ways into one line
+  countries       Which country a point is in (simplified Natural Earth outlines, from tools/countries.py)
+  weather         Live conditions from Open-Meteo; the wind on the rider
   devices/        Bluetooth GATT and ANT+ protocol encode/decode; the sensor hub
   world/          Terrain (elevation tiles, height field, chunk/horizon/road meshes),
                   OpenStreetMap buildings, scenery (forests, water, other roads, bridges and tunnels),
                   structures (decks, bores, overbridges, log bridges), the route road's surface and width,
-                  trails (grades, berms, fords), barriers and landmarks
+                  trails (grades, berms, fords), barriers and landmarks (signs, and the models of turbines,
+                  towers, castles and the like), and imagery (which source where,
+                  web-map tiles put together into one image per terrain chunk)
 crates/relay/     The group-ride relay server (WebSocket, stateless)
 src-tauri/        The app (Tauri 2)
   devices/        Bluetooth via the OS stack (btleplug); ANT+ USB stick via libusb; demo rider
   session         50 Hz simulation loop, trainer control, saving rides
   native/         The optional native renderer (wgpu → Metal) and its shaders
   mapdata         Downloading and caching map data (vector tiles, Overpass)
+  imagery         Downloading, caching and decoding imagery tiles for the ground
   diag            The diagnostics log and reports
   group, smart    Group-ride client; fan and light control
   strava, geo     Strava; place search and route planning

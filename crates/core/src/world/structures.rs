@@ -1,10 +1,12 @@
 //! The built things along the route that aren't buildings: bridge parapets and
 //! piers (or, on a trail, a log bridge), tunnel bores with their portals and the
-//! land over them, and the bridges that carry other roads and railways across overhead.
+//! land over them, and the bridges that carry other roads and railways across overhead;
+//! and the landmarks (`sights.rs`), which span the route the same way.
 
 use super::height::{smoothstep, BLEND, BRIDGE, TUNNEL};
 use super::mesh::TriMesh;
 use super::scenery::{runs, Deck, Overbridge};
+use super::sights::Rotor;
 use super::{World, DECK_DEPTH, ROAD_LIFT};
 
 /// One mesh for the whole route, like the road.
@@ -14,6 +16,8 @@ pub struct Structures {
     pub lit: TriMesh,
     /// Tunnel interiors, which daylight doesn't reach: drawn in exactly the colours given.
     pub unlit: TriMesh,
+    /// Wind turbine rotors, for the renderer to turn (their towers are in `lit`).
+    pub rotors: Vec<Rotor>,
 }
 
 type P3 = [f64; 3];
@@ -84,6 +88,7 @@ impl World {
         for deck in &self.scene.decks {
             self.deck(&mut out.lit, deck);
         }
+        self.sight_models(&mut out.lit, &mut out.rotors);
         out
     }
 

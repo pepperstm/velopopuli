@@ -8,12 +8,15 @@ mod buildings;
 mod dem;
 mod fords;
 mod height;
+mod imagery;
 mod landmarks;
 mod mesh;
 mod mvt;
 mod roads;
 mod scenery;
+mod sights;
 mod structures;
+mod style;
 mod surface;
 
 pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
@@ -21,11 +24,14 @@ pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Foo
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
 pub use fords::{FORD_DEPTH, FORD_MAX_SPEED, FORD_REACH, FORD_ROLLING};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
+pub use imagery::{chunk_image, far_colours, provider_at, providers, tile_url, zoom_for, ChunkImage, Provider, Tile, FAR_PX, NEAR_PX};
 pub use landmarks::{landmarks, Landmark};
 pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
+pub use sights::{blades, map_query, mark_footprints, parse_sights, sights_from_labels, Rotor, Sight, SightKind, SIGHT_RADIUS_M};
 pub use structures::Structures;
+pub use style::{region_at, BuildingTags, Region, Steeple};
 pub use surface::{
     highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, FORD, SINGLETRACK,
     SINGLETRACK_WIDTH, TIMBER, UNMARKED, WAY_TAGS,
@@ -108,6 +114,8 @@ pub struct World {
     pub field: HeightField,
     pub buildings: Buildings,
     pub scene: Scene,
+    /// Landmarks to model (wind turbines, towers, castles, …); empty to leave them out.
+    pub sights: Vec<Sight>,
     tree_line: f64,
 }
 
@@ -146,7 +154,7 @@ impl World {
         // Rough alpine tree line, falling with latitude.
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::new(route.clone(), dem, dem_offset);
-        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line }
+        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), sights: Vec::new(), tree_line }
     }
 
     /// A world with OpenStreetMap scenery (forests, water, bridges, tunnels) and buildings.
@@ -156,7 +164,10 @@ impl World {
         let scene = Scene::new(&route, scenery);
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::with_kinds(route.clone(), dem, dem_offset, scene.kinds.clone());
-        Self { route, field, buildings: Buildings::default(), scene, tree_line }.with_buildings(footprints)
+        // Landmarks come with the road tags; without those, the tiles' castles and churches.
+        let mapped = if scenery.way_tags == WAY_TAGS { scenery.sights.clone() } else { sights_from_labels(&scenery.labels) };
+        let (footprints, sights) = mark_footprints(footprints, &mapped);
+        Self { route, field, buildings: Buildings::default(), scene, sights, tree_line }.with_buildings(&footprints)
     }
 
     /// Adds buildings (OpenStreetMap footprints) to the landscape.
