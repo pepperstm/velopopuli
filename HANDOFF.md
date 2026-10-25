@@ -12,9 +12,16 @@ A free, open-source indoor-cycling app: import any GPX route, ride it on a smart
 
 It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding GPX routes over winter), was rewritten the same day from Electron/TypeScript into Rust + Tauri for low overhead, renamed "Velo Populi" and then "VeloPopuli" to match the website.
 
-## 2. Where it stands (October 2026, v0.3.0)
+## 2. Where it stands (October 2026: v0.3.5 released, v0.4 in progress)
 
-**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks, weather), the virtual-gear maths, diagnostics, the relay. 111 automated tests (plus three that need the network and are skipped by default), plus visual checks through the automated smoke harness (section 6).
+**Released:** v0.3.5, from `main`. **In progress: the world update for v0.4**, on branch `feature/satellite-imagery` (draft pull request #39 into `next`; tracking issue #36). It is complete and tested with the smoke harness, and lands as **one** merge — see section 5a. What it adds:
+
+- **Imagery on the ground** (#32): national orthophotos where they are open, Sentinel-2 cloudless 2017 elsewhere, or the rider's own provider; one image per terrain chunk, and the far mesh coloured from the same imagery.
+- **Buildings that fit their region** (#33): regional styles (roof shape and pitch, eaves, colours, timber upper floors), adjusted by building kind and overridden by mapped tags.
+- **Landmarks** (#34): wind turbines with turning rotors, lighthouses, masts, chimneys, water towers, windmills, castles and monuments up to ~3 km from the road; church towers in the local style; castle battlements.
+- **Realistic weather and wind** (#35): live cloud, haze, rain and snow strength, wet roads and lying snow from Open-Meteo; the wind in the physics and sent to the trainer, with a slider from *felt as it is* to *only seen*.
+
+**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, ground imagery, regional buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks and their models, live weather and wind), the virtual-gear maths, diagnostics, the relay. 111 automated tests (plus three that need the network and are skipped by default), plus visual checks through the automated smoke harness (section 6).
 
 **Built but not proven with real use:**
 
@@ -24,7 +31,9 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 | **Virtual gears** | The maths is unit-tested and shifting was checked with the demo rider and the smoke harness (`VP_SMOKE_SHIFT`), but it has **never been felt on a real trainer**. |
 | **Strava** (OAuth, upload, segments, activities as ghosts) | Never run against the live API. Users must create their own API key (open source can't ship a secret). Scope is `read,activity:read_all,activity:write`. |
 | **Windows and Linux** | Built and packaged by CI on every push (and Arch's package is installed in a container and its libraries checked), but **never run by a person**. |
-| **Native renderer** (macOS, opt-in) | wgpu/Metal in an NSView under a transparent webview. Matches three.js in screenshots; HUD-over-native never checked in a real window; no clean release-build performance comparison. |
+| **Native renderer** (macOS, opt-in) | wgpu/Metal in an NSView under a transparent webview. Matches three.js in screenshots; HUD-over-native never checked in a real window; no clean release-build performance comparison. **Behind the page on the world update:** no ground imagery, wet roads or lying snow, and turbine blades stand still. |
+| **Wind on the trainer** | FTMS wind speed and FE-C page 50 wind are unit-tested against the specs; never felt on a real trainer. Whether trainers honour the wind field (or only the gradient) is unknown. |
+| **Your own imagery provider** | Tested with an open tile URL only, never with a real keyed account. |
 | **Mapillary street photos** | Needs a user token; never tried with a real one. |
 | **Fan and lights** (Home Assistant, Shelly, Tasmota, webhook) | Tested against mocks only. |
 
@@ -35,12 +44,13 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 ```
 crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/tests/)
   gpx, physics      Route building; speed from power (CdA, Crr scaled by road surface, altitude-dependent air density)
-  ride, gamify      50 Hz ride engine, rivals/ghosts, recorder; XP, levels, badges, streaks
+  ride, gamify      50 Hz ride engine (wind included), rivals/ghosts, recorder; XP, levels, badges, streaks
   workout, fitness  Workouts; power curve, FTP estimate, zones, CTL/ATL/TSB
   gearing           Virtual gears: gear sets (presets, custom teeth), the effective gradient that makes the trainer feel like a gear
   segments, fit     Strava segments/ghost matching, photo picking; FIT encoder
   waymarked         Waymarked MTB routes (route=mtb relations): listing an area, joining a relation's ways into one line, GPX
   countries         Country at a point, from simplified Natural Earth outlines in countries.txt (rebuilt by tools/countries.py)
+  weather           Open-Meteo request and reply → Conditions; the wind at a rider's height (headwind)
   devices/          BLE GATT (FTMS, CPS, CSC, HR, Tacx FE-C tunnel) and ANT+ (framing, FE-C, power, HR, S&C) codecs; sensor hub (most direct source wins)
   world/            mod.rs: World, chunk/horizon meshes, the route road ribbon
                     height.rs: height field pinned to the road; dem.rs: elevation tiles; berms.rs: banked trail turns
@@ -54,16 +64,19 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
 src-tauri/          The app (Tauri 2)
   main.rs           App state, command registration, data dir (VP_DATA_DIR override), diag init
-  commands.rs       Every command the page calls (routes, ride data in binary form, settings, smoke hooks…)
+  commands.rs       Every command the page calls (routes, ride data in binary form — terrain_imagery, terrain_far,
+                    ride_structures with its rotors —, ride_weather, settings, smoke hooks…)
   session.rs        Ride start (loads map data, builds World), the simulation loop, trainer commands, saving
   devices/          ble.rs (btleplug), ant.rs (rusb, vendored libusb), sim.rs (demo rider), mod.rs registry
-  mapdata.rs        Downloading + caching vector tiles and Overpass data per route
+  mapdata.rs        Downloading + caching vector tiles and Overpass data per route (road tags and landmarks in one request)
   imagery.rs        Imagery tiles: download, disk cache (`imagery/<source>/<z>/<x>/<y>`, trimmed past 2 GB), decode
   native/           Native renderer (mod.rs, host.rs NSView, shader.wgsl)
   diag.rs           Diagnostics log + reports; issues.rs: GitHub new-issue links; snapshot.rs: window PNGs (macOS)
   strava, geo, photos, smart, group, library, terrain, secrets, store
-web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, rider.ts,
-                    barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
+web/                React + three.js (Vite). ui/ screens, world/ the 3D scene: scene.ts, terrain.ts (chunks, imagery
+                    materials, far mesh), rider.ts, barriers.ts, surfaces.ts, rotors.ts (turbine blades), weather.ts
+                    (looks, live conditions → a look, rain and snow), weathered.ts (wet and snowy shading on any
+                    material), native.ts (assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
 .github/workflows/build.yml   CI: all tests, installers for every platform, Arch package, releases
@@ -78,8 +91,10 @@ How a ride flows end to end is in the wiki's [Architecture](https://github.com/p
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
 - `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
 - **Caches have versions:** buildings `FORMAT` (3, since footprints carry their tags) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (4, since the same request brings the landmarks) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
+- **Settings that hold keys in plain text:** `look.imageryUrl` (a rider's own imagery provider, key included) and `look.mapillaryToken` are kept in `settings.json`, not the keychain. Other world-update settings: `look.imagery`, `look.landmarks` (signs and landmark models), `look.windEffect` (0–100, default 100).
 - **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space — kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux.
 - **Logs:** `logs/diagnostics-<time>.log`, last 12 runs kept.
+- **Weather** is fetched, never stored: Open-Meteo needs no key and is asked again every 15 minutes during a live-weather ride.
 - **Imagery cache:** `imagery/<source id>/<z>/<x>/<y>` holds tiles as the server sent them; `<y>.none` marks "no tile here" for 30 days. A rider's own provider's folder is named from a hash of its URL, so its key is never in a path. Oldest tiles go first once the folder passes 2 GB.
 
 ## 5. Building
@@ -105,6 +120,8 @@ Notes from experience:
 ## 5a. How changes reach `main`
 
 The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branch (`fix/…`, `feature/…`, `docs/…`) → one logical change with tests and docs → pull request from the template → CI green → **squash merge**. `main` is protected: changes arrive only through pull requests whose checks (`test`, `Linux`, `Windows`, `macOS`) pass on a branch up to date with `main`. No approving review is required (set to 0 on 2026-10-23: the maintainer is the only reviewer). After a squash merge, a pull request stacked on the merged one needs `git rebase --onto origin/main <old base tip>`. `npm run format` formats everything (rustfmt.toml, .prettierrc.json); `npm run check` runs what CI runs. After merging, sync `docs/wiki/` to the wiki repository and tag releases as below.
+
+**The exception now in force — the world update.** `next` is the branch for v0.4; v0.3.5 was cut from the same point (`release/v0.3.5`, merged to `main` as #38), so `next` doesn't need `main` first. The maintainer's rule (2026-10-24): *no merges or pull requests until the whole world update is fully fleshed out, then merge it all in as one.* So all of it is on `feature/satellite-imagery`, one commit per part, with **one** draft pull request (#39, into `next`) whose description covers the whole update. Don't open per-feature pull requests or merge anything into `next` in the meantime. When it is ready: mark #39 ready, squash-merge into `next`, then take `next` to `main` as v0.4 (expect a version-number conflict with v0.3.5's bump; take 0.4.0 everywhere).
 
 ## 6. Testing
 
@@ -132,9 +149,10 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 4. Pairing to a specific ANT+ device and more than one device per type.
 5. Rolling resistance per road surface, trail grade and ford — built (`Surface::rolling_factor`, `Trail::rolling_factor`, `FORD_ROLLING`; the trainer gets the extra as gradient so every trainer feels it). Next: feel it on a real trainer and tune the factors and the trail speed limits.
 5a. Virtual gears — built (keyboard, Bluetooth remotes, on-screen buttons, rider-defined gear sets); next: Di2 and Zwift Click/Play shifters, Zwift Hub native shifting, and feeling it on real trainers.
-6. Native renderer: verify HUD in a real window, measure release-build overhead, then Windows/Linux hosts.
+6. Native renderer: catch up with the world update — ground imagery (chunk images from `terrain_imagery`, far colours from `terrain_far`), wet roads and lying snow (the same sums as `weathered.ts`), and turning rotors (the rotor list from `ride_structures`, or `Structures::rotors`); then verify the HUD in a real window, measure release-build overhead, then Windows/Linux hosts.
+6a. **Finish and merge the world update** (section 5a), then release v0.4. Before release, feel the wind on a real trainer and check `RIDER_HEIGHT_SHARE` (0.6) feels right.
 7. **Stretch — self-hosted group servers and clubs.** Design agreed in discussion: no central server; identity is a keypair created on the device (no accounts), friends lists stored locally and exchanged by friend codes/QR including the friend's home server address, clubs run their own server (the relay plus a small database: members, invites, scheduled rides, shared routes, leaderboards), optional community server, federation later. Package the relay as a Docker image with `wss://`. Leaderboards can't be cheat-proof (power comes from the rider's device).
-8. More OpenStreetMap detail: roof shapes, other land cover, broadleaf trees, squares, cuttings/embankments for side roads.
+8. More OpenStreetMap detail: other land cover, broadleaf trees, squares, cuttings/embankments for side roads, building parts (`building:part`) for complex outlines. Imagery at night and in snow (today the photo is the same in every light and season; lying snow is shaded over it).
 
 ## 9. Decisions and the reasons for them
 
@@ -151,8 +169,10 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Apple Health removed** for now (no desktop HealthKit; export import was clunky).
 - **Commits are under the maintainer's name only.**
 - **Buildings by region, not by country:** a handful of building traditions (`Region` in `style.rs`) chosen by country, with the Alps carved out of IT, FR and DE by latitude and longitude. Coarse on purpose: a style per country would be hundreds of palettes to tune for little gain. Mapped tags always win. Footprint height means the walls (to the eaves); a mapped `height` is to the roof top and is shared out once the roof is built.
-- **Landmarks ride along with the road tags:** one Overpass request per 20 km stretch brings the roads under the route and the landmarks around it, because the servers ration requests rather than results. Without Overpass, castles and churches come from the tiles' points of interest (no heights or outlines). Landmarks are one mesh for the whole route (like the bridges), not per chunk, so tall ones show from kilometres away; their feet sink 25 m into the ground because the distant terrain is coarser than the near. A landmark inside a building outline replaces it (lighthouse, water tower…) or tells it what it is (church, castle), so nothing is drawn twice. Turbines face a fixed west-south-westerly until there is weather to turn them.
+- **Landmarks ride along with the road tags:** one Overpass request per 20 km stretch brings the roads under the route and the landmarks around it, because the servers ration requests rather than results. Without Overpass, castles and churches come from the tiles' points of interest (no heights or outlines). Landmarks are one mesh for the whole route (like the bridges), not per chunk, so tall ones show from kilometres away; their feet sink 25 m into the ground because the distant terrain is coarser than the near. A landmark inside a building outline replaces it (lighthouse, water tower…) or tells it what it is (church, castle), so nothing is drawn twice. Turbines face a fixed west-south-westerly (`WIND_FROM_DEG`) unless live weather gives a wind, when the page turns them to face it and spins them from cut-in (3 m/s) to rated speed (12 m/s).
 - **Rotors turn on the page only:** the page animates them (`rotors.ts`); the native renderer gets still blades from `world::blades` and skips the page's rotor mesh when baking props.
+- **Wind is physics, the rest of the weather is looks.** The 10 m wind from Open-Meteo is cut to 60% at rider height (`RIDER_HEIGHT_SHARE`), and only its head/tail part counts: drag uses the speed of the air past the rider (`0.5·ρ·CdA·air·|air|`), so tailwinds push. Crosswinds are left out (small effect on a bike, and no lean to show). Simulated pace riders get the same wind (ghosts replay recorded rides, so don't), so a pacer isn't unfairly spared it. The trainer is sent the headwind as well as the gradient. The **wind slider** (`windEffect`) scales only what is felt — at 0% it is still drawn — because some riders want the look of a gale without riding into it.
+- **Weather is live or a preset, never stored.** No forecast and no history: a ride shows the weather now, wherever the route is, refreshed every 15 minutes. Presets (rain, snow…) set the same look fields at fixed strengths and have no wind.
 - **Imagery: open licences only by default.** National orthophotos where they are open (swisstopo, IGN France, PNOA, PDOK, USGS) and Sentinel-2 cloudless **2017** (CC BY 4.0) elsewhere — the 2018 and later releases are CC BY-NC-SA, so are left out. Esri, Google and Bing are off-limits by their terms. A rider can add their own provider (tile URL with key), used under their account. Coverage is decided by country outline, not by the server's answer: swisstopo, for one, returns blurry filler outside Switzerland rather than an error.
 
 ## 10. Known traps
@@ -162,6 +182,9 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **upload-artifact keeps the common parent path** of its inputs, so files land at different depths per OS; the release job finds relay binaries with `find`.
 - **Vector-tile streets carry no `surface`**, only `kind`/`tracktype` — surface and width needed Overpass.
 - **Sentinel-2 in towns:** at 10 m a pixel a town is a blur of roof colour, so coarse imagery loses most of its warm colours (`COARSE_GREY` in `imagery.rs`); greens are left alone.
+- **Open-Meteo `current` rain, showers and snowfall are totals over its 15-minute interval**, not per hour: `parse_conditions` multiplies by `3600 / interval`. Snowfall is cm, snow depth is metres.
+- **Wind units on the trainer:** FTMS simulation sends wind in mm/s (signed 16-bit), FE-C page 50 in km/h offset by 127. Positive is a headwind in both.
+- **`weathered.ts` hooks the shader at `#include <alphamap_fragment>`, not `<color_fragment>`:** the imagery material replaces `<color_fragment>` outright, so a later patch hooking it found nothing and snow never showed. Chain any further shader patches the same way (keep the earlier `onBeforeCompile`, extend `customProgramCacheKey`).
 - **Weather is the page's except for the wind:** `weather.rs` (core) reads Open-Meteo; `ride_weather` hands its wind to the ride engine (`RideEngine::wind`, scaled by `wind_effect`) and returns the rest for the page to draw (`lookFromConditions`, `weathered.ts` for wet roads and lying snow). The native renderer gets the sky, light, fog and falling rain or snow, not the wet roads or lying snow.
 - **Imagery is drawn by the page only:** the native renderer builds its own chunks and far mesh straight from `World`, so it shows none of it yet (chunk images come from `terrain_imagery`, far colours from `terrain_far`).
 - **Fonts on canvas:** barrier banners are drawn on a canvas in Manrope; `Ride.tsx` waits for `document.fonts.load` before building the world, or the banner falls back to a system font.
