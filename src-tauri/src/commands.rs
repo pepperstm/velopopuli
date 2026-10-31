@@ -274,13 +274,17 @@ pub async fn ride_road_mesh(state: State<'_, AppState>) -> Res<Response> {
 }
 
 /// The tree models, one per kind. Layout: `[kinds, then the vertex count of each]` as u32,
-/// then as f32 per kind: positions, normals and colours (3 each per vertex).
+/// then as f32: each kind's sprite frame (`[half width, bottom, top]`), then per kind its
+/// positions, normals and colours (3 each per vertex).
 #[tauri::command]
 pub fn tree_models() -> Response {
-    let models: Vec<_> = (0..velopopuli_core::world::TREE_KINDS as u8).map(velopopuli_core::world::tree_model).collect();
+    use velopopuli_core::world::{sprite_frame, tree_model, TREE_KINDS};
+    let models: Vec<_> = (0..TREE_KINDS as u8).map(tree_model).collect();
+    let frames: Vec<f32> = (0..TREE_KINDS as u8).flat_map(|k| sprite_frame(k).map(|v| v as f32)).collect();
     let mut header = vec![models.len() as u32];
     header.extend(models.iter().map(|m| m.vertices() as u32));
-    let parts: Vec<&[f32]> = models.iter().flat_map(|m| [&m.positions[..], &m.normals[..], &m.colors[..]]).collect();
+    let mut parts: Vec<&[f32]> = vec![&frames];
+    parts.extend(models.iter().flat_map(|m| [&m.positions[..], &m.normals[..], &m.colors[..]]));
     Response::new(f32_bytes(&header, &parts))
 }
 

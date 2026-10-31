@@ -1204,7 +1204,7 @@ mod scenery {
 
     #[test]
     fn trees_of_many_kinds_grow_where_they_belong() {
-        use velopopuli_core::world::{tree_model, tree_share, TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, PINE, SPRUCE, TREE_KINDS};
+        use velopopuli_core::world::{sprite_frame, tree_model, TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, PINE, SPRUCE, TREE_KINDS};
         // Every kind has a model, standing on the ground, of its own size.
         let top = |k: u8| tree_model(k).positions.chunks(3).map(|p| p[1] as f64).fold(f64::MIN, f64::max);
         for k in 0..TREE_KINDS as u8 {
@@ -1251,9 +1251,13 @@ mod scenery {
         distinct.dedup();
         assert!(distinct.len() >= 3, "{distinct:?}");
         assert!(woods.trees.chunks(TREE_FLOATS).all(|t| (0.8..1.2).contains(&t[7])));
-        // Distant chunks draw a share of their trees: all close by, fewer further out.
-        assert_eq!(tree_share(1.0, 6.0), 1.0);
-        assert!((tree_share(6.0, 6.0) - 0.3).abs() < 1e-9 && tree_share(3.0, 6.0) < 1.0 && tree_share(3.0, 6.0) > tree_share(5.0, 6.0));
+        // Each kind's sprite frame holds its whole model: as wide, as low and as tall.
+        for k in 0..TREE_KINDS as u8 {
+            let [half, bottom, top] = sprite_frame(k);
+            let m = tree_model(k);
+            assert!(m.positions.chunks(3).all(|p| (p[0] as f64).abs() <= half && p[1] as f64 >= bottom && p[1] as f64 <= top));
+            assert!(half > 0.5 && top - bottom > 1.5, "kind {k}: {half} {bottom} {top}");
+        }
     }
 
     #[test]

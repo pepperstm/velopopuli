@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { api } from '../bridge'
 import type { WorldLayout } from '../types'
+import { SPRITES_FROM, spriteMaterial, treeMaterial, type TreeKit } from './trees'
 
 // The landscape is computed in Rust, off the render thread, and arrives as
 // ready-made vertex buffers: square chunks around the rider plus one coarse
@@ -10,32 +11,11 @@ import type { WorldLayout } from '../types'
 const MAX_IN_FLIGHT = 6
 /** Numbers per tree in a chunk: x, y, z, yaw, width scale, height scale, kind, shade. */
 const TREE_FLOATS = 8
-/** As `ALL_TREES_WITHIN` and `FAR_TREES` in `world/trees.rs`: every tree in chunks this close
- * to the rider (in chunks, centre to centre), and this share of them at the edge of the view. */
-const ALL_TREES_WITHIN = 1.5
-const FAR_TREES = 0.3
-
-/** The tree models (built in Rust, see `world/trees.rs`), one per kind. */
-async function loadTreeGeometries(): Promise<THREE.BufferGeometry[]> {
-  const buffer = await api.ride.trees()
-  const [kinds] = new Uint32Array(buffer, 0, 1)
-  const counts = Array.from(new Uint32Array(buffer, 4, kinds))
-  let offset = 4 + kinds * 4
-  return counts.map((verts) => {
-    const geo = new THREE.BufferGeometry()
-    for (const name of ['position', 'normal', 'color']) {
-      geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(buffer, offset, verts * 3), 3))
-      offset += verts * 12
-    }
-    return geo
-  })
-}
-
-/** How much of a chunk's trees to draw, by its distance from the rider in chunks (as `tree_share` in Rust). */
-function treeShare(distance: number, view: number): number {
-  const t = Math.min(Math.max((distance - ALL_TREES_WITHIN) / (view - ALL_TREES_WITHIN), 0), 1)
-  return 1 - (1 - FAR_TREES) * t * t * (3 - 2 * t)
-}
+/** A chunk's 3D trees are kept in the scene while any of it is within this of the rider, and its
+ * sprites while any of it is beyond this: the switching distance, its spread, and room for the
+ * camera to be away from the rider. */
+const NEAR_TREES_M = SPRITES_FROM + 75
+const FAR_TREES_M = SPRITES_FROM - 75
 
 /**
  * One window bay of one storey. It multiplies the wall colour, so it is white
@@ -141,8 +121,8 @@ function decodeGrid(buffer: ArrayBuffer): GridReply {
 
 interface Chunk {
   mesh: THREE.Mesh
-  /** One per kind of tree present, each with every tree of its kind (drawn: a share of them). */
-  trees: { mesh: THREE.InstancedMesh; all: number }[]
+  /** Per kind of tree present: its trees in 3D (drawn only near the camera) and as sprites (only far from it). */
+  trees: { near: THREE.InstancedMesh; far: THREE.InstancedMesh }[]
   buildings: THREE.Mesh | null
   water: THREE.Mesh | null
   roads: THREE.Mesh | null
@@ -158,9 +138,9 @@ export class Terrain {
   private pending = new Set<string>()
   private indices: Uint16Array
   private ground = new THREE.MeshLambertMaterial({ vertexColors: true })
-  private treeGeometries: Promise<THREE.BufferGeometry[]> = loadTreeGeometries()
   private treesAt = { x: Infinity, z: Infinity }
-  private treeMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
+  private treeMaterial = treeMaterial()
+  private spriteMaterial: THREE.MeshLambertMaterial | null = null
   private buildingMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: windowTexture() })
   // Slightly see-through, with a sheen where the sun catches it.
   private waterMaterial = new THREE.MeshPhongMaterial({ vertexColors: true, transparent: true, opacity: 0.86, shininess: 90, specular: 0x8899aa })
@@ -181,7 +161,10 @@ export class Terrain {
   private centre = { cx: 0, cz: 0 }
   private disposed = false
 
-  constructor(private layout: WorldLayout) {
+  constructor(
+    private layout: WorldLayout,
+    private trees: Promise<TreeKit>
+  ) {
     this.indices = gridIndices(layout.cells)
     const farGeo = new THREE.BufferGeometry()
     const farVerts = (layout.farCells + 1) ** 2
@@ -229,22 +212,31 @@ export class Terrain {
         this.chunks.delete(k)
       }
     }
-    // Thin the distant woods again once the rider has moved on a little.
-    if (Math.hypot(x - this.treesAt.x, z - this.treesAt.z) > chunk / 8) {
+    // Once the rider has moved on a little, sort the chunks' trees into 3D and sprites again.
+    if (Math.hypot(x - this.treesAt.x, z - this.treesAt.z) > 20) {
       this.treesAt = { x, z }
       for (const [k, c] of this.chunks) {
         const [kx, kz] = k.split(',').map(Number)
-        this.thinTrees(kx, kz, c.trees)
+        this.placeTrees(kx, kz, c.trees)
       }
     }
   }
 
-  /** Draws all of a chunk's trees near the rider, and fewer the further away it is. */
-  private thinTrees(cx: number, cz: number, trees: Chunk['trees']): void {
-    const { chunk, viewChunks } = this.layout
+  /**
+   * Keeps a chunk's 3D trees only where some of it is near enough to need them, and its
+   * sprites only where some of it is far enough; the shaders split the trees between the two
+   * one by one.
+   */
+  private placeTrees(cx: number, cz: number, trees: Chunk['trees']): void {
+    const { chunk } = this.layout
     const at = Number.isFinite(this.treesAt.x) ? this.treesAt : { x: (this.centre.cx + 0.5) * chunk, z: (this.centre.cz + 0.5) * chunk }
-    const share = treeShare(Math.hypot((cx + 0.5) * chunk - at.x, (cz + 0.5) * chunk - at.z) / chunk, viewChunks)
-    for (const t of trees) t.mesh.count = Math.ceil(t.all * share)
+    const [x0, z0] = [cx * chunk, cz * chunk]
+    const nearest = Math.hypot(Math.max(x0 - at.x, 0, at.x - x0 - chunk), Math.max(z0 - at.z, 0, at.z - z0 - chunk))
+    const farthest = Math.hypot(Math.max(Math.abs(at.x - x0), Math.abs(at.x - x0 - chunk)), Math.max(Math.abs(at.z - z0), Math.abs(at.z - z0 - chunk)))
+    for (const t of trees) {
+      t.near.visible = nearest < NEAR_TREES_M
+      t.far.visible = farthest > FAR_TREES_M
+    }
   }
 
   private async load(cx: number, cz: number): Promise<void> {
@@ -267,8 +259,9 @@ export class Terrain {
       const mesh = new THREE.Mesh(geo, this.ground)
       this.group.add(mesh)
 
-      // The trees come grouped by kind, each kind in random order (so its first part is an even thinning).
-      const geometries = await this.treeGeometries
+      // The trees come grouped by kind; each kind is one set of instances drawn two ways.
+      const kit = await this.trees
+      this.spriteMaterial ??= spriteMaterial(kit.texture)
       const trees: Chunk['trees'] = []
       const count = data.trees.length / TREE_FLOATS
       const holder = new THREE.Object3D()
@@ -277,7 +270,7 @@ export class Terrain {
         const kind = data.trees[first * TREE_FLOATS + 6]
         let end = first
         while (end < count && data.trees[end * TREE_FLOATS + 6] === kind) end++
-        const geometry = geometries[kind]
+        const geometry = kit.models[kind]
         if (geometry) {
           const mesh = new THREE.InstancedMesh(geometry, this.treeMaterial, end - first)
           for (let i = first; i < end; i++) {
@@ -291,14 +284,18 @@ export class Terrain {
           }
           mesh.instanceMatrix.needsUpdate = true
           if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-          // Bounds over every tree, before any are left out.
           mesh.computeBoundingSphere()
-          trees.push({ mesh, all: end - first })
-          this.group.add(mesh)
+          // The same trees as sprites, sharing their places and shades.
+          const far = new THREE.InstancedMesh(kit.sprites[kind], this.spriteMaterial, end - first)
+          far.instanceMatrix = mesh.instanceMatrix
+          far.instanceColor = mesh.instanceColor
+          far.computeBoundingSphere()
+          trees.push({ near: mesh, far })
+          this.group.add(mesh, far)
         }
         first = end
       }
-      this.thinTrees(cx, cz, trees)
+      this.placeTrees(cx, cz, trees)
       let buildings: THREE.Mesh | null = null
       if (data.buildings) {
         const walls = new THREE.BufferGeometry()
@@ -393,8 +390,9 @@ export class Terrain {
     this.group.remove(c.mesh)
     c.mesh.geometry.dispose()
     for (const t of c.trees) {
-      this.group.remove(t.mesh)
-      t.mesh.dispose()
+      this.group.remove(t.near, t.far)
+      t.near.dispose()
+      t.far.dispose()
     }
     if (c.buildings) {
       this.group.remove(c.buildings)
@@ -416,8 +414,8 @@ export class Terrain {
     this.chunks.clear()
     this.far.geometry.dispose()
     this.ground.dispose()
-    void this.treeGeometries.then((gs) => gs.forEach((g) => g.dispose()))
     this.treeMaterial.dispose()
+    this.spriteMaterial?.dispose()
     this.buildingMaterial.map?.dispose()
     this.buildingMaterial.dispose()
     this.waterMaterial.dispose()

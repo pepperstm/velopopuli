@@ -31,7 +31,7 @@ pub use surface::{
     highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, FORD, SINGLETRACK,
     SINGLETRACK_WIDTH, TIMBER, UNMARKED, WAY_TAGS,
 };
-pub use trees::{tree_model, tree_share, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, KINDS as TREE_KINDS, PINE, SPRUCE, TREE_FLOATS};
+pub use trees::{sprite_frame, tree_model, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, KINDS as TREE_KINDS, PINE, SPRITES_FROM, SPRITE_SPREAD, SPRUCE, TREE_FLOATS};
 
 use std::sync::Arc;
 
@@ -89,8 +89,7 @@ pub struct GridMesh {
     pub normals: Vec<f32>,
     pub colors: Vec<f32>,
     /// Trees as `[x, y, z, yaw, width scale, height scale, kind, shade]` each (`TREE_FLOATS`),
-    /// grouped by kind and in random order within it, so drawing the first part of each
-    /// kind's run thins the trees evenly.
+    /// grouped by kind (so a renderer can draw each kind's run with its own model).
     pub trees: Vec<f32>,
     pub buildings: BuildingMesh,
     /// Water surfaces as loose triangles: positions, and a colour per vertex.
@@ -376,8 +375,7 @@ impl World {
         let mapped = scene.covers(&self.route, x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
 
         let climate = trees::Climate { lat: self.route.lat0.abs(), tree_line: self.tree_line };
-        // (kind, place in the random order, the tree)
-        let mut planted: Vec<(u8, f64, [f32; TREE_FLOATS])> = Vec::new();
+        let mut planted: Vec<(u8, [f32; TREE_FLOATS])> = Vec::new();
         // `seed` makes each tree's random numbers; `wood` says whether it stands among others.
         let mut grow = |tx: f64, tz: f64, ty: f64, wood: bool, seed: (i32, i32)| {
             let r = |salt: i32| hash2(seed.0.wrapping_mul(31).wrapping_add(salt), seed.1.wrapping_mul(17).wrapping_sub(salt.wrapping_mul(7)));
@@ -385,7 +383,7 @@ impl World {
             let width = 0.75 + r(3) * 0.55;
             let tall = width * (0.88 + r(4) * 0.3);
             let shade = 0.82 + r(5) * 0.36;
-            planted.push((kind, r(6), [tx as f32, (ty - 0.2) as f32, tz as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, shade as f32]));
+            planted.push((kind, [tx as f32, (ty - 0.2) as f32, tz as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, shade as f32]));
         };
 
         // Mapped forest: most of a lattice of 5 m squares, each tree somewhere in its square.
@@ -425,8 +423,8 @@ impl World {
             let Some(ty) = plant(tx, tz) else { continue };
             grow(tx, tz, ty, !mapped, (cx.wrapping_mul(4099).wrapping_add(k), cz.wrapping_mul(8191).wrapping_sub(k)));
         }
-        planted.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
-        mesh.trees = planted.iter().flat_map(|t| t.2).collect();
+        planted.sort_by_key(|t| t.0);
+        mesh.trees = planted.iter().flat_map(|t| t.1).collect();
         mesh
     }
 

@@ -133,7 +133,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         if (native) {
           // The GPU draws the world natively beneath this page; the page only shows the HUD.
           try {
-            await api.native.start(world.nativeAssets(started.rivals, theLook))
+            await api.native.start(await world.nativeAssets(started.rivals, theLook))
             if (disposed) return void api.native.stop()
             nativeRef.current = true
             document.body.classList.add('native-3d')

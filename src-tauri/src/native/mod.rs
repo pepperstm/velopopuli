@@ -19,7 +19,9 @@ use bytemuck::{Pod, Zeroable};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use velopopuli_core::ride::{RideEngine, RivalKind};
-use velopopuli_core::world::{barrier_model, surface_runs, tree_model, tree_share, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, TIMBER, TREE_FLOATS, TREE_KINDS, UNMARKED};
+use velopopuli_core::world::{
+    barrier_model, sprite_frame, surface_runs, tree_model, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, SPRITES_FROM, TIMBER, TREE_FLOATS, TREE_KINDS, UNMARKED,
+};
 use wgpu::util::DeviceExt;
 
 use host::HostView;
@@ -471,6 +473,10 @@ impl Mesh {
     }
 }
 
+/// Room around the trees' switching distance (its spread, and the camera being away from the
+/// rider) within which a chunk is drawn both in 3D and as sprites.
+const TREES_MARGIN: f64 = 75.0;
+
 struct Chunk {
     ground: Mesh,
     /// Per kind of tree: its instances, and how many.
@@ -532,6 +538,7 @@ struct Pipelines {
     overlay: wgpu::RenderPipeline,
     blended: wgpu::RenderPipeline,
     trees: wgpu::RenderPipeline,
+    sprites: wgpu::RenderPipeline,
     barriers: wgpu::RenderPipeline,
     labels: wgpu::RenderPipeline,
     shadow: wgpu::RenderPipeline,
@@ -554,6 +561,8 @@ struct Renderer {
     msaa: wgpu::TextureView,
     depth: wgpu::TextureView,
     tree_meshes: Vec<Option<Mesh>>,
+    /// Each kind's sprite: a quad over its frame, textured from its cell of the page's tree atlas.
+    sprite_meshes: Vec<Option<Mesh>>,
     shadow_mesh: Mesh,
 }
 
@@ -657,7 +666,8 @@ impl Renderer {
             opaque: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], false, true, Less, (0, 0.0)),
             overlay: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], false, false, LessEqual, (-4, -2.0)),
             blended: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], true, false, Less, (0, 0.0)),
-            trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
+            trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance.clone()], false, true, Less, (0, 0.0)),
+            sprites: pipeline("vs_sprite", "fs_sprite", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
             barriers: pipeline("vs_barrier", "fs_main", &[vertex_layout.clone(), barrier_instance], false, true, Less, (0, 0.0)),
             labels: pipeline("vs_label", "fs_label", &[label_layout], true, false, Less, (0, 0.0)),
             shadow: pipeline("vs_main", "fs_shadow", &[vertex_layout.clone()], true, false, LessEqual, (-4, -2.0)),
@@ -733,6 +743,15 @@ impl Renderer {
             add_texture(&t.name, t.w, t.h, data, &t.wrap);
         }
         let (msaa, depth) = targets(&device, &config);
+        let sprite_meshes = (0..TREE_KINDS as u8)
+            .map(|kind| {
+                let [half, bottom, top] = sprite_frame(kind).map(|v| v as f32);
+                let (u0, u1) = (kind as f32 / TREE_KINDS as f32, (kind + 1) as f32 / TREE_KINDS as f32);
+                let v = |x: f32, y: f32, u: f32, w: f32| Vertex { pos: [x, y, 0.0], normal: [0.0, 1.0, 0.0], color: [1.0; 3], uv: [u, w] };
+                let quad = [v(-half, bottom, u0, 0.0), v(half, bottom, u1, 0.0), v(half, top, u1, 1.0), v(-half, bottom, u0, 0.0), v(half, top, u1, 1.0), v(-half, top, u0, 1.0)];
+                Mesh::new(&device, &quad, None)
+            })
+            .collect();
         let tree_meshes = (0..TREE_KINDS as u8)
             .map(|kind| {
                 let m = tree_model(kind);
@@ -740,7 +759,7 @@ impl Renderer {
             })
             .collect();
         let shadow_mesh = Mesh::new(&device, &shadow_geometry(), None).unwrap();
-        Ok(Renderer { device, queue, surface, config, pipes, globals, globals_bg, draws, draws_bg, textures, msaa, depth, tree_meshes, shadow_mesh })
+        Ok(Renderer { device, queue, surface, config, pipes, globals, globals_bg, draws, draws_bg, textures, msaa, depth, tree_meshes, sprite_meshes, shadow_mesh })
     }
 
     fn resize(&mut self, size: (u32, u32)) {
@@ -1141,18 +1160,34 @@ impl Renderer {
                 if let Some(m) = &scene.structures_unlit {
                     m.draw(&mut pass);
                 }
-                // Trees, flat-shaded: every one nearby, fewer in the distance (each kind's
-                // instances are in random order, so drawing the first part thins them evenly).
+                // Trees: in 3D near the camera (flat-shaded), as sprites further out. The shaders
+                // split them one by one; a chunk is drawn each way only if some of it could need it.
+                let reach = |k: &(i32, i32)| {
+                    let (x0, z0) = (k.0 as f64 * LAYOUT.chunk, k.1 as f64 * LAYOUT.chunk);
+                    let nearest = (x0 - p.x).max(p.x - x0 - LAYOUT.chunk).max(0.0).hypot((z0 - p.z).max(p.z - z0 - LAYOUT.chunk).max(0.0));
+                    let farthest = (p.x - x0).abs().max((p.x - x0 - LAYOUT.chunk).abs()).hypot((p.z - z0).abs().max((p.z - z0 - LAYOUT.chunk).abs()));
+                    (nearest < SPRITES_FROM + TREES_MARGIN, farthest > SPRITES_FROM - TREES_MARGIN)
+                };
                 pass.set_pipeline(&self.pipes.trees);
                 pass.set_bind_group(2, &self.draws_bg, &[3 * DRAW_STRIDE as u32]);
-                for (k, c) in chunks.iter() {
-                    let away = ((k.0 as f64 + 0.5) * LAYOUT.chunk - p.x).hypot((k.1 as f64 + 0.5) * LAYOUT.chunk - p.z) / LAYOUT.chunk;
-                    let share = tree_share(away, LAYOUT.view_chunks as f64);
+                for (_, c) in chunks.iter().filter(|(k, _)| reach(k).0) {
                     for (model, instances) in self.tree_meshes.iter().zip(&c.trees) {
                         if let (Some(m), Some((buf, n))) = (model, instances) {
                             pass.set_vertex_buffer(0, m.vertices.slice(..));
                             pass.set_vertex_buffer(1, buf.slice(..));
-                            pass.draw(0..m.count, 0..((*n as f64 * share).ceil() as u32).min(*n));
+                            pass.draw(0..m.count, 0..*n);
+                        }
+                    }
+                }
+                pass.set_pipeline(&self.pipes.sprites);
+                pass.set_bind_group(1, tex("trees"), &[]);
+                pass.set_bind_group(2, &self.draws_bg, &[0]);
+                for (_, c) in chunks.iter().filter(|(k, _)| reach(k).1) {
+                    for (model, instances) in self.sprite_meshes.iter().zip(&c.trees) {
+                        if let (Some(m), Some((buf, n))) = (model, instances) {
+                            pass.set_vertex_buffer(0, m.vertices.slice(..));
+                            pass.set_vertex_buffer(1, buf.slice(..));
+                            pass.draw(0..m.count, 0..*n);
                         }
                     }
                 }

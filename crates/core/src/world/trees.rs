@@ -192,13 +192,18 @@ impl Climate {
     }
 }
 
-/// Every tree is drawn in chunks this close to the rider (in chunks, centre to centre)…
-pub const ALL_TREES_WITHIN: f64 = 1.5;
-/// …and this share of them at the edge of the view, where the haze hides the gaps.
-pub const FAR_TREES: f64 = 0.3;
+/// Trees further than this from the camera (metres, along the ground) are drawn as sprites:
+/// a picture of their model, turned to face the camera, two triangles instead of a hundred.
+/// Each tree switches at its own distance, up to `SPRITE_SPREAD / 2` either side, so there is
+/// no line where the woods change. Both renderers use the same rule (`spriteFrom` in the
+/// page's `trees.ts`, `sprite_from` in the native shader).
+pub const SPRITES_FROM: f64 = 200.0;
+pub const SPRITE_SPREAD: f64 = 30.0;
 
-/// How much of a chunk's trees to draw, `distance` chunks from the rider with `view` chunks in
-/// sight. The page's `treeShare` in `terrain.ts` is the same.
-pub fn tree_share(distance: f64, view: f64) -> f64 {
-    1.0 - (1.0 - FAR_TREES) * smoothstep(ALL_TREES_WITHIN, view, distance)
+/// The rectangle a kind's sprite covers in its own frame: half its width across the picture
+/// (x), and its lowest and highest points. The sprite pictures are drawn to fit it exactly,
+/// one per kind side by side in the atlas (`kind / KINDS` to `(kind + 1) / KINDS` across).
+pub fn sprite_frame(kind: u8) -> [f64; 3] {
+    let m = tree_model(kind);
+    m.positions.chunks(3).fold([0.0f64, f64::MAX, f64::MIN], |[w, lo, hi], p| [w.max((p[0] as f64).abs()), lo.min(p[1] as f64), hi.max(p[1] as f64)])
 }

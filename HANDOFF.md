@@ -47,7 +47,7 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
                     roads.rs: draping other roads on terrain; structures.rs: decks, bores, overbridges
                     buildings.rs: OSM footprints → meshes; surface.rs: route surface/width/markings from OSM tags
                     barriers.rs: race barriers; landmarks.rs: signs, summits, POIs; trees.rs: the six tree models,
-                    which kind grows where, and how many to draw in distant chunks
+                    which kind grows where, and where trees turn into sprites
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
 src-tauri/          The app (Tauri 2)
   main.rs           App state, command registration, data dir (VP_DATA_DIR override), diag init
@@ -58,7 +58,7 @@ src-tauri/          The app (Tauri 2)
   native/           Native renderer (mod.rs, host.rs NSView, shader.wgsl)
   diag.rs           Diagnostics log + reports; issues.rs: GitHub new-issue links; snapshot.rs: window PNGs (macOS)
   strava, geo, photos, smart, group, library, terrain, secrets, store
-web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, rider.ts,
+web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, trees.ts (tree models, sprite atlas), rider.ts,
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
@@ -155,7 +155,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Fonts on canvas:** barrier banners are drawn on a canvas in Manrope; `Ride.tsx` waits for `document.fonts.load` before building the world, or the banner falls back to a system font.
 - **The native renderer is fed partly from the page** (`native.ts`: textures, text labels, props baked from the three.js scene, rider poses) and partly from Rust meshes; anything added to the three.js scene that native should also show must be either baked or reimplemented in `native/mod.rs` (barriers, road surfaces and precipitation are reimplemented there).
 - **Barriers and the road width:** anything placed beside the route must use `World::half_width(i)` (Rust) or `halfWidthAt()` (page), never a constant.
-- **Trees are grouped by kind and shuffled within it:** a chunk's trees are `[x, y, z, yaw, width, height, kind, shade]`, sorted by kind and in random order within each kind, so a renderer thins a distant chunk by drawing only the first part of each kind's run (`tree_share`; the page's `treeShare` in `terrain.ts` mirrors it). Keep that order if you add trees, or distant woods go bald in patches. The models come from `tree_model` for both renderers (`tree_models` command for the page).
+- **Trees are 3D near the camera and sprites beyond about 200 m:** a chunk's trees are `[x, y, z, yaw, width, height, kind, shade]`, grouped by kind; each kind is one set of instances drawn twice, as its 3D model (`tree_model`) and as a camera-facing quad (`sprite_frame`) textured from an atlas that the page renders from the models at ride start (`trees.ts`) and hands to the native renderer as the `trees` texture. The vertex shaders split the trees one by one at each tree's own distance (`SPRITES_FROM` ± `SPRITE_SPREAD`/2, from a hash of its position), so the two copies of the rule — `spriteFrom` in `trees.ts` and `sprite_from` in `shader.wgsl` — must stay identical, or trees vanish or double at the switch. Atlas cells are cleared one at a time (`target.scissorTest`): three.js clears the whole target on every render otherwise.
 - **Barrier sections lean with the road:** each is placed by `[x, y, z, yaw, distance, look, pitch]`, tipped about its own x axis first and then turned (`'YXZ'` in three.js, `vs_barrier` in the native shader), so both ends stand on the road and neighbours meet. A new renderer of them must apply the pitch, and in that order.
 - **Berms tilt the riding surface and fords lower it:** anything standing *on* the route's surface (riders) must add `World::bank_at` (Rust) or `bankAt()` (page) — the lift at its offset (negative in a ford), and the roll. The inside edge of a berm is at the centre-line height; the outside is raised. The route's own `ele` is never changed by either, so gradients and physics are unaffected.
 - **Road looks are numbered across three places:** a new look needs its constant in `surface.rs`, its texture in `SURFACES` in `surfaces.ts` (same order), and its name in the native renderer's match in `native/mod.rs`. Today: 0–4 surfaces, 5 lane, 6 timber, 7 singletrack, 8 ford.

@@ -7,6 +7,7 @@ import type { Landmark, WorldLayout } from '../types'
 import { RiderModel } from './rider'
 import { Terrain } from './terrain'
 import { packNative } from './native'
+import { loadTrees, type TreeKit } from './trees'
 import { Precipitation, type Look } from './weather'
 
 export interface WorldRival {
@@ -195,6 +196,8 @@ export class World {
   private lamp = new THREE.PointLight(0xfff4e0, 0, 32, 1.6)
   private precipitation: Precipitation | null = null
   private terrain: Terrain
+  /** The tree models and their sprites, shared by every chunk (and handed to the native renderer). */
+  private trees: Promise<TreeKit>
   private rider = new RiderModel(0xe9ff60)
   private others = new Map<string, Other>()
   private pos = {} as RoutePos
@@ -225,7 +228,8 @@ export class World {
     this.sun.position.set(0.5, 1, 0.35)
     this.scene.add(this.sun, this.lamp)
 
-    this.terrain = new Terrain(layout)
+    this.trees = loadTrees(this.renderer)
+    this.terrain = new Terrain(layout, this.trees)
     this.scene.add(this.terrain.group)
     this.scene.add(this.rider.group)
     this.addMarkers(kmLabel, markerSpacing)
@@ -248,14 +252,15 @@ export class World {
   }
 
   /** Everything the native renderer needs from this scene (see `native.ts`). */
-  nativeAssets(rivals: { id: string; name: string; kind: string }[], l: Look): Uint8Array {
+  async nativeAssets(rivals: { id: string; name: string; kind: string }[], l: Look): Promise<Uint8Array> {
+    const trees = await this.trees
     const tags = rivals.map((r) => {
       const sprite = textSprite(r.name, r.kind === 'ghost' ? 'rgba(255,255,255,0.25)' : 'rgba(20,24,32,0.7)')
       sprite.scale.set(sprite.userData.aspect, 1, 1)
       return { sprite, rider: r.id }
     })
     const skip = (o: THREE.Object3D): boolean => o === this.sky || o === this.terrain.group || o === this.rider.group || o === this.precipitation?.object
-    return packNative(this.scene, skip, tags, l)
+    return packNative(this.scene, skip, tags, l, trees.atlas)
   }
 
   /** Sets the time of day and weather. */
