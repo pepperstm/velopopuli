@@ -531,6 +531,7 @@ struct Pipelines {
     overlay: wgpu::RenderPipeline,
     blended: wgpu::RenderPipeline,
     trees: wgpu::RenderPipeline,
+    barriers: wgpu::RenderPipeline,
     labels: wgpu::RenderPipeline,
     shadow: wgpu::RenderPipeline,
     rain: wgpu::RenderPipeline,
@@ -653,7 +654,8 @@ impl Renderer {
             opaque: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], false, true, Less, (0, 0.0)),
             overlay: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], false, false, LessEqual, (-4, -2.0)),
             blended: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], true, false, Less, (0, 0.0)),
-            trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
+            trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance.clone()], false, true, Less, (0, 0.0)),
+            barriers: pipeline("vs_barrier", "fs_main", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
             labels: pipeline("vs_label", "fs_label", &[label_layout], true, false, Less, (0, 0.0)),
             shadow: pipeline("vs_main", "fs_shadow", &[vertex_layout.clone()], true, false, LessEqual, (-4, -2.0)),
             rain: pipeline_of("vs_rain", "fs_rain", &[], true, false, Less, (0, 0.0), wgpu::PrimitiveTopology::LineList),
@@ -906,7 +908,7 @@ impl Renderer {
                 let first = barrier_sections.partition_point(|b| (b[4] as f64) < shown - 150.0);
                 for b in barrier_sections[first..].iter().take_while(|b| (b[4] as f64) < shown + 900.0) {
                     if let Some(list) = per_look.get_mut(b[5] as usize) {
-                        list.extend_from_slice(&[(b[0] as f64 - origin[0]) as f32, b[1], (b[2] as f64 - origin[1]) as f32, b[3], 1.0, 1.0]);
+                        list.extend_from_slice(&[(b[0] as f64 - origin[0]) as f32, b[1], (b[2] as f64 - origin[1]) as f32, b[3], b[6], 0.0]);
                     }
                 }
                 for (slot, list) in barrier_instances.iter_mut().zip(per_look) {
@@ -1141,7 +1143,8 @@ impl Renderer {
                         pass.draw(0..self.tree_mesh.count, 0..*n);
                     }
                 }
-                // Race barriers, through the instanced pipeline the trees use (lit, smooth normals).
+                // Race barriers: instanced like the trees, but leaning with the slope.
+                pass.set_pipeline(&self.pipes.barriers);
                 pass.set_bind_group(1, tex("banner"), &[]);
                 pass.set_bind_group(2, &self.draws_bg, &[0]);
                 for (model, instances) in barrier_models.iter().zip(&barrier_instances) {

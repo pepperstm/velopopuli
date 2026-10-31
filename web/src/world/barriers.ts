@@ -5,6 +5,8 @@ const BEHIND_M = 150
 const AHEAD_M = 900
 /** The drawn stretch is moved on once the rider has gone this far. */
 const STEP_M = 40
+/** Numbers per section: x, y, z, yaw, distance along the route, look, pitch. */
+const SECTION = 7
 
 let banner: THREE.CanvasTexture | null = null
 
@@ -50,8 +52,8 @@ export class Barriers {
     const [count, looks] = new Uint32Array(buffer, 0, 2)
     const counts = Array.from(new Uint32Array(buffer, 8, looks))
     let offset = 8 + looks * 4
-    this.sections = new Float32Array(buffer, offset, count * 6)
-    offset += count * 24
+    this.sections = new Float32Array(buffer, offset, count * SECTION)
+    offset += count * SECTION * 4
     const capacity = Math.ceil(((BEHIND_M + AHEAD_M) / 2.5) * 2) + 8
     const material = new THREE.MeshLambertMaterial({ map: bannerTexture(), vertexColors: true })
     for (const verts of counts) {
@@ -79,23 +81,25 @@ export class Barriers {
     if (Math.abs(dist - this.shownAt) < STEP_M) return
     this.shownAt = dist
     const s = this.sections
-    const n = s.length / 6
+    const n = s.length / SECTION
     // First section within reach (they are in order along the route).
     let lo = 0
     let hi = n
     while (lo < hi) {
       const mid = (lo + hi) >> 1
-      if (s[mid * 6 + 4] < dist - BEHIND_M) lo = mid + 1
+      if (s[mid * SECTION + 4] < dist - BEHIND_M) lo = mid + 1
       else hi = mid
     }
     const holder = new THREE.Object3D()
     const filled = this.meshes.map(() => 0)
-    for (let i = lo; i < n && s[i * 6 + 4] < dist + AHEAD_M; i++) {
-      const look = s[i * 6 + 5]
+    for (let i = lo; i < n && s[i * SECTION + 4] < dist + AHEAD_M; i++) {
+      const at = i * SECTION
+      const look = s[at + 5]
       const mesh = this.meshes[look]
       if (!mesh || filled[look] >= mesh.instanceMatrix.count) continue
-      holder.position.set(s[i * 6], s[i * 6 + 1], s[i * 6 + 2])
-      holder.rotation.set(0, s[i * 6 + 3], 0)
+      holder.position.set(s[at], s[at + 1], s[at + 2])
+      // Tipped along the slope first, then turned to follow the road.
+      holder.rotation.set(s[at + 6], s[at + 3], 0, 'YXZ')
       holder.updateMatrix()
       mesh.setMatrixAt(filled[look]++, holder.matrix)
     }

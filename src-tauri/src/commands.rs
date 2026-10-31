@@ -274,7 +274,7 @@ pub async fn ride_road_mesh(state: State<'_, AppState>) -> Res<Response> {
 }
 
 /// Race barriers. Layout: `[sections, looks, then the vertex count of each look]` as u32, then as f32:
-/// the sections (`[x, y, z, yaw, distance, look]` each), then per look its positions, normals,
+/// the sections (`[x, y, z, yaw, distance, look, pitch]` each), then per look its positions, normals,
 /// colours (3 each per vertex) and UVs (2).
 #[tauri::command]
 pub async fn ride_barriers(state: State<'_, AppState>) -> Res<Response> {

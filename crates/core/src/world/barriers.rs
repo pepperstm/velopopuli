@@ -3,7 +3,9 @@
 //!
 //! The barrier is one steel section (feet, end posts, two rails and uprights) in a few
 //! looks: plain, or carrying a banner in one of the event colours. Sections are placed
-//! every `SECTION_M` along each side; the renderers draw the ones near the rider.
+//! every `SECTION_M` along each side; the renderers draw the ones near the rider. Like a
+//! real one, each section is a rigid frame standing on its feet at both ends, so on a hill
+//! it leans with the road, and neighbours meet at the same height.
 
 use super::mesh::TriMesh;
 use super::{World, OPEN, ROAD_LIFT};
@@ -84,9 +86,11 @@ pub fn barrier_model(look: usize) -> TriMesh {
 
 impl World {
     /// Barrier sections along both sides of the route, nearest first along it:
-    /// `[x, y, z, yaw, distance along the route, look]` each. None on bridges (they have
-    /// parapets) or in tunnels, nor on the inside of a bend too tight to stand them.
-    pub fn barriers(&self) -> Vec<[f32; 6]> {
+    /// `[x, y, z, yaw, distance along the route, look, pitch]` each, where the model is
+    /// tipped by `pitch` about its own x axis (Three.js's sense: positive lowers its +z end)
+    /// before being turned by `yaw`. None on bridges (they have parapets) or in tunnels, nor
+    /// on the inside of a bend too tight to stand them.
+    pub fn barriers(&self) -> Vec<[f32; 7]> {
         let r = &self.route;
         let kinds = self.field.kinds();
         let mut out = Vec::new();
@@ -105,6 +109,11 @@ impl World {
             tz /= len;
             let curvature = if i > 0 && i + 1 < r.n { ((r.x[i + 1] - 2.0 * r.x[i] + r.x[i - 1]) * tz - (r.z[i + 1] - 2.0 * r.z[i] + r.z[i - 1]) * tx) / (r.step * r.step) } else { 0.0 };
             let p = r.sample_at(d);
+            // Standing on its feet at both ends: the height of the road under each end, and the
+            // slope between them.
+            let (behind, ahead) = (r.sample_at(d - LENGTH / 2.0).ele, r.sample_at(d + LENGTH / 2.0).ele);
+            let y = (behind + ahead) / 2.0 + ROAD_LIFT - 0.12;
+            let climb = (ahead - behind).atan2(LENGTH);
             let offset = self.half_width(i) + SET_BACK;
             let heading = tx.atan2(tz);
             // Banners come in runs of four sections, each run in the next colour, with plain runs between.
@@ -118,7 +127,9 @@ impl World {
                 let (x, z) = (p.x + tz * side * offset, p.z - tx * side * offset);
                 // The far side's barrier is turned round, so both have the road on their −x side.
                 let yaw = if side > 0.0 { heading } else { heading + std::f64::consts::PI };
-                out.push([x as f32, (p.ele + ROAD_LIFT - 0.12) as f32, z as f32, yaw as f32, d as f32, look as f32]);
+                // The model's +z end points up the road on this side and down it on the far side.
+                let pitch = if side > 0.0 { -climb } else { climb };
+                out.push([x as f32, y as f32, z as f32, yaw as f32, d as f32, look as f32, pitch as f32]);
             }
         }
         out
