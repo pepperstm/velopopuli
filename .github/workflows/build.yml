@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             name: macOS (Apple silicon + Intel)
             args: --target universal-apple-darwin --bundles app,dmg
             targets: aarch64-apple-darwin,x86_64-apple-darwin
