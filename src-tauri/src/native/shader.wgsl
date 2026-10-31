@@ -60,10 +60,10 @@ fn vs_main(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @locatio
     return o;
 }
 
-/// A tree: one shared cone-and-trunk mesh placed by `[x, y, z, yaw, width, height]`.
+/// A tree: its kind's shared mesh placed by `[x, y, z, yaw, width, height, kind, shade]`.
 @vertex
 fn vs_tree(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) color: vec3<f32>, @location(3) uv: vec2<f32>,
-           @location(4) at: vec3<f32>, @location(5) shape: vec3<f32>) -> VsOut {
+           @location(4) at: vec3<f32>, @location(5) shape: vec3<f32>, @location(6) kind_shade: vec2<f32>) -> VsOut {
     var o: VsOut;
     let c = cos(shape.x);
     let s = sin(shape.x);
@@ -72,7 +72,7 @@ fn vs_tree(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @locatio
     let world = r + at + d.model[3].xyz;
     o.world = world;
     o.normal = vec3<f32>(c * normal.x + s * normal.z, normal.y, -s * normal.x + c * normal.z);
-    o.color = color;
+    o.color = color * kind_shade.y;
     o.uv = uv;
     o.clip = g.view_proj * vec4<f32>(world, 1.0);
     return o;

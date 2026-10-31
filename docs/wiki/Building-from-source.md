@@ -49,7 +49,7 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_SMOKE_SCROLL` | Scroll to the section with this heading before capturing (e.g. `Gears` on the Settings screen) |
 | `VP_SKIP_OVERPASS` | Don't ask the Overpass API (tests the fallbacks) |
 
-The ride uses the newest route in the library (or the Demo Loop) and the simulated demo rider. A window that opens behind others gets few animation frames; the `.txt` reports how many were drawn.
+The ride uses the newest route in the library (or the Demo Loop) and the simulated demo rider. A window that opens behind others gets few animation frames; the `.txt` reports how many were drawn, and for the last frame the triangles, draw calls and average milliseconds a frame (for comparing the cost of a change at the same spot).
 
 Turn clip frames into a video with `ffmpeg -framerate 15 -i shot.frames/%04d.png -c:v libx264 -pix_fmt yuv420p clip.mp4`.
 

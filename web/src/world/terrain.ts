@@ -1,5 +1,4 @@
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { api } from '../bridge'
 import type { WorldLayout } from '../types'
 
@@ -9,19 +8,33 @@ import type { WorldLayout } from '../types'
 // uploads the answers to the GPU.
 
 const MAX_IN_FLIGHT = 6
+/** Numbers per tree in a chunk: x, y, z, yaw, width scale, height scale, kind, shade. */
+const TREE_FLOATS = 8
+/** As `ALL_TREES_WITHIN` and `FAR_TREES` in `world/trees.rs`: every tree in chunks this close
+ * to the rider (in chunks, centre to centre), and this share of them at the edge of the view. */
+const ALL_TREES_WITHIN = 1.5
+const FAR_TREES = 0.3
 
-function buildTreeGeometry(): THREE.BufferGeometry {
-  const paint = (g: THREE.BufferGeometry, r: number, gr: number, b: number): THREE.BufferGeometry => {
-    const n = g.getAttribute('position').count
-    const colors = new Float32Array(n * 3)
-    for (let i = 0; i < n; i++) colors.set([r, gr, b], i * 3)
-    g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    return g.toNonIndexed()
-  }
-  const trunk = paint(new THREE.CylinderGeometry(0.22, 0.3, 1.8, 5).translate(0, 0.9, 0), 0.32, 0.22, 0.14)
-  const lower = paint(new THREE.ConeGeometry(2.1, 4.2, 7).translate(0, 3.6, 0), 0.13, 0.36, 0.17)
-  const upper = paint(new THREE.ConeGeometry(1.5, 3.6, 7).translate(0, 6.0, 0), 0.16, 0.42, 0.2)
-  return mergeGeometries([trunk, lower, upper])!
+/** The tree models (built in Rust, see `world/trees.rs`), one per kind. */
+async function loadTreeGeometries(): Promise<THREE.BufferGeometry[]> {
+  const buffer = await api.ride.trees()
+  const [kinds] = new Uint32Array(buffer, 0, 1)
+  const counts = Array.from(new Uint32Array(buffer, 4, kinds))
+  let offset = 4 + kinds * 4
+  return counts.map((verts) => {
+    const geo = new THREE.BufferGeometry()
+    for (const name of ['position', 'normal', 'color']) {
+      geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(buffer, offset, verts * 3), 3))
+      offset += verts * 12
+    }
+    return geo
+  })
+}
+
+/** How much of a chunk's trees to draw, by its distance from the rider in chunks (as `tree_share` in Rust). */
+function treeShare(distance: number, view: number): number {
+  const t = Math.min(Math.max((distance - ALL_TREES_WITHIN) / (view - ALL_TREES_WITHIN), 0), 1)
+  return 1 - (1 - FAR_TREES) * t * t * (3 - 2 * t)
 }
 
 /**
@@ -119,7 +132,7 @@ function decodeGrid(buffer: ArrayBuffer): GridReply {
     positions: take(verts * 3),
     normals: take(verts * 3),
     colors: take(verts * 3),
-    trees: take(trees * 6),
+    trees: take(trees * TREE_FLOATS),
     buildings: walls ? [take(walls * 3), take(walls * 3), take(walls * 3), take(walls * 2)] : null,
     water: water ? [take(water * 3), take(water * 3)] : null,
     roads: roads ? [take(roads * 3), take(roads * 3), take(roads * 3), take(roads * 2)] : null
@@ -128,7 +141,8 @@ function decodeGrid(buffer: ArrayBuffer): GridReply {
 
 interface Chunk {
   mesh: THREE.Mesh
-  trees: THREE.InstancedMesh | null
+  /** One per kind of tree present, each with every tree of its kind (drawn: a share of them). */
+  trees: { mesh: THREE.InstancedMesh; all: number }[]
   buildings: THREE.Mesh | null
   water: THREE.Mesh | null
   roads: THREE.Mesh | null
@@ -144,7 +158,8 @@ export class Terrain {
   private pending = new Set<string>()
   private indices: Uint16Array
   private ground = new THREE.MeshLambertMaterial({ vertexColors: true })
-  private treeGeometry = buildTreeGeometry()
+  private treeGeometries: Promise<THREE.BufferGeometry[]> = loadTreeGeometries()
+  private treesAt = { x: Infinity, z: Infinity }
   private treeMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
   private buildingMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: windowTexture() })
   // Slightly see-through, with a sheen where the sun catches it.
@@ -214,6 +229,22 @@ export class Terrain {
         this.chunks.delete(k)
       }
     }
+    // Thin the distant woods again once the rider has moved on a little.
+    if (Math.hypot(x - this.treesAt.x, z - this.treesAt.z) > chunk / 8) {
+      this.treesAt = { x, z }
+      for (const [k, c] of this.chunks) {
+        const [kx, kz] = k.split(',').map(Number)
+        this.thinTrees(kx, kz, c.trees)
+      }
+    }
+  }
+
+  /** Draws all of a chunk's trees near the rider, and fewer the further away it is. */
+  private thinTrees(cx: number, cz: number, trees: Chunk['trees']): void {
+    const { chunk, viewChunks } = this.layout
+    const at = Number.isFinite(this.treesAt.x) ? this.treesAt : { x: (this.centre.cx + 0.5) * chunk, z: (this.centre.cz + 0.5) * chunk }
+    const share = treeShare(Math.hypot((cx + 0.5) * chunk - at.x, (cz + 0.5) * chunk - at.z) / chunk, viewChunks)
+    for (const t of trees) t.mesh.count = Math.ceil(t.all * share)
   }
 
   private async load(cx: number, cz: number): Promise<void> {
@@ -236,23 +267,38 @@ export class Terrain {
       const mesh = new THREE.Mesh(geo, this.ground)
       this.group.add(mesh)
 
-      let trees: THREE.InstancedMesh | null = null
-      const count = data.trees.length / 6
-      if (count) {
-        trees = new THREE.InstancedMesh(this.treeGeometry, this.treeMaterial, count)
-        const holder = new THREE.Object3D()
-        for (let i = 0; i < count; i++) {
-          const [x, y, z, yaw, scale, tall] = data.trees.subarray(i * 6, i * 6 + 6)
-          holder.position.set(x, y, z)
-          holder.rotation.set(0, yaw, 0)
-          holder.scale.set(scale, tall, scale)
-          holder.updateMatrix()
-          trees.setMatrixAt(i, holder.matrix)
+      // The trees come grouped by kind, each kind in random order (so its first part is an even thinning).
+      const geometries = await this.treeGeometries
+      const trees: Chunk['trees'] = []
+      const count = data.trees.length / TREE_FLOATS
+      const holder = new THREE.Object3D()
+      const shade = new THREE.Color()
+      for (let first = 0; first < count; ) {
+        const kind = data.trees[first * TREE_FLOATS + 6]
+        let end = first
+        while (end < count && data.trees[end * TREE_FLOATS + 6] === kind) end++
+        const geometry = geometries[kind]
+        if (geometry) {
+          const mesh = new THREE.InstancedMesh(geometry, this.treeMaterial, end - first)
+          for (let i = first; i < end; i++) {
+            const [x, y, z, yaw, width, tall, , tint] = data.trees.subarray(i * TREE_FLOATS, (i + 1) * TREE_FLOATS)
+            holder.position.set(x, y, z)
+            holder.rotation.set(0, yaw, 0)
+            holder.scale.set(width, tall, width)
+            holder.updateMatrix()
+            mesh.setMatrixAt(i - first, holder.matrix)
+            mesh.setColorAt(i - first, shade.setScalar(tint))
+          }
+          mesh.instanceMatrix.needsUpdate = true
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+          // Bounds over every tree, before any are left out.
+          mesh.computeBoundingSphere()
+          trees.push({ mesh, all: end - first })
+          this.group.add(mesh)
         }
-        trees.instanceMatrix.needsUpdate = true
-        trees.computeBoundingSphere()
-        this.group.add(trees)
+        first = end
       }
+      this.thinTrees(cx, cz, trees)
       let buildings: THREE.Mesh | null = null
       if (data.buildings) {
         const walls = new THREE.BufferGeometry()
@@ -346,9 +392,9 @@ export class Terrain {
   private release(c: Chunk): void {
     this.group.remove(c.mesh)
     c.mesh.geometry.dispose()
-    if (c.trees) {
-      this.group.remove(c.trees)
-      c.trees.dispose()
+    for (const t of c.trees) {
+      this.group.remove(t.mesh)
+      t.mesh.dispose()
     }
     if (c.buildings) {
       this.group.remove(c.buildings)
@@ -370,7 +416,7 @@ export class Terrain {
     this.chunks.clear()
     this.far.geometry.dispose()
     this.ground.dispose()
-    this.treeGeometry.dispose()
+    void this.treeGeometries.then((gs) => gs.forEach((g) => g.dispose()))
     this.treeMaterial.dispose()
     this.buildingMaterial.map?.dispose()
     this.buildingMaterial.dispose()

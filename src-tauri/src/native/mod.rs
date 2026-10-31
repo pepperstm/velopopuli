@@ -19,7 +19,7 @@ use bytemuck::{Pod, Zeroable};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use velopopuli_core::ride::{RideEngine, RivalKind};
-use velopopuli_core::world::{barrier_model, surface_runs, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, TIMBER, UNMARKED};
+use velopopuli_core::world::{barrier_model, surface_runs, tree_model, tree_share, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, TIMBER, TREE_FLOATS, TREE_KINDS, UNMARKED};
 use wgpu::util::DeviceExt;
 
 use host::HostView;
@@ -473,7 +473,8 @@ impl Mesh {
 
 struct Chunk {
     ground: Mesh,
-    trees: Option<(wgpu::Buffer, u32)>,
+    /// Per kind of tree: its instances, and how many.
+    trees: Vec<Option<(wgpu::Buffer, u32)>>,
     buildings: Option<Mesh>,
     water: Option<Mesh>,
     roads: Option<Mesh>,
@@ -552,7 +553,7 @@ struct Renderer {
     textures: HashMap<String, wgpu::BindGroup>,
     msaa: wgpu::TextureView,
     depth: wgpu::TextureView,
-    tree_mesh: Mesh,
+    tree_meshes: Vec<Option<Mesh>>,
     shadow_mesh: Mesh,
 }
 
@@ -610,7 +611,9 @@ impl Renderer {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3, 3 => Float32x2],
         };
-        let tree_instance = wgpu::VertexBufferLayout { array_stride: 24, step_mode: wgpu::VertexStepMode::Instance, attributes: &wgpu::vertex_attr_array![4 => Float32x3, 5 => Float32x3] };
+        let tree_instance =
+            wgpu::VertexBufferLayout { array_stride: 32, step_mode: wgpu::VertexStepMode::Instance, attributes: &wgpu::vertex_attr_array![4 => Float32x3, 5 => Float32x3, 6 => Float32x2] };
+        let barrier_instance = wgpu::VertexBufferLayout { array_stride: 24, step_mode: wgpu::VertexStepMode::Instance, attributes: &wgpu::vertex_attr_array![4 => Float32x3, 5 => Float32x3] };
         let label_layout = wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<LabelVertex>() as u64,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -654,8 +657,8 @@ impl Renderer {
             opaque: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], false, true, Less, (0, 0.0)),
             overlay: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], false, false, LessEqual, (-4, -2.0)),
             blended: pipeline("vs_main", "fs_main", &[vertex_layout.clone()], true, false, Less, (0, 0.0)),
-            trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance.clone()], false, true, Less, (0, 0.0)),
-            barriers: pipeline("vs_barrier", "fs_main", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
+            trees: pipeline("vs_tree", "fs_main", &[vertex_layout.clone(), tree_instance], false, true, Less, (0, 0.0)),
+            barriers: pipeline("vs_barrier", "fs_main", &[vertex_layout.clone(), barrier_instance], false, true, Less, (0, 0.0)),
             labels: pipeline("vs_label", "fs_label", &[label_layout], true, false, Less, (0, 0.0)),
             shadow: pipeline("vs_main", "fs_shadow", &[vertex_layout.clone()], true, false, LessEqual, (-4, -2.0)),
             rain: pipeline_of("vs_rain", "fs_rain", &[], true, false, Less, (0, 0.0), wgpu::PrimitiveTopology::LineList),
@@ -730,9 +733,14 @@ impl Renderer {
             add_texture(&t.name, t.w, t.h, data, &t.wrap);
         }
         let (msaa, depth) = targets(&device, &config);
-        let tree_mesh = Mesh::new(&device, &tree_geometry(), None).unwrap();
+        let tree_meshes = (0..TREE_KINDS as u8)
+            .map(|kind| {
+                let m = tree_model(kind);
+                Mesh::new(&device, &verts_from(&m.positions, Some(&m.normals), &m.colors, None, [0.0, 0.0]), None)
+            })
+            .collect();
         let shadow_mesh = Mesh::new(&device, &shadow_geometry(), None).unwrap();
-        Ok(Renderer { device, queue, surface, config, pipes, globals, globals_bg, draws, draws_bg, textures, msaa, depth, tree_mesh, shadow_mesh })
+        Ok(Renderer { device, queue, surface, config, pipes, globals, globals_bg, draws, draws_bg, textures, msaa, depth, tree_meshes, shadow_mesh })
     }
 
     fn resize(&mut self, size: (u32, u32)) {
@@ -1133,14 +1141,19 @@ impl Renderer {
                 if let Some(m) = &scene.structures_unlit {
                     m.draw(&mut pass);
                 }
-                // Trees, flat-shaded.
+                // Trees, flat-shaded: every one nearby, fewer in the distance (each kind's
+                // instances are in random order, so drawing the first part thins them evenly).
                 pass.set_pipeline(&self.pipes.trees);
                 pass.set_bind_group(2, &self.draws_bg, &[3 * DRAW_STRIDE as u32]);
-                pass.set_vertex_buffer(0, self.tree_mesh.vertices.slice(..));
-                for c in chunks.values() {
-                    if let Some((buf, n)) = &c.trees {
-                        pass.set_vertex_buffer(1, buf.slice(..));
-                        pass.draw(0..self.tree_mesh.count, 0..*n);
+                for (k, c) in chunks.iter() {
+                    let away = ((k.0 as f64 + 0.5) * LAYOUT.chunk - p.x).hypot((k.1 as f64 + 0.5) * LAYOUT.chunk - p.z) / LAYOUT.chunk;
+                    let share = tree_share(away, LAYOUT.view_chunks as f64);
+                    for (model, instances) in self.tree_meshes.iter().zip(&c.trees) {
+                        if let (Some(m), Some((buf, n))) = (model, instances) {
+                            pass.set_vertex_buffer(0, m.vertices.slice(..));
+                            pass.set_vertex_buffer(1, buf.slice(..));
+                            pass.draw(0..m.count, 0..((*n as f64 * share).ceil() as u32).min(*n));
+                        }
                     }
                 }
                 // Race barriers: instanced like the trees, but leaning with the slope.
@@ -1277,10 +1290,24 @@ impl Renderer {
 
     fn upload_chunk(&self, mesh: &GridMesh, grid_idx: &[u32], origin: [f64; 2]) -> Option<Chunk> {
         let ground = Mesh::new(&self.device, &verts_from(&mesh.positions, Some(&mesh.normals), &mesh.colors, None, origin), Some(grid_idx))?;
-        let trees = (!mesh.trees.is_empty()).then(|| {
-            let shifted: Vec<f32> = mesh.trees.chunks_exact(6).flat_map(|t| [(t[0] as f64 - origin[0]) as f32, t[1], (t[2] as f64 - origin[1]) as f32, t[3], t[4], t[5]]).collect();
-            (self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&shifted), usage: wgpu::BufferUsages::VERTEX }), (shifted.len() / 6) as u32)
-        });
+        // One instance buffer per kind of tree, each in the order it came (random within the kind).
+        let mut per_kind: Vec<Vec<f32>> = vec![Vec::new(); TREE_KINDS];
+        for t in mesh.trees.chunks_exact(TREE_FLOATS) {
+            if let Some(list) = per_kind.get_mut(t[6] as usize) {
+                list.extend_from_slice(&[(t[0] as f64 - origin[0]) as f32, t[1], (t[2] as f64 - origin[1]) as f32, t[3], t[4], t[5], t[6], t[7]]);
+            }
+        }
+        let trees = per_kind
+            .into_iter()
+            .map(|list| {
+                (!list.is_empty()).then(|| {
+                    (
+                        self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&list), usage: wgpu::BufferUsages::VERTEX }),
+                        (list.len() / TREE_FLOATS) as u32,
+                    )
+                })
+            })
+            .collect();
         let b = &mesh.buildings;
         let buildings = Mesh::new(&self.device, &verts_from(&b.positions, Some(&b.normals), &b.colors, Some(&b.uvs), origin), None);
         let water = Mesh::new(&self.device, &verts_from(&mesh.water, None, &mesh.water_colors, None, origin), None);
@@ -1312,29 +1339,6 @@ fn targets(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> (wgpu:
             .create_view(&Default::default())
     };
     (make(config.format), make(DEPTH))
-}
-
-/// The shared tree: a trunk and two cones, as the page's own tree is built.
-fn tree_geometry() -> Vec<Vertex> {
-    let mut out = Vec::new();
-    let mut cone = |r0: f64, r1: f64, h: f64, y0: f64, sides: usize, color: [f32; 3]| {
-        for s in 0..sides {
-            let (a0, a1) = (s as f64 / sides as f64 * std::f64::consts::TAU, (s + 1) as f64 / sides as f64 * std::f64::consts::TAU);
-            let p = |a: f64, r: f64, y: f64| [(a.sin() * r) as f32, y as f32, (a.cos() * r) as f32];
-            let (b0, b1, t0, t1) = (p(a0, r0, y0), p(a1, r0, y0), p(a0, r1, y0 + h), p(a1, r1, y0 + h));
-            for q in [b0, b1, t1, b0, t1, t0] {
-                out.push(Vertex { pos: q, normal: [0.0, 1.0, 0.0], color, uv: [0.5, 0.5] });
-            }
-            // The base.
-            for q in [[0.0, y0 as f32, 0.0], b1, b0] {
-                out.push(Vertex { pos: q, normal: [0.0, -1.0, 0.0], color, uv: [0.5, 0.5] });
-            }
-        }
-    };
-    cone(0.3, 0.22, 1.8, 0.0, 5, [0.32, 0.22, 0.14]);
-    cone(2.1, 0.0, 4.2, 1.5, 7, [0.13, 0.36, 0.17]);
-    cone(1.5, 0.0, 3.6, 4.2, 7, [0.16, 0.42, 0.2]);
-    out
 }
 
 /// Meshes that span the route rather than one chunk: the road, bridges and tunnels, props and riders.

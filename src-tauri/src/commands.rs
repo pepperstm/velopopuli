@@ -223,12 +223,12 @@ fn f32_bytes(header: &[u32], parts: &[&[f32]]) -> Vec<u8> {
 }
 
 /// Layout: `[ground vertices, trees, building vertices, water vertices, road vertices]` as u32,
-/// then as f32: ground positions, normals and colours; trees; building positions, normals, colours
+/// then as f32: ground positions, normals and colours; trees (`TREE_FLOATS` each); building positions, normals, colours
 /// and UVs; water positions and colours; road positions, normals, colours and UVs.
 fn grid_response(mesh: GridMesh) -> Response {
     let (b, r) = (&mesh.buildings, &mesh.roads);
     Response::new(f32_bytes(
-        &[(mesh.positions.len() / 3) as u32, (mesh.trees.len() / 6) as u32, b.vertices() as u32, (mesh.water.len() / 3) as u32, r.vertices() as u32],
+        &[(mesh.positions.len() / 3) as u32, (mesh.trees.len() / velopopuli_core::world::TREE_FLOATS) as u32, b.vertices() as u32, (mesh.water.len() / 3) as u32, r.vertices() as u32],
         &[&mesh.positions, &mesh.normals, &mesh.colors, &mesh.trees, &b.positions, &b.normals, &b.colors, &b.uvs, &mesh.water, &mesh.water_colors, &r.positions, &r.normals, &r.colors, &r.uvs],
     ))
 }
@@ -271,6 +271,17 @@ pub async fn ride_road_mesh(state: State<'_, AppState>) -> Res<Response> {
     let mesh = tauri::async_runtime::spawn_blocking(move || world.road()).await.map_err(blocking_err)?;
     let looks: Vec<f32> = mesh.looks.iter().map(|&s| s as f32).collect();
     Ok(Response::new(f32_bytes(&[], &[&mesh.positions, &mesh.uvs, &looks])))
+}
+
+/// The tree models, one per kind. Layout: `[kinds, then the vertex count of each]` as u32,
+/// then as f32 per kind: positions, normals and colours (3 each per vertex).
+#[tauri::command]
+pub fn tree_models() -> Response {
+    let models: Vec<_> = (0..velopopuli_core::world::TREE_KINDS as u8).map(velopopuli_core::world::tree_model).collect();
+    let mut header = vec![models.len() as u32];
+    header.extend(models.iter().map(|m| m.vertices() as u32));
+    let parts: Vec<&[f32]> = models.iter().flat_map(|m| [&m.positions[..], &m.normals[..], &m.colors[..]]).collect();
+    Response::new(f32_bytes(&header, &parts))
 }
 
 /// Race barriers. Layout: `[sections, looks, then the vertex count of each look]` as u32, then as f32:

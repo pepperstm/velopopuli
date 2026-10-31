@@ -152,7 +152,10 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           scenery: started.scenery,
           covered: started.covered,
           native: nativeRef.current,
-          frames: () => frames
+          frames: () => frames,
+          drawn: () => world.drawn(),
+          // Average time between frames over the last few seconds, ms.
+          frameMs: () => (recent.length > 1 ? (recent[recent.length - 1] - recent[0]) / (recent.length - 1) : 0)
         }
         smokeHooks.native = nativeRef.current
         const smoke = await api.smoke.config()
@@ -176,6 +179,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
 
         let last = performance.now()
         let frames = 0
+        const recent: number[] = []
         let frameFailed = false
         const loop = (now: number): void => {
           raf = requestAnimationFrame(loop)
@@ -200,6 +204,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               }))
             })
             frames++
+            recent.push(now)
+            if (recent.length > 300) recent.shift()
           } catch (err) {
             // Report a broken frame once, rather than failing silently sixty times a second.
             if (!frameFailed) void api.log(`frame failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`)

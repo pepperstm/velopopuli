@@ -464,6 +464,12 @@ export class World {
     this.renderer.render(this.scene, this.camera)
   }
 
+  /** What the last frame drew, for the automated check: triangles and draw calls. */
+  drawn(): { triangles: number; calls: number } {
+    const { triangles, calls } = this.renderer.info.render
+    return { triangles, calls }
+  }
+
   private updateCamera(dt: number, p: RoutePos, dist: number): void {
     // Ease the camera's heading so hairpins swing round rather than snap.
     if (this.camHeading === null) this.camHeading = p.heading

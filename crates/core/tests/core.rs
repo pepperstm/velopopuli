@@ -6,7 +6,7 @@ use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, 
 use velopopuli_core::physics::{step_speed, PhysicsParams};
 use velopopuli_core::ride::{RideEngine, RideInput, RivalKind};
 use velopopuli_core::types::{BotSettings, PersonalBest, Profile, Settings};
-use velopopuli_core::world::{align_dem, Dem, Surface, Trail, World, CELLS, CHUNK, FAR_CELLS, TILE};
+use velopopuli_core::world::{align_dem, Dem, Surface, Trail, World, CELLS, CHUNK, FAR_CELLS, TILE, TREE_FLOATS};
 
 /// A straight road heading north with a given elevation profile.
 fn straight(length_m: f64, ele_at: impl Fn(f64) -> Option<f64>) -> Vec<RawPoint> {
@@ -418,7 +418,7 @@ mod world {
         assert_eq!(chunk.positions.len(), row * row * 3);
         assert_eq!(chunk.normals.len(), row * row * 3);
         assert_eq!(chunk.colors.len(), row * row * 3);
-        assert_eq!(chunk.trees.len() % 6, 0);
+        assert_eq!(chunk.trees.len() % TREE_FLOATS, 0);
         assert!(chunk.positions.iter().chain(&chunk.normals).chain(&chunk.colors).all(|v| v.is_finite()));
         // Neighbouring chunks share their edge exactly, so there are no cracks.
         let next = world.chunk(cx + 1, cz);
@@ -595,7 +595,7 @@ mod buildings {
         assert!(close(ridge, expected, 0.01), "highest point {ridge} expected {expected}");
         // No tree grows through a building.
         let trees = world.chunk(cx, cz).trees;
-        assert!(trees.chunks(6).all(|t| !world.buildings.covers(t[0] as f64, t[2] as f64)));
+        assert!(trees.chunks(TREE_FLOATS).all(|t| !world.buildings.covers(t[0] as f64, t[2] as f64)));
     }
 }
 
@@ -1203,6 +1203,60 @@ mod scenery {
     }
 
     #[test]
+    fn trees_of_many_kinds_grow_where_they_belong() {
+        use velopopuli_core::world::{tree_model, tree_share, TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, PINE, SPRUCE, TREE_KINDS};
+        // Every kind has a model, standing on the ground, of its own size.
+        let top = |k: u8| tree_model(k).positions.chunks(3).map(|p| p[1] as f64).fold(f64::MIN, f64::max);
+        for k in 0..TREE_KINDS as u8 {
+            let m = tree_model(k);
+            assert!(m.vertices() >= 60 && m.positions.chunks(3).all(|p| p[1] > -0.4), "kind {k}");
+        }
+        assert!(top(BUSH) < 2.5 && top(SPRUCE) > 9.5 && top(COLUMN) > 11.0 && top(BIRCH) > top(BUSH) * 4.0);
+
+        // How often each kind turns up over a wide area at one latitude and height.
+        let mix = |lat: f64, height_below_tree_line: f64, wood: bool| {
+            let climate = TreeClimate { lat, tree_line: (3600.0 - lat * 38.0).max(600.0) };
+            let mut n = [0usize; TREE_KINDS];
+            for i in 0..4000 {
+                let at = ((i % 80) as f64 * 97.0, (i / 80) as f64 * 113.0);
+                let (roll, pick) = ((i as f64 * 0.618_034).fract(), (i as f64 * 0.414_214 + 0.3).fract());
+                n[climate.kind_at(at, climate.tree_line - height_below_tree_line, wood, roll, pick) as usize] += 1;
+            }
+            n.map(|c| c as f64 / 4000.0)
+        };
+        let conifers = |m: [f64; TREE_KINDS]| m[SPRUCE as usize] + m[PINE as usize];
+        // A temperate lowland wood: mostly broadleaf, with stands of conifers, some birch and undergrowth.
+        let lowland = mix(48.0, 1500.0, true);
+        assert!(lowland[BROADLEAF as usize] > 0.35 && (0.15..0.55).contains(&conifers(lowland)), "{lowland:?}");
+        assert!(lowland[BIRCH as usize] > 0.03 && lowland[BUSH as usize] > 0.02);
+        // Near the tree line: conifers, mostly spruce.
+        let alpine = mix(46.0, 300.0, true);
+        assert!(conifers(alpine) > 0.9 && alpine[SPRUCE as usize] > alpine[PINE as usize], "{alpine:?}");
+        // The south: pines rather than spruce, and cypresses.
+        let south = mix(38.0, 2000.0, true);
+        assert!(south[PINE as usize] > south[SPRUCE as usize] && south[COLUMN as usize] > 0.02, "{south:?}");
+        // The north: mostly conifers, and more birch than broadleaf.
+        let north = mix(63.0, 500.0, true);
+        assert!(conifers(north) > 0.5 && north[BIRCH as usize] > north[BROADLEAF as usize], "{north:?}");
+        // Trees on their own in farmland: many bushes, few conifers.
+        let fields = mix(48.0, 1500.0, false);
+        assert!(fields[BUSH as usize] > 0.2 && conifers(fields) < 0.2, "{fields:?}");
+
+        // In a mapped wood: several kinds, grouped by kind, each with a shade.
+        let (_, world) = world();
+        let woods = world.chunk(0, 5);
+        let kinds: Vec<f32> = woods.trees.chunks(TREE_FLOATS).map(|t| t[6]).collect();
+        assert!(kinds.windows(2).all(|w| w[0] <= w[1]));
+        let mut distinct = kinds.clone();
+        distinct.dedup();
+        assert!(distinct.len() >= 3, "{distinct:?}");
+        assert!(woods.trees.chunks(TREE_FLOATS).all(|t| (0.8..1.2).contains(&t[7])));
+        // Distant chunks draw a share of their trees: all close by, fewer further out.
+        assert_eq!(tree_share(1.0, 6.0), 1.0);
+        assert!((tree_share(6.0, 6.0) - 0.3).abs() < 1e-9 && tree_share(3.0, 6.0) < 1.0 && tree_share(3.0, 6.0) > tree_share(5.0, 6.0));
+    }
+
+    #[test]
     fn barriers_lean_with_the_road() {
         // A steady 10% climb, then flat.
         let route = Arc::new(build_route("climb", &straight(1000.0, |d| Some(100.0 + 0.1 * d.min(600.0)))).unwrap());
@@ -1329,10 +1383,10 @@ mod scenery {
         // 100–300 m along is z 1200–1400, all in chunk row 5 (z 1200–1440): chunk (0, 5) east of the road, (−1, 5) west.
         let woods = world.chunk(0, 5);
         let lake = world.chunk(-1, 5);
-        let trees = |m: &velopopuli_core::world::GridMesh| m.trees.chunks(6).map(|t| (t[0] as f64, t[2] as f64)).collect::<Vec<_>>();
+        let trees = |m: &velopopuli_core::world::GridMesh| m.trees.chunks(TREE_FLOATS).map(|t| (t[0] as f64, t[2] as f64)).collect::<Vec<_>>();
         let in_forest = trees(&woods).iter().filter(|t| t.0 >= 40.0 && t.0 <= 200.0 && t.1 >= 1200.0 && t.1 <= 1400.0).count();
-        // 160 m × 200 m of forest at one tree per ten-metre cell, less the thinning.
-        assert!(in_forest > 120, "{in_forest} trees");
+        // 160 m × 200 m of forest at about 300 trees a hectare (less any on the stream's banks).
+        assert!(in_forest > 750, "{in_forest} trees");
         assert!(woods.water.is_empty());
 
         assert!(!lake.water.is_empty());
@@ -1430,7 +1484,7 @@ mod scenery {
         assert!(woods.roads.vertices() > 0);
         assert!(vertices(&woods).iter().all(|v| v[0] > 38.0 && (v[2] - z(200.0)).abs() < 2.0), "something besides the track");
         // …and no tree stands on the track.
-        assert!(woods.trees.chunks(6).all(|t| !(t[0] > 40.0 && t[0] < 200.0 && (t[2] as f64 - z(200.0)).abs() < 2.5)));
+        assert!(woods.trees.chunks(TREE_FLOATS).all(|t| !(t[0] > 40.0 && t[0] < 200.0 && (t[2] as f64 - z(200.0)).abs() < 2.5)));
         // The railway is a bed with two rails on top, drawn after it.
         let rail = world.chunk(-2, 5);
         let dark = rail.roads.colors.chunks(3).position(|c| c[0] < 0.05).expect("rails");

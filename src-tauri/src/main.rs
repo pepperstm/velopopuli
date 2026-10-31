@@ -114,6 +114,7 @@ fn main() {
             commands::ride_road_mesh,
             commands::ride_structures,
             commands::ride_barriers,
+            commands::tree_models,
             commands::terrain_chunk,
             commands::terrain_far,
             commands::ride_toggle_pause,
