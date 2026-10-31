@@ -17,7 +17,7 @@ Every push is built and tested by GitHub Actions on Windows, macOS and Linux; th
 
 ## Tests
 
-- `cargo test -p velopopuli-core` — the pure-Rust core: route building, physics, recording, workouts, fitness, segments, sensor protocols, terrain, buildings, scenery, surfaces, road widths and barriers.
+- `cargo test -p velopopuli-core` — the pure-Rust core: route building, physics, recording, workouts, fitness, segments, sensor protocols, terrain, buildings, scenery, surfaces, road widths, barriers and trees.
 - `cargo test -p velopopuli` — the app (diagnostics, GitHub issue links, smart plugs, …).
 - `cargo test -p velopopuli-relay` — the group-ride relay.
 
