@@ -65,6 +65,7 @@ export const api = {
     roadMesh: () => invoke<ArrayBuffer>('ride_road_mesh'),
     structures: () => invoke<ArrayBuffer>('ride_structures'),
     barriers: () => invoke<ArrayBuffer>('ride_barriers'),
+    trees: () => invoke<ArrayBuffer>('tree_models'),
     chunk: (cx: number, cz: number) => invoke<ArrayBuffer>('terrain_chunk', { cx, cz }),
     far: (cx: number, cz: number) => invoke<ArrayBuffer>('terrain_far', { cx, cz }),
     togglePause: () => invoke<void>('ride_toggle_pause'),

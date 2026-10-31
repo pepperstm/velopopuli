@@ -172,7 +172,9 @@ export function packNative(
   scene: THREE.Scene,
   skip: (o: THREE.Object3D) => boolean,
   riderSprites: { sprite: THREE.Sprite; rider: string }[],
-  look: Look
+  look: Look,
+  /** The tree sprites' pictures (see `trees.ts`). */
+  trees: HTMLCanvasElement
 ): Uint8Array {
   const sprites: { sprite: THREE.Sprite; rider: string | null }[] = []
   scene.traverse((o) => {
@@ -189,7 +191,8 @@ export function packNative(
     { name: 'windows', canvas: windowTexture().image as HTMLCanvasElement, wrap: 'repeat', flip: true },
     { name: 'banner', canvas: bannerTexture().image as HTMLCanvasElement, wrap: 'clamp', flip: true },
     { name: 'ways', canvas: waysTexture().image as HTMLCanvasElement, wrap: 'clampS', flip: true },
-    { name: 'labels', canvas: atlas.canvas, wrap: 'clamp', flip: false }
+    { name: 'labels', canvas: atlas.canvas, wrap: 'clamp', flip: false },
+    { name: 'trees', canvas: trees, wrap: 'clamp', flip: true }
   ]
   const header = new TextEncoder().encode(
     JSON.stringify({

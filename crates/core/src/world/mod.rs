@@ -15,6 +15,7 @@ mod roads;
 mod scenery;
 mod structures;
 mod surface;
+mod trees;
 
 pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
@@ -30,6 +31,7 @@ pub use surface::{
     highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, FORD, SINGLETRACK,
     SINGLETRACK_WIDTH, TIMBER, UNMARKED, WAY_TAGS,
 };
+pub use trees::{sprite_frame, tree_model, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, KINDS as TREE_KINDS, PINE, SPRITES_FROM, SPRITE_SPREAD, SPRUCE, TREE_FLOATS};
 
 use std::sync::Arc;
 
@@ -49,9 +51,12 @@ const FAR_INNER: f64 = 1050.0;
 pub const VIEW_CHUNKS: i32 = 6;
 pub const ROAD_WIDTH: f64 = 6.5;
 pub const ROAD_LIFT: f64 = 0.07;
-const TREES_PER_CHUNK: i32 = 46;
-/// The share of lattice cells in a mapped forest that get a tree.
-const FOREST_DENSITY: f64 = 0.6;
+/// Spots tried per chunk for trees outside mapped forest (woods where there is no map; a
+/// quarter of them as trees in fields and hedges where there is).
+const TREES_PER_CHUNK: i32 = 180;
+/// A mapped forest is planted on a lattice of 5 m squares (four to a terrain cell); this
+/// share of them get a tree, about 300 a hectare.
+const FOREST_DENSITY: f64 = 0.75;
 /// Vertices across the road ribbon.
 pub const ROAD_SECTION: usize = 6;
 /// How far the retaining wall under the embankment reaches down. It is buried on
@@ -83,7 +88,8 @@ pub struct GridMesh {
     pub positions: Vec<f32>,
     pub normals: Vec<f32>,
     pub colors: Vec<f32>,
-    /// Trees as `[x, y, z, yaw, scale, height scale]` each.
+    /// Trees as `[x, y, z, yaw, width scale, height scale, kind, shade]` each (`TREE_FLOATS`),
+    /// grouped by kind (so a renderer can draw each kind's run with its own model).
     pub trees: Vec<f32>,
     pub buildings: BuildingMesh,
     /// Water surfaces as loose triangles: positions, and a colour per vertex.
@@ -368,20 +374,36 @@ impl World {
         };
         let mapped = scene.covers(&self.route, x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
 
-        // Mapped forest: a tree in most cells of the lattice.
+        let climate = trees::Climate { lat: self.route.lat0.abs(), tree_line: self.tree_line };
+        let mut planted: Vec<(u8, [f32; TREE_FLOATS])> = Vec::new();
+        // `seed` makes each tree's random numbers; `wood` says whether it stands among others.
+        let mut grow = |tx: f64, tz: f64, ty: f64, wood: bool, seed: (i32, i32)| {
+            let r = |salt: i32| hash2(seed.0.wrapping_mul(31).wrapping_add(salt), seed.1.wrapping_mul(17).wrapping_sub(salt.wrapping_mul(7)));
+            let kind = climate.kind_at((tx, tz), ty, wood, r(1), r(2));
+            let width = 0.75 + r(3) * 0.55;
+            let tall = width * (0.88 + r(4) * 0.3);
+            let shade = 0.82 + r(5) * 0.36;
+            planted.push((kind, [tx as f32, (ty - 0.2) as f32, tz as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, shade as f32]));
+        };
+
+        // Mapped forest: most of a lattice of 5 m squares, each tree somewhere in its square.
         if scene.forest.touches(cx, cz) {
             for j in 0..CELLS as i32 {
                 for i in 0..CELLS as i32 {
                     let (li, lj) = (li0 + m as i32 + i, lj0 + m as i32 + j);
-                    if !scene.forest.get(li, lj) || hash2(li.wrapping_mul(3), lj.wrapping_mul(5)) > FOREST_DENSITY {
+                    if !scene.forest.get(li, lj) {
                         continue;
                     }
-                    let tx = x0 + (i as f64 + hash2(li, lj.wrapping_mul(7))) * cell;
-                    let tz = z0 + (j as f64 + hash2(li.wrapping_mul(11), lj)) * cell;
-                    let Some(ty) = plant(tx, tz) else { continue };
-                    let scale = 1.0 + hash2(li, lj) * 0.9;
-                    let yaw = hash2(lj, li) * std::f64::consts::TAU;
-                    mesh.trees.extend_from_slice(&[tx as f32, (ty - 0.2) as f32, tz as f32, yaw as f32, scale as f32, (scale * (0.9 + hash2(li.wrapping_add(lj), li) * 0.4)) as f32]);
+                    for q in 0..4 {
+                        let (si, sj) = (li.wrapping_mul(2) + q % 2, lj.wrapping_mul(2) + q / 2);
+                        if hash2(si.wrapping_mul(3), sj.wrapping_mul(5)) > FOREST_DENSITY {
+                            continue;
+                        }
+                        let tx = x0 + (i as f64 + ((q % 2) as f64 + hash2(si, sj.wrapping_mul(7))) / 2.0) * cell;
+                        let tz = z0 + (j as f64 + ((q / 2) as f64 + hash2(si.wrapping_mul(11), sj)) / 2.0) * cell;
+                        let Some(ty) = plant(tx, tz) else { continue };
+                        grow(tx, tz, ty, true, (si, sj));
+                    }
                 }
             }
         }
@@ -389,7 +411,7 @@ impl World {
         // Elsewhere: deterministic per chunk, clustered into woods by a low-frequency mask.
         // Where the map says what is forest and what is not, only a scattering is kept.
         for k in 0..TREES_PER_CHUNK {
-            if mapped && k % 3 != 0 {
+            if mapped && k % 4 != 0 {
                 continue;
             }
             let tx = x0 + hash2(cx.wrapping_mul(131).wrapping_add(k), cz.wrapping_mul(17).wrapping_sub(k)) * CHUNK;
@@ -399,10 +421,10 @@ impl World {
                 continue;
             }
             let Some(ty) = plant(tx, tz) else { continue };
-            let scale = 0.8 + hash2(k * 3, cx.wrapping_mul(7).wrapping_add(cz)) * 1.1;
-            let yaw = hash2(k, cz) * std::f64::consts::TAU;
-            mesh.trees.extend_from_slice(&[tx as f32, (ty - 0.2) as f32, tz as f32, yaw as f32, scale as f32, (scale * (0.85 + hash2(k, cx) * 0.4)) as f32]);
+            grow(tx, tz, ty, !mapped, (cx.wrapping_mul(4099).wrapping_add(k), cz.wrapping_mul(8191).wrapping_sub(k)));
         }
+        planted.sort_by_key(|t| t.0);
+        mesh.trees = planted.iter().flat_map(|t| t.1).collect();
         mesh
     }
 

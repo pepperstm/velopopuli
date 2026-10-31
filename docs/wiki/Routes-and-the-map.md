@@ -16,7 +16,7 @@ Everything comes from open data and is downloaded once per route, then kept on y
 
 - **Terrain** from open elevation tiles, out to the horizon. Near the road the ground is shaped to the route's own elevation so the road never floats or sinks.
 - **Buildings** from OpenStreetMap, within about 350 m of the road — with mapped heights where the detailed source (Overpass) answers, otherwise estimated.
-- **Forests, lakes, rivers, the surrounding roads and railways, bridges and tunnels** from OpenStreetMap's vector tiles, about a kilometre either side. Where your route crosses a mapped bridge or tunnel, you ride over the deck or through the bore.
+- **Forests, lakes, rivers, the surrounding roads and railways, bridges and tunnels** from OpenStreetMap's vector tiles, about a kilometre either side. Where your route crosses a mapped bridge or tunnel, you ride over the deck or through the bore. Woods are planted densely with spruce, pine, broadleaf, birch, cypress or poplar and bushes, in stands, chosen by altitude and latitude.
 - **Your road itself** is drawn as a closed race road, set apart from the map's road network by crowd barriers. It takes the real road's character from OpenStreetMap tags:
   - **Surface** — tarmac, concrete, cobbles, gravel or dirt (`surface` tag);
   - **Width** — from `width` or `lanes`, else typical for the road class (a 7 m main road, a 5 m village street, a 3 m track);

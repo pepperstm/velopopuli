@@ -15,7 +15,8 @@ crates/core/      Pure Rust library, no I/O — fully unit-tested
   world/          Terrain (elevation tiles, height field, chunk/horizon/road meshes),
                   OpenStreetMap buildings, scenery (forests, water, other roads, bridges and tunnels),
                   structures (decks, bores, overbridges, log bridges), the route road's surface and width,
-                  trails (grades, berms, fords), barriers and landmarks
+                  trails (grades, berms, fords), barriers and landmarks, trees (six kinds, chosen by
+                  altitude and latitude; drawn as sprites in the distance)
 crates/relay/     The group-ride relay server (WebSocket, stateless)
 src-tauri/        The app (Tauri 2)
   devices/        Bluetooth via the OS stack (btleplug); ANT+ USB stick via libusb; demo rider
@@ -32,7 +33,7 @@ web/              React screens and the three.js world
 
 1. **Start:** the route is built (resampled every few metres, smoothed, climbs found). Map data for the route is loaded from the cache or downloaded: vector tiles for scenery, Overpass for building detail and the route's road tags (surface, width, lanes, trail grades). The `World` combines it: a height field pinned to the road, the scene (forests, water, other roads), structures, the route road and barriers.
 2. **Loop (50 Hz, Rust):** sensor readings are merged (most direct source wins), the physics advances the rider, rivals and ghosts move, and once a second the trainer gets a command (gradient or ERG target) and the diagnostics log gets a line. State goes to the page 20 times a second.
-3. **Drawing:** the page asks for meshes in compact binary form (terrain chunks streamed around the rider, the road ribbon, structures, barriers) and draws them with three.js — or the native renderer draws the same meshes with Metal beneath a transparent page that shows only the HUD.
+3. **Drawing:** the page asks for meshes in compact binary form (terrain chunks streamed around the rider with their trees, the road ribbon, structures, barriers, the tree models) and draws them with three.js; trees beyond about 200 m become camera-facing sprites rendered from the same models — or the native renderer draws the same meshes with Metal beneath a transparent page that shows only the HUD.
 4. **End:** the ride is saved as FIT, personal bests, XP and badges are updated, and it can be uploaded to Strava.
 
 ## Design choices

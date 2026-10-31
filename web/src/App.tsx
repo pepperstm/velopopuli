@@ -81,7 +81,7 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
       native = `\n--- native frames drawn: ${frames}${error ? ` (error: ${error})` : ''}`
     }
     const tiles = document.querySelectorAll('.leaflet-tile-loaded').length
-    const info = `${document.body.innerText}\n\n--- map tiles loaded: ${tiles}\n--- world: ${JSON.stringify(smokeHooks.world)}\n--- frames drawn: ${(smokeHooks.world as { frames?: () => number } | null)?.frames?.() ?? 0}\n--- last ride state: ${JSON.stringify(smokeHooks.state)}${native}`
+    const info = `${document.body.innerText}\n\n--- map tiles loaded: ${tiles}\n--- world: ${JSON.stringify(smokeHooks.world)}\n--- frames drawn: ${(smokeHooks.world as { frames?: () => number } | null)?.frames?.() ?? 0}\n--- last frame: ${JSON.stringify((smokeHooks.world as { drawn?: () => unknown } | null)?.drawn?.() ?? null)}, ${((smokeHooks.world as { frameMs?: () => number } | null)?.frameMs?.() ?? 0).toFixed(1)} ms a frame\n--- last ride state: ${JSON.stringify(smokeHooks.state)}${native}`
     void api.smoke.done(smokeHooks.capture?.() ?? null, info)
   }, smoke.ms)
 }

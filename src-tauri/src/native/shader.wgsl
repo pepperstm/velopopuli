@@ -60,10 +60,10 @@ fn vs_main(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @locatio
     return o;
 }
 
-/// A tree: one shared cone-and-trunk mesh placed by `[x, y, z, yaw, width, height]`.
+/// A tree: its kind's shared mesh placed by `[x, y, z, yaw, width, height, kind, shade]`.
 @vertex
 fn vs_tree(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) color: vec3<f32>, @location(3) uv: vec2<f32>,
-           @location(4) at: vec3<f32>, @location(5) shape: vec3<f32>) -> VsOut {
+           @location(4) at: vec3<f32>, @location(5) shape: vec3<f32>, @location(6) kind_shade: vec2<f32>) -> VsOut {
     var o: VsOut;
     let c = cos(shape.x);
     let s = sin(shape.x);
@@ -72,9 +72,43 @@ fn vs_tree(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @locatio
     let world = r + at + d.model[3].xyz;
     o.world = world;
     o.normal = vec3<f32>(c * normal.x + s * normal.z, normal.y, -s * normal.x + c * normal.z);
-    o.color = color;
+    o.color = color * kind_shade.y;
     o.uv = uv;
     o.clip = g.view_proj * vec4<f32>(world, 1.0);
+    // Beyond its switching distance the tree is drawn as a sprite instead.
+    let base = at + d.model[3].xyz;
+    if (distance(base.xz, g.camera.xz) > sprite_from(base)) {
+        o.clip = vec4<f32>(2.0, 2.0, 2.0, 1.0);
+    }
+    return o;
+}
+
+/// Each tree's own switching distance from 3D to sprite, from where it stands. As
+/// `spriteFrom` in the page's `trees.ts`, and `SPRITES_FROM` / `SPRITE_SPREAD` in the core.
+fn sprite_from(at: vec3<f32>) -> f32 {
+    return 200.0 + (fract(sin(dot(at.xz, vec2<f32>(12.9898, 78.233))) * 43758.5453) - 0.5) * 30.0;
+}
+
+/// A tree as a sprite: its kind's quad (`pos.x` across, `pos.y` up) standing at the tree,
+/// turned about the vertical to face the camera, scaled like the tree; lit as if facing the
+/// camera and a little upwards, much as a crown's surfaces are on average.
+@vertex
+fn vs_sprite(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) color: vec3<f32>, @location(3) uv: vec2<f32>,
+             @location(4) at: vec3<f32>, @location(5) shape: vec3<f32>, @location(6) kind_shade: vec2<f32>) -> VsOut {
+    var o: VsOut;
+    let base = at + d.model[3].xyz;
+    let to_camera = g.camera.xz - base.xz;
+    let facing = normalize(to_camera + vec2<f32>(0.0001, 0.0));
+    let right = vec3<f32>(facing.y, 0.0, -facing.x);
+    let world = base + right * pos.x * shape.y + vec3<f32>(0.0, pos.y * shape.z, 0.0);
+    o.world = world;
+    o.normal = normalize(vec3<f32>(facing.x * 0.6, 0.8, facing.y * 0.6));
+    o.color = color * kind_shade.y;
+    o.uv = uv;
+    o.clip = g.view_proj * vec4<f32>(world, 1.0);
+    if (length(to_camera) <= sprite_from(base)) {
+        o.clip = vec4<f32>(2.0, 2.0, 2.0, 1.0);
+    }
     return o;
 }
 
@@ -107,7 +141,20 @@ fn fogged(c: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(i: VsOut) -> @location(0) vec4<f32> {
+    return shade(i, textureSample(tex, samp, i.uv));
+}
+
+/// A sprite: only where its picture is.
+@fragment
+fn fs_sprite(i: VsOut) -> @location(0) vec4<f32> {
     let texel = textureSample(tex, samp, i.uv);
+    if (texel.a < 0.5) {
+        discard;
+    }
+    return shade(i, vec4<f32>(texel.rgb, 1.0));
+}
+
+fn shade(i: VsOut, texel: vec4<f32>) -> vec4<f32> {
     var base = i.color * d.tint.rgb * texel.rgb;
     if (d.flags.y > 0.5) {
         // Rider models: the jersey's share of each vertex takes the rider's colour.
