@@ -1203,6 +1203,39 @@ mod scenery {
     }
 
     #[test]
+    fn barriers_lean_with_the_road() {
+        // A steady 10% climb, then flat.
+        let route = Arc::new(build_route("climb", &straight(1000.0, |d| Some(100.0 + 0.1 * d.min(600.0)))).unwrap());
+        let world = World::new(route.clone(), None, 0.0);
+        let b = world.barriers();
+        let feet = |s: &[f32; 7]| {
+            // The ends of the section's feet in the world, as the renderers place it
+            // (tipped about its x axis by the pitch, then turned by the yaw).
+            let (half, pitch, yaw) = (1.175f64, s[6] as f64, s[3] as f64);
+            [-half, half].map(|z| {
+                let (y, z) = (-z * pitch.sin(), z * pitch.cos());
+                (s[0] as f64 + z * yaw.sin(), s[1] as f64 + y, s[2] as f64 + z * yaw.cos())
+            })
+        };
+        let lift = |m: f64| route.sample_at(m).ele + velopopuli_core::world::ROAD_LIFT - 0.12;
+        let on_climb: Vec<_> = b.iter().filter(|s| s[4] > 100.0 && s[4] < 500.0).collect();
+        assert!(on_climb.len() > 200, "{}", on_climb.len());
+        for s in &on_climb {
+            // Both feet stand on the road's level where they are, uphill and down.
+            for (_, y, z) in feet(s) {
+                // The route runs due north (−z) from its start.
+                let along = route.z[0] - z;
+                assert!((y - lift(along)).abs() < 0.02, "{} {y} {}", s[4], lift(along));
+            }
+            // About 5.7° either way: the two sides face opposite ways along the road.
+            assert!(((s[6] as f64).abs() - 0.1f64.atan()).abs() < 0.01, "{}", s[6]);
+        }
+        assert!(on_climb.iter().any(|s| s[6] > 0.0) && on_climb.iter().any(|s| s[6] < 0.0));
+        // Upright on the flat.
+        assert!(b.iter().filter(|s| s[4] > 700.0 && s[4] < 950.0).all(|s| s[6].abs() < 1e-4));
+    }
+
+    #[test]
     fn reads_surfaces_from_overpass() {
         let json = r#"{"elements":[
             {"type":"way","id":1,"tags":{"highway":"track","surface":"fine_gravel"},"geometry":[{"lat":45.0,"lon":6.0},{"lat":45.001,"lon":6.0}]},

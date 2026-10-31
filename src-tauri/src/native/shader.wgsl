@@ -78,6 +78,27 @@ fn vs_tree(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @locatio
     return o;
 }
 
+/// A race barrier section: one shared model placed by `[x, y, z, yaw, pitch, -]`, tipped
+/// about its own x axis to lie along the slope, then turned to follow the road.
+@vertex
+fn vs_barrier(@location(0) pos: vec3<f32>, @location(1) normal: vec3<f32>, @location(2) color: vec3<f32>, @location(3) uv: vec2<f32>,
+              @location(4) at: vec3<f32>, @location(5) shape: vec3<f32>) -> VsOut {
+    var o: VsOut;
+    let cp = cos(shape.y);
+    let sp = sin(shape.y);
+    let p = vec3<f32>(pos.x, cp * pos.y - sp * pos.z, sp * pos.y + cp * pos.z);
+    let n = vec3<f32>(normal.x, cp * normal.y - sp * normal.z, sp * normal.y + cp * normal.z);
+    let c = cos(shape.x);
+    let s = sin(shape.x);
+    let world = vec3<f32>(c * p.x + s * p.z, p.y, -s * p.x + c * p.z) + at + d.model[3].xyz;
+    o.world = world;
+    o.normal = vec3<f32>(c * n.x + s * n.z, n.y, -s * n.x + c * n.z);
+    o.color = color;
+    o.uv = uv;
+    o.clip = g.view_proj * vec4<f32>(world, 1.0);
+    return o;
+}
+
 fn fogged(c: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     let dist = distance(world, g.camera.xyz);
     let f = smoothstep(g.fog.x, g.fog.y, dist);
