@@ -36,6 +36,8 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 | **Real terrain** — the Alpe d'Huez switchbacks from the overhead camera | **Structured workouts** on any route, the trainer holding each target |
 | <img src="docs/images/ride-dusk-rain.jpg" alt="Climbing at dusk in the rain with the bike lamp on"> | <img src="docs/images/ride-snow.jpg" alt="Climbing at dawn in falling snow"> |
 | **Time of day and weather** — dusk in the rain, with a lamp on the bike | …or dawn in the snow, or the live weather at the real place |
+| <img src="docs/images/ride-lane.jpg" alt="A Devon lane between high hedge banks, green fields beyond"> | <img src="docs/images/ride-fields.jpg" alt="Climbing out of Bovey Tracey with hedged fields on the hills"> |
+| **Holloways** — a Devon lane between hedge banks | **Field boundaries** — hedgerows, walls or fences in the style of the region, and the ones on the map |
 
 ### In the app
 
@@ -65,7 +67,7 @@ Be aware of what has and has not been proven:
 | Waymarked MTB routes | Listed and joined from the live Overpass API around Finale Ligure (a 23 km route joined with no gaps); the joining is unit-tested. The screen itself was only type-checked, not clicked through |
 | Strava segments and ghosts from Strava | Matching is unit-tested; the Strava calls have **not** been made against the live API |
 | Street-level photos | Selection unit-tested and a bad token is reported correctly; not tried with a real Mapillary token |
-| Native renderer | Screenshots from the automated run match the built-in renderer (day, dusk with rain fog, high camera, and the leaning barriers and tree sprites of 0.3.6). The HUD on top of it was not checked in a screenshot of the real window |
+| Native renderer | Screenshots from the automated run match the built-in renderer (day, dusk with rain fog, high camera, the leaning barriers and tree sprites of 0.3.6, and the hedge banks of 0.3.7). The HUD on top of it was not checked in a screenshot of the real window |
 | FIT export | Unit-tested by decoding the output with an independent FIT parser |
 | Bluetooth and ANT+ **protocol** encoding/decoding (FTMS, Cycling Power, CSC, HR, ANT framing, ANT+ HR/power/speed/cadence/FE-C pages) | Unit-tested against hand-built packets |
 | Full app: import → real-terrain download → ride → save FIT → personal best → summary | Verified by automated runs with the demo rider on macOS (Apple Silicon), in debug, dev-server and release builds |
