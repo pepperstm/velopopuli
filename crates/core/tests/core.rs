@@ -1675,3 +1675,66 @@ mod waymarked {
         assert!(parse_gpx(&to_gpx("No heights", &flat)).unwrap().1.iter().all(|p| p.ele.is_none()));
     }
 }
+
+#[test]
+fn hillside_roads_sit_in_cuttings_and_on_embankments() {
+    // A road heading north across a hillside that rises 0.6 m a metre to the east (31°).
+    let mut route = build_route("hillside", &straight(3000.0, |_| None)).unwrap();
+    let hillside = |route: &Route| {
+        let (zoom, keys) = Dem::plan(route).unwrap();
+        let mut dem = Dem::new(zoom);
+        let world_px = TILE as f64 * 2f64.powi(zoom as i32);
+        let metres_per_px = 2.0 * std::f64::consts::PI * 6_378_137.0 * 45f64.to_radians().cos() / world_px;
+        let road_px = (7.0 + 180.0) / 360.0 * world_px;
+        for key in &keys {
+            let mut px = vec![0u8; TILE * TILE * 3];
+            for x in 0..TILE {
+                let east = ((key.0 * TILE as i64 + x as i64) as f64 + 0.5 - road_px) * metres_per_px;
+                let v = (1000.0 + 0.6 * east + 32768.0) * 256.0;
+                for y in 0..TILE {
+                    let o = (y * TILE + x) * 3;
+                    px[o..o + 3].copy_from_slice(&[(v / 65536.0) as u8, ((v / 256.0) as u32 % 256) as u8, (v as u32 % 256) as u8]);
+                }
+            }
+            assert!(dem.insert_rgb(*key, &px, 3));
+        }
+        dem
+    };
+    let first = hillside(&route);
+    let offset = align_dem(&mut route, &first);
+    let (natural, dem) = (hillside(&route), hillside(&route));
+    let route = Arc::new(route);
+    let world = World::new(route.clone(), Some(dem), offset);
+    let mid = route.n / 2;
+    let (xr, zr, level) = (route.x[mid], route.z[mid], route.ele[mid] as f64 - 0.35);
+    // The ground across the road, from both chunks either side of it, on the grid row nearest the middle.
+    let row = (zr / (CHUNK / CELLS as f64)).round() * (CHUNK / CELLS as f64);
+    let (cx, cz) = ((xr / CHUNK).floor() as i32, (row / CHUNK).floor() as i32);
+    let mut across: Vec<(f64, f64)> = [cx - 1, cx, cx + 1]
+        .iter()
+        .flat_map(|&c| world.chunk(c, cz).positions.chunks(3).map(|p| (p[0] as f64, p[1] as f64, p[2] as f64)).collect::<Vec<_>>())
+        .filter(|p| (p.2 - row).abs() < 0.5)
+        .map(|p| (p.0 - xr, p.1))
+        .collect();
+    across.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let hill = |d: f64| natural.height_at(&route, xr + d, row) + offset;
+    // The shelf the road stands on is level, out to the edge of the cutting.
+    for &(d, g) in across.iter().filter(|p| p.0 >= -5.0 && p.0 <= 10.0) {
+        assert!((g - level).abs() < 1.0, "shelf at {d:.0} m: {g:.1} for a road at {level:.1}");
+    }
+    let between = |lo: f64, hi: f64, test: &dyn Fn(f64, f64) -> bool| across.iter().any(|&(d, g)| d > lo && d < hi && test(d, g));
+    // Uphill, a cutting face: well above where a gentle blend would be, but still below the hillside.
+    assert!(between(16.0, 40.0, &|d, g| g > level + 5.0 && g < hill(d) - 1.0), "no cutting: {across:?}");
+    // Downhill, an embankment: well below the road, but above the slope below it.
+    assert!(between(-20.0, -8.0, &|d, g| g < level - 1.5 && g > hill(d) + 1.0), "no embankment: {across:?}");
+    // Nowhere does the ground dip below both, or rise above both.
+    for &(d, g) in &across {
+        assert!(g > level.min(hill(d)) - 1.5 && g < level.max(hill(d)) + 1.5, "at {d:.0} m: {g:.1} (road {level:.1}, hillside {:.1})", hill(d));
+    }
+    // Faces are at most a few metres high (more is blended away), and the ground is the hillside
+    // again by the edge of the road's reach.
+    assert!(across.iter().all(|&(d, g)| d.abs() > 30.0 || (g - level).abs() < 10.0), "too tall a face: {across:?}");
+    for &(d, g) in across.iter().filter(|p| p.0.abs() >= 90.0 && p.0.abs() <= 120.0) {
+        assert!((g - hill(d)).abs() < 1.5, "at {d:.0} m: {g:.1}, hillside {:.1}", hill(d));
+    }
+}

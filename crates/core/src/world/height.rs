@@ -10,9 +10,21 @@ use super::dem::Dem;
 use super::CHUNK;
 use crate::gpx::Route;
 
-/// Ground is flat at road level within this distance of the centreline…
+/// Ground is flat at road level within this distance of the centreline (a terrain cell
+/// beyond the widest road, so no cell can tilt up over its edge)…
 const FLAT: f64 = 16.0;
-/// …and fully blended into the surrounding terrain beyond this one.
+/// Below the road it can fall away sooner, from this distance: a cell leaning down past the
+/// edge goes under the road, whose embankment and retaining wall cover it.
+const FILL_FROM: f64 = 8.0;
+/// Past those the ground rises to the hillside as a cutting this steep (rise over run: about 50°, steep
+/// enough to show as rock), or falls to it as an embankment this steep (about 34°, a grassed
+/// slope)…
+const CUT_SLOPE: f64 = 1.2;
+const FILL_SLOPE: f64 = 0.67;
+/// …up to this height. A real cutting or embankment can be taller, but most of a bigger
+/// difference is the terrain data being coarse, and is blended away instead.
+const FACE_MAX: f64 = 7.0;
+/// …and is the surrounding terrain whatever beyond this distance.
 pub(super) const BLEND: f64 = 90.0;
 /// Another stretch of the route this close (a hairpin's other arm) shares the ground.
 const SHARED: f64 = 18.0;
@@ -335,11 +347,37 @@ impl HeightField {
             let own = own_h / own_w;
             road = (own + (road - own) * smoothstep(FLAT, OWN_STRETCH, d)).min(other.1);
         }
+        let level = road - 0.35;
         // Approaching a tunnel the cutting narrows to the width of the tunnel's own trench.
         let narrow = self.shape[nearest] as f64;
-        let t = smoothstep(mix(FLAT, TRENCH_FLAT, narrow), mix(BLEND, TRENCH_BLEND, narrow), d);
-        mix(road - 0.35, around, t)
+        let trench = mix(level, around, smoothstep(mix(FLAT, TRENCH_FLAT, narrow), mix(BLEND, TRENCH_BLEND, narrow), d));
+        mix(cross_section(d, level, around), trench, narrow)
     }
+}
+
+/// A road's cross-section: the ground at road level out to `FLAT` (`FILL_FROM` below the road),
+/// then a cutting face up to the hillside or an embankment down to it, as steep as a road
+/// builder would make them and up to `FACE_MAX` high. Any more difference than that (mostly
+/// where coarse terrain data disagrees with the route's own elevation) is blended away gently
+/// over the road's whole reach, as is everything by the edge of it.
+fn cross_section(d: f64, level: f64, around: f64) -> f64 {
+    let rise = around - level;
+    let height = rise.abs();
+    let out = (d - if rise >= 0.0 { FLAT } else { FILL_FROM }).max(0.0);
+    let face = height.min(FACE_MAX);
+    let slope = if rise >= 0.0 { CUT_SLOPE } else { FILL_SLOPE };
+    // The top of a cutting (or the foot of an embankment) is rounded off a little.
+    let held = smooth_min(face, slope * out, 0.4 * face) + (height - face) * smoothstep(FLAT, BLEND, d);
+    mix(level + held.copysign(rise), around, smoothstep(BLEND - 20.0, BLEND, d))
+}
+
+/// The smaller of `a` and `b`, with the corner between them rounded over about `k`.
+fn smooth_min(a: f64, b: f64, k: f64) -> f64 {
+    if k <= 0.0 {
+        return a.min(b);
+    }
+    let h = (0.5 + 0.5 * (b - a) / k).clamp(0.0, 1.0);
+    mix(b, a, h) - k * h * (1.0 - h)
 }
 
 fn mix(a: f64, b: f64, t: f64) -> f64 {
