@@ -5,6 +5,8 @@ on:
   workflow_run:
     workflows: [Build]
     types: [completed]
+  pull_request:
+    paths: ['website/**', '.github/workflows/website.yml']
   workflow_dispatch:
   push:
     branches: [main]
@@ -15,8 +17,17 @@ concurrency:
   group: ionos-website
   cancel-in-progress: false
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s website/scripts -p 'test_*.py'
   deploy:
+    needs: validate
     if: >-
+      github.event_name != 'pull_request' &&
       (github.event_name != 'workflow_run' ||
        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) &&
       (github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft))
