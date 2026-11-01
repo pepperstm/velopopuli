@@ -2,12 +2,13 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
-## What's new in 0.3.6
+## What's new in 0.3.7
 
-- **Barriers lean with the road.** On a hill each barrier section now stands on its feet at both ends and tilts with the slope, instead of standing level and floating or sinking.
-- **Denser woods, and six kinds of tree.** Mapped forests are planted much more thickly, with spruce, pine, broadleaf, birch, tall columnar trees and bushes, mixed by latitude, altitude (conifers take over towards the tree line) and stands that change across a wood.
-- **Distant trees as sprites.** Beyond about 200 m a tree is drawn as a flat picture of itself and becomes a 3D model as you get closer, so the denser woods cost only a little more to draw than the old sparse ones.
-- The README and guides have fresh screenshots from this version.
+- **Roads cut into the hillside.** On a mountainside your road now sits on a level shelf, with a rocky cutting rising above it and a grassy embankment falling away below, instead of the slope simply blending into the road.
+- **Side roads and railways too.** The other roads, tracks and railways around you are level across, cut into slopes and carried on embankments. Footpaths and driveways still follow the ground.
+- **Field boundaries.** Open country is divided into fields: the hedges, walls and fences mapped near your route, and elsewhere fields in the style of the region — hedgerows with the odd tree in Britain, Ireland and north-west France, dry-stone walls on their hills and round the Mediterranean, timber fences on mountain pastures and in Scandinavia.
+- **Holloways.** In hedge country, narrow lanes, yours included, run between high hedge banks, with gaps for junctions and gateways.
+- The ride screenshots and the animation in the README are fresh from this version.
 
 ## Download
 
