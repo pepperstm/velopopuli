@@ -12,16 +12,16 @@ A free, open-source indoor-cycling app: import any GPX route, ride it on a smart
 
 It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding GPX routes over winter), was rewritten the same day from Electron/TypeScript into Rust + Tauri for low overhead, renamed "Velo Populi" and then "VeloPopuli" to match the website.
 
-## 2. Where it stands (October 2026: v0.3.5 released, v0.4 in progress)
+## 2. Where it stands (November 2026: v0.3.6 released, v0.4 on `next`)
 
-**Released:** v0.3.5, from `main`. **In progress: the world update for v0.4**, on branch `feature/satellite-imagery` (draft pull request #39 into `next`; tracking issue #36). It is complete and tested with the smoke harness, and lands as **one** merge — see section 5a. What it adds:
+**Released:** v0.3.6, from `main`. **On `next`, for v0.4: the world update** (#39, squash-merged into `next`; tracking issue #36), with `main` merged in up to v0.3.6. It goes to `main` as v0.4 when the maintainer says — see section 5a. What it adds:
 
 - **Imagery on the ground** (#32): national orthophotos where they are open, Sentinel-2 cloudless 2017 elsewhere, or the rider's own provider; one image per terrain chunk, and the far mesh coloured from the same imagery.
 - **Buildings that fit their region** (#33): regional styles (roof shape and pitch, eaves, colours, timber upper floors), adjusted by building kind and overridden by mapped tags.
 - **Landmarks** (#34): wind turbines with turning rotors, lighthouses, masts, chimneys, water towers, windmills, castles and monuments up to ~3 km from the road; church towers in the local style; castle battlements.
 - **Realistic weather and wind** (#35): live cloud, haze, rain and snow strength, wet roads and lying snow from Open-Meteo; the wind in the physics and sent to the trainer, with a slider from *felt as it is* to *only seen*.
 
-**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, ground imagery, regional buildings, forests, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers, landmarks and their models, live weather and wind), the virtual-gear maths, diagnostics, the relay. 111 automated tests (plus three that need the network and are skipped by default), plus visual checks through the automated smoke harness (section 6).
+**Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain, ground imagery, regional buildings, forests of six kinds of tree with sprites in the distance, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers that lean with the road, landmarks and their models, live weather and wind), the virtual-gear maths, diagnostics, the relay. 113 automated tests (plus three that need the network and are skipped by default), plus visual checks through the automated smoke harness (section 6).
 
 **Built but not proven with real use:**
 
@@ -34,6 +34,7 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 | **Native renderer** (macOS, opt-in) | wgpu/Metal in an NSView under a transparent webview. Matches three.js in screenshots; HUD-over-native never checked in a real window; no clean release-build performance comparison. **Behind the page on the world update:** no ground imagery, wet roads or lying snow, and turbine blades stand still. |
 | **Wind on the trainer** | FTMS wind speed and FE-C page 50 wind are unit-tested against the specs; never felt on a real trainer. Whether trainers honour the wind field (or only the gradient) is unknown. |
 | **Your own imagery provider** | Tested with an open tile URL only, never with a real keyed account. |
+| **Dense woods and tree sprites** | Checked in both renderers with the smoke harness, and their cost measured only on Apple silicon (about 0.6 M triangles a frame on a wooded climb). Not tried on weaker graphics (Windows/Linux integrated GPUs). |
 | **Mapillary street photos** | Needs a user token; never tried with a real one. |
 | **Fan and lights** (Home Assistant, Shelly, Tasmota, webhook) | Tested against mocks only. |
 
@@ -58,7 +59,8 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
                     roads.rs: draping other roads on terrain; structures.rs: decks, bores, overbridges
                     buildings.rs: OSM footprints → meshes (walls, roofs over a fitted rectangle); style.rs: regional
                     building styles, building kinds, OSM roof/colour/material tags → a Look; surface.rs: route surface/width/markings from OSM tags
-                    barriers.rs: race barriers; landmarks.rs: signs, summits, POIs;
+                    barriers.rs: race barriers; landmarks.rs: signs, summits, POIs; trees.rs: the six tree models,
+                    which kind grows where, and where trees turn into sprites;
                     sights.rs: landmark models (turbines, towers, castles…) fetched with the road tags
                     imagery.rs: imagery sources per country, web-map tiles → one image per chunk, far-mesh colours
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
@@ -74,9 +76,9 @@ src-tauri/          The app (Tauri 2)
   diag.rs           Diagnostics log + reports; issues.rs: GitHub new-issue links; snapshot.rs: window PNGs (macOS)
   strava, geo, photos, smart, group, library, terrain, secrets, store
 web/                React + three.js (Vite). ui/ screens, world/ the 3D scene: scene.ts, terrain.ts (chunks, imagery
-                    materials, far mesh), rider.ts, barriers.ts, surfaces.ts, rotors.ts (turbine blades), weather.ts
-                    (looks, live conditions → a look, rain and snow), weathered.ts (wet and snowy shading on any
-                    material), native.ts (assets handed to the native renderer)
+                    materials, far mesh), trees.ts (tree models, sprite atlas), rider.ts, barriers.ts, surfaces.ts,
+                    rotors.ts (turbine blades), weather.ts (looks, live conditions → a look, rain and snow), weathered.ts
+                    (wet and snowy shading on any material), native.ts (assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
 .github/workflows/build.yml   CI: all tests, installers for every platform, Arch package, releases
@@ -121,11 +123,11 @@ Notes from experience:
 
 The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branch (`fix/…`, `feature/…`, `docs/…`) → one logical change with tests and docs → pull request from the template → CI green → **squash merge**. `main` is protected: changes arrive only through pull requests whose checks (`test`, `Linux`, `Windows`, `macOS`) pass on a branch up to date with `main`. No approving review is required (set to 0 on 2026-10-23: the maintainer is the only reviewer). After a squash merge, a pull request stacked on the merged one needs `git rebase --onto origin/main <old base tip>`. `npm run format` formats everything (rustfmt.toml, .prettierrc.json); `npm run check` runs what CI runs. After merging, sync `docs/wiki/` to the wiki repository and tag releases as below.
 
-**The exception now in force — the world update.** `next` is the branch for v0.4; v0.3.5 was cut from the same point (`release/v0.3.5`, merged to `main` as #38), so `next` doesn't need `main` first. The maintainer's rule (2026-10-24): *no merges or pull requests until the whole world update is fully fleshed out, then merge it all in as one.* So all of it is on `feature/satellite-imagery`, one commit per part, with **one** draft pull request (#39, into `next`) whose description covers the whole update. Don't open per-feature pull requests or merge anything into `next` in the meantime. When it is ready: mark #39 ready, squash-merge into `next`, then take `next` to `main` as v0.4 (expect a version-number conflict with v0.3.5's bump; take 0.4.0 everywhere).
+**`next`, the branch for v0.4.** The world update was built on `feature/satellite-imagery` as one piece (the maintainer's rule of 2026-10-24: no merges or pull requests until the whole of it was fleshed out) and squash-merged into `next` as #39. `next` is protected like `main`, so changes reach it through pull requests too. Fixes and releases still go to `main` first, and `main` is merged into `next` afterwards (as for v0.3.6, issue #48), so the two don't drift. When the maintainer says, `next` goes to `main` as v0.4: bump the version to 0.4.0 everywhere in that pull request.
 
 ## 6. Testing
 
-- `cargo test --workspace` — 111 tests: 102 core, 1 relay, 8 app (plus three app tests that need the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
+- `cargo test --workspace` — 113 tests: 104 core, 1 relay, 8 app (plus three app tests that need the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
 - **The smoke harness** is how most visual and end-to-end checking has been done: a debug build that rides (or opens a screen) by itself, saves pictures and the visible text, and quits. All the `VP_SMOKE_*` switches are documented in the wiki's [Building from source](https://github.com/pepperstm/velopopuli/wiki/Building-from-source). The most useful: `VP_SMOKE_AT` (start part-way), `VP_SMOKE_CAM=3` (overhead — good for junctions), `VP_SMOKE_WINDOW=1` (whole window with HUD), `VP_SMOKE_CLIP=6` (frames for a demo clip), `VP_SMOKE_SURFACE`, `VP_SKIP_OVERPASS`, `VP_SMOKE_REPORT`. With `"nativeRenderer": true` in the data folder's `settings.json`, the native renderer's own frame is saved too, as `<name>.native.png` — the only way to see it, since window snapshots capture just the web view.
 - The ride-start diagnostics line `[ride] surfaces … trails … berms … fords … widths …` shows what the map matching decided; a smoke run also prints each berm and ford.
 - Good test routes: Bourg d'Oisans → Alpe d'Huez (town, river, hairpins — route it with BRouter); the Trouée d'Arenberg (OSM track "Drève des Boules d'Hérin", `surface=sett`); Meylan near Grenoble (roundabouts); any city crossing (viaducts). For trails, around Finale Ligure: graded singletrack and switchbacks (berms), Ponte dell'Acqua (OSM way 143650465, a log bridge), Strada Valle del Bosco (way 113195224, a ford over the Rio dell'Ericeto); a hike near Chamonix (grades estimated from `sac_scale`); a field near Chartres (the off-map dirt track). A test route is two files in the data folder: `data/routes.json` and `data/route-<id>.json` (`{name, gpx}`).
@@ -152,7 +154,7 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 6. Native renderer: catch up with the world update — ground imagery (chunk images from `terrain_imagery`, far colours from `terrain_far`), wet roads and lying snow (the same sums as `weathered.ts`), and turning rotors (the rotor list from `ride_structures`, or `Structures::rotors`); then verify the HUD in a real window, measure release-build overhead, then Windows/Linux hosts.
 6a. **Finish and merge the world update** (section 5a), then release v0.4. Before release, feel the wind on a real trainer and check `RIDER_HEIGHT_SHARE` (0.6) feels right.
 7. **Stretch — self-hosted group servers and clubs.** Design agreed in discussion: no central server; identity is a keypair created on the device (no accounts), friends lists stored locally and exchanged by friend codes/QR including the friend's home server address, clubs run their own server (the relay plus a small database: members, invites, scheduled rides, shared routes, leaderboards), optional community server, federation later. Package the relay as a Docker image with `wss://`. Leaderboards can't be cheat-proof (power comes from the rider's device).
-8. More OpenStreetMap detail: other land cover, broadleaf trees, squares, cuttings/embankments for side roads, building parts (`building:part`) for complex outlines. Imagery at night and in snow (today the photo is the same in every light and season; lying snow is shaded over it).
+8. More OpenStreetMap detail: other land cover, mapped leaf types (`leaf_type` needs Overpass; the vector tiles only say "forest"), squares, cuttings/embankments for side roads, building parts (`building:part`) for complex outlines. Imagery at night and in snow (today the photo is the same in every light and season; lying snow is shaded over it).
 
 ## 9. Decisions and the reasons for them
 
@@ -188,7 +190,9 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Weather is the page's except for the wind:** `weather.rs` (core) reads Open-Meteo; `ride_weather` hands its wind to the ride engine (`RideEngine::wind`, scaled by `wind_effect`) and returns the rest for the page to draw (`lookFromConditions`, `weathered.ts` for wet roads and lying snow). The native renderer gets the sky, light, fog and falling rain or snow, not the wet roads or lying snow.
 - **Imagery is drawn by the page only:** the native renderer builds its own chunks and far mesh straight from `World`, so it shows none of it yet (chunk images come from `terrain_imagery`, far colours from `terrain_far`).
 - **Fonts on canvas:** barrier banners are drawn on a canvas in Manrope; `Ride.tsx` waits for `document.fonts.load` before building the world, or the banner falls back to a system font.
-- **The native renderer is fed partly from the page** (`native.ts`: textures, text labels, props baked from the three.js scene, rider poses) and partly from Rust meshes; anything added to the three.js scene that native should also show must be either baked or reimplemented in `native/mod.rs` (barriers, road surfaces and precipitation are reimplemented there).
+- **The native renderer is fed partly from the page** (`native.ts`: textures, text labels, props baked from the three.js scene, rider poses) and partly from Rust meshes; anything added to the three.js scene that native should also show must be either baked or reimplemented in `native/mod.rs` (barriers, road surfaces, precipitation and trees are reimplemented there; the tree sprites' atlas is drawn by the page and handed over as the `trees` texture).
 - **Barriers and the road width:** anything placed beside the route must use `World::half_width(i)` (Rust) or `halfWidthAt()` (page), never a constant.
+- **Trees are 3D near the camera and sprites beyond about 200 m:** a chunk's trees are `[x, y, z, yaw, width, height, kind, shade]`, grouped by kind; each kind is one set of instances drawn twice, as its 3D model (`tree_model`) and as a camera-facing quad (`sprite_frame`) textured from an atlas that the page renders from the models at ride start (`trees.ts`) and hands to the native renderer as the `trees` texture. The vertex shaders split the trees one by one at each tree's own distance (`SPRITES_FROM` ± `SPRITE_SPREAD`/2, from a hash of its position), so the two copies of the rule — `spriteFrom` in `trees.ts` and `sprite_from` in `shader.wgsl` — must stay identical, or trees vanish or double at the switch. Atlas cells are cleared one at a time (`target.scissorTest`): three.js clears the whole target on every render otherwise.
+- **Barrier sections lean with the road:** each is placed by `[x, y, z, yaw, distance, look, pitch]`, tipped about its own x axis first and then turned (`'YXZ'` in three.js, `vs_barrier` in the native shader), so both ends stand on the road and neighbours meet. A new renderer of them must apply the pitch, and in that order.
 - **Berms tilt the riding surface and fords lower it:** anything standing *on* the route's surface (riders) must add `World::bank_at` (Rust) or `bankAt()` (page) — the lift at its offset (negative in a ford), and the roll. The inside edge of a berm is at the centre-line height; the outside is raised. The route's own `ele` is never changed by either, so gradients and physics are unaffected.
 - **Road looks are numbered across three places:** a new look needs its constant in `surface.rs`, its texture in `SURFACES` in `surfaces.ts` (same order), and its name in the native renderer's match in `native/mod.rs`. Today: 0–4 surfaces, 5 lane, 6 timber, 7 singletrack, 8 ford.
