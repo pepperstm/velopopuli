@@ -3,3 +3,7 @@ target
 dist-web
 *.log
 .DS_Store
+
+/website/build/
+
+/website/scripts/__pycache__/

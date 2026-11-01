@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free GPX route planner — VeloPopuli</title>
+<meta name="description" content="Build a real-road GPX ride, for free. Generate loops, choose twistier roads, seek climbs or flatter routes, and find interval stretches in real terrain.">
+<meta name="theme-color" content="#e9ff60"><link rel="canonical" href="https://velopopuli.com/route-planner.html">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNlOWZmNjAiLz48cGF0aCBkPSJNMTAgMTRoMTJsMTAgMjcgMTctMjdoOEwzNiA1MUgyNHoiIGZpbGw9IiMyNDI3MWYiLz48cGF0aCBkPSJNMjkgMTRoMTJsLTYgMTR6IiBmaWxsPSIjMjQyNzFmIi8+PC9zdmc+Cg==" type="image/svg+xml"><style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap');
+:root{--paper:#f7f7ef;--ink:#24271f;--muted:#666b5e;--line:#d9ddcc;--yellow:#e9ff60;--dark:#252d24;--font:'DM Sans',Arial,sans-serif;--heading:'Manrope',Arial,sans-serif}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:32px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;-webkit-font-smoothing:antialiased}button,a{-webkit-tap-highlight-color:transparent}a{color:inherit;text-decoration:none}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #839c00;outline-offset:5px}button{color:inherit}::selection{background:var(--yellow);color:var(--ink)}.wrap{width:min(1320px,calc(100% - 112px));margin:auto}.header{height:100px;display:flex;align-items:center;justify-content:space-between;gap:36px;border-bottom:1px solid var(--line)}.brand{font-family:var(--heading);font-weight:800;letter-spacing:-1.6px;font-size:28px;display:flex;align-items:center}.brand span{font-weight:500}.brand svg{width:34px;height:34px;margin-right:8px}.brand .brand-dot{font-size:10px;align-self:flex-start;letter-spacing:0;margin:3px 0 0 3px}.header nav{display:flex;gap:32px;margin-left:auto;margin-right:30px;font-size:13px;font-weight:550}.header nav a:hover,.text-button:hover{color:#62752a}.header nav span{margin-left:5px}.button{border:1px solid transparent;display:inline-flex;justify-content:center;align-items:center;gap:22px;padding:17px 23px;min-height:54px;font-size:13px;font-weight:650;border-radius:4px;transition:transform .2s,background .2s}.button:hover{transform:translateY(-2px)}.button.small{min-height:43px;padding:12px 19px;font-size:12px}.dark{background:var(--ink);color:#fff}.dark:hover{background:#414e33}.yellow{background:var(--yellow);color:var(--ink)}.yellow:hover{background:#def04f}.button>span:last-child{margin-left:auto;font-size:17px}.hero{display:grid;grid-template-columns:1fr 1fr;gap:45px;padding-top:52px;padding-bottom:55px;align-items:center}.eyebrow{font-size:10px;letter-spacing:1.6px;font-weight:650;margin:0 0 30px;line-height:1.6}.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#70883d;margin:0 9px 1px 0}.hero h1{font-family:var(--heading);font-size:clamp(60px,6.1vw,94px);letter-spacing:-6px;font-weight:650;line-height:1.04;margin:0 0 28px}.ride-word{position:relative;white-space:nowrap}.ride-word svg{position:absolute;bottom:-9px;left:0;width:100%;height:18px;overflow:visible}.ride-word svg path{stroke:#a2ba3e;stroke-width:7;fill:none}.hero-description{font-size:19px;line-height:1.5;font-weight:500;margin:0 0 12px;max-width:370px}.muted{color:var(--muted)}.hero-detail{max-width:390px;line-height:1.7;font-size:14px;margin:0}.hero-actions{display:flex;align-items:center;gap:23px;margin-top:30px}.hero-actions .button{gap:14px}.text-button{border:0;background:none;padding:0;font-size:12px;font-weight:600;line-height:1.6}.hero-notes{display:flex;flex-wrap:wrap;gap:19px;margin-top:16px;font-size:10px;color:var(--muted)}.hero-notes span+span{border-left:1px solid #c5cabb;padding-left:19px}.ride-preview{position:relative;aspect-ratio:16/10;min-height:0;height:auto;max-height:none;border-radius:6px;overflow:hidden;background:#11160f;isolation:isolate}.landscape{position:absolute;width:100%;height:100%;inset:0;object-fit:cover;transition:filter .7s}.ride-preview.night .landscape{filter:brightness(.54) hue-rotate(40deg) saturate(.7)}.scene-top{position:absolute;z-index:1;display:flex;justify-content:space-between;left:23px;right:23px;top:23px;font-size:8px;font-weight:650;letter-spacing:1.1px;color:#36453c}.scene-top span:first-child{display:flex;align-items:center;gap:6px}.scene-top i{width:5px;height:5px;border-radius:50%;background:#4b664c}.scene-top span:last-child{font-size:6px;padding-top:1px}.route-tag{position:absolute;left:22px;right:22px;bottom:65px;background:#f7f7efe8;backdrop-filter:blur(10px);padding:18px 17px;display:flex;align-items:center;gap:14px;border:1px solid #f8ffe6;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:1px}.route-tag small{display:block;font-size:13px;font-weight:400;letter-spacing:0;margin-top:4px}.route-tag>span:last-child{margin-left:auto;font-size:23px;font-weight:400}.route-line{width:30px;height:30px;display:block;position:relative}.route-line:before{content:'';position:absolute;inset:2px 7px;border:2px solid #687d4d;border-radius:50% 0 50% 50%;transform:rotate(30deg)}.scene-bottom{position:absolute;bottom:19px;left:23px;right:23px;display:flex;justify-content:space-between;align-items:center;font-size:8px;letter-spacing:1.2px;color:#f6f7e8}.scene-bottom button{width:28px;height:28px;background:#f6f7e82b;color:#fff;border:1px solid #f6f7e85c;border-radius:50%;font-size:17px}.ticker{background:var(--yellow);border-top:1px solid #dae874;border-bottom:1px solid #dae874}.ticker>.wrap{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:64px;font-size:11px;font-weight:650;letter-spacing:1.5px}.ticker-divider{width:1px;height:18px;background:#858b4e;opacity:.65;flex:none}.section{padding-top:98px;padding-bottom:98px}h2{font-family:var(--heading);font-size:clamp(34px,3.6vw,52px);letter-spacing:-2.4px;font-weight:600;line-height:1.15;margin:0 0 24px}.section-intro{font-size:15px;color:var(--muted);line-height:1.8;max-width:400px}.performance{display:grid;grid-template-columns:1.08fr 1fr;gap:85px}.performance .eyebrow{margin-bottom:23px}.inline-link{display:inline-flex;align-items:center;gap:30px;font-size:12px;font-weight:650;border-bottom:1px solid #aab69b;padding-bottom:7px;margin-top:18px}.inline-link:hover{border-color:var(--ink)}.specs{border-top:1px solid #abb49c}.spec{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);gap:23px;padding:19px 0}.spec strong{font-family:var(--heading);font-size:67px;letter-spacing:-4px;font-weight:500;white-space:nowrap}.spec strong span{font-size:20px;letter-spacing:-.8px;margin-left:7px}.spec>div{width:170px}.spec b{font-size:12px;font-weight:650}.spec p{font-size:11px;color:var(--muted);line-height:1.5;margin:6px 0}.spec-foot{display:flex;gap:14px;align-items:center;padding-top:18px}.spec-foot p{font-size:12px;color:var(--muted);line-height:1.7;max-width:340px;margin:0}.rust-mark{font-size:31px}.measurement{font-size:9px;color:var(--muted);margin-top:15px;line-height:1.6}.features{background:#eef0e5;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.section-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;margin-bottom:46px}.section-heading .section-intro{max-width:330px;margin-bottom:28px}.section-heading .eyebrow{margin-bottom:20px}.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:30px}.feature-art{height:210px;border-radius:3px;position:relative;overflow:hidden;margin-bottom:27px}.feature-art>span:last-child{position:absolute;bottom:15px;left:17px;font-size:8px;letter-spacing:1.3px}.map-art{background:#d4dcc0}.map-art svg{position:absolute;width:100%;height:100%;inset:0}.contour{position:absolute;border:1px solid #afbc98;width:400px;height:200px;border-radius:50%;transform:rotate(-37deg);top:-70px;left:-100px}.c2{width:380px;height:150px;top:-40px;left:-70px}.c3{width:500px;height:280px;top:-100px;left:-140px}.trainer-art{background:#e2e4d6}.connection{display:flex;align-items:center;gap:6px;font-size:8px;letter-spacing:1px;position:absolute;top:17px;left:17px}.connection i{background:#7c9245;width:5px;height:5px;border-radius:50%}.trainer-mode{position:absolute;top:45px;left:17px;display:flex;border:1px solid #bbc3aa;border-radius:3px;font-size:8px;overflow:hidden}.trainer-mode span{padding:5px 9px}.trainer-mode span:first-child{background:#303f31;color:#fff}.trainer-art svg{position:absolute;inset:45px 0 0;width:100%;height:130px}.progress-art{background:#dedfc7;display:flex;align-items:center;padding:28px;gap:18px}.badge{width:77px;flex-shrink:0}.badge svg{width:100%}.progress-art>div>small{font-size:6px;letter-spacing:.6px;font-weight:650}.progress-art b{display:block;font-family:var(--heading);font-size:16px;line-height:1.3;margin:7px 0 14px;letter-spacing:-.5px}.xp-bar{height:3px;background:#bdc4a3}.xp-bar span{display:block;width:67%;background:#596f39;height:100%}.badge-label{font-size:6px;letter-spacing:1px;display:block;margin-top:7px}.feature-number{font-size:9px;color:#6b745c;letter-spacing:1.2px}.feature-grid h3{font-family:var(--heading);font-size:21px;letter-spacing:-.7px;line-height:1.3;font-weight:650;margin:13px 0}.feature-grid p{font-size:13px;line-height:1.8;color:var(--muted);margin:0;min-height:164px}.feature-grid .inline-link{font-size:11px}.compatibility{border-top:1px solid #cbd2bd;border-bottom:1px solid #cbd2bd;margin-top:60px;scroll-margin-top:25px}.compatibility summary{cursor:pointer;padding:25px 0;font-size:14px;list-style:none;display:flex;justify-content:space-between;font-weight:550;gap:20px}.compatibility summary::-webkit-details-marker{display:none}.compatibility summary span{font-size:20px;line-height:1}.compatibility[open] summary span{transform:rotate(45deg)}.compatibility>div{max-width:750px;padding-bottom:25px;font-size:13px;color:var(--muted);line-height:1.8}.philosophy{background:var(--dark);color:#f6f7e9}.philosophy-top{display:flex;align-items:flex-start;justify-content:space-between}.philosophy .eyebrow{color:#c2c9b2}.license-chip{border:1px solid #65715b;padding:8px 11px;border-radius:3px;font-size:8px;letter-spacing:1px}.philosophy-heading{display:grid;grid-template-columns:1.15fr 1fr;gap:80px;align-items:center}.philosophy h2{font-size:clamp(45px,5vw,72px);letter-spacing:-3.8px;line-height:1.1}.philosophy h2 em{font-style:normal;color:var(--yellow)}.philosophy .section-intro{color:#c3cbb9;font-size:17px;margin-bottom:28px;max-width:370px}.principles{display:grid;grid-template-columns:repeat(3,1fr);gap:50px;border-top:1px solid #53604a;padding-top:35px;margin-top:40px}.principles article>span{font-size:10px;color:var(--yellow);letter-spacing:1px}.principles h3{font-size:16px;font-weight:500;margin:14px 0 10px}.principles p{font-size:12px;line-height:1.8;color:#bac3b1;max-width:300px}.download-section{text-align:center}.download-section .eyebrow{margin-bottom:20px}.download-section h2{font-size:clamp(43px,5vw,66px);letter-spacing:-3.4px;margin-bottom:20px}.download-section h2>span{color:#7c8d50}.download-section .section-intro{margin:0 auto 37px}.platforms{display:flex;gap:14px;max-width:830px;margin:auto;justify-content:center}.platform{flex:1;border:1px solid #c5cdb9;background:transparent;border-radius:4px;display:flex;text-align:left;align-items:center;padding:20px;gap:14px;transition:background .2s,transform .2s}.platform:hover{background:var(--yellow);transform:translateY(-3px)}.platform-icon{font-size:29px}.platform small{font-size:8px;letter-spacing:1px;display:block}.platform b{font-size:18px;display:block;margin-top:3px;font-weight:550}.platform>span:last-child{margin-left:auto;font-size:22px}.download-note{font-size:10px;color:var(--muted);margin-top:20px}.contribute{margin-top:80px;background:var(--yellow);border-radius:4px;padding:35px 32px;display:flex;align-items:center;gap:25px;text-align:left}.contribute-symbol{font-size:40px;font-weight:400;letter-spacing:-4px;flex-shrink:0}.contribute h3{font-family:var(--heading);font-size:22px;letter-spacing:-.7px;font-weight:650;margin:0 0 8px}.contribute p{font-size:12px;line-height:1.7;max-width:510px;margin:0}.contribute .button{margin-left:auto;flex-shrink:0;gap:23px}.footer{border-top:1px solid var(--line);padding-top:33px;padding-bottom:25px;display:flex;align-items:center;flex-wrap:wrap;gap:25px}.footer .brand{font-size:24px}.footer>p{font-size:11px;color:var(--muted);margin:0}.footer>div{margin-left:auto;display:flex;gap:25px;align-items:center;font-size:11px}.footer .text-button{font-size:11px}.footer>p.attribution{font-size:8px;flex-basis:100%;line-height:1.7;color:#777e6d}dialog{width:min(500px,calc(100% - 40px));padding:40px;border:1px solid #c3ccb4;border-radius:6px;background:var(--paper);color:var(--ink)}dialog::backdrop{background:#17231990;backdrop-filter:blur(4px)}dialog h2{font-size:34px;letter-spacing:-1.5px}dialog p{font-size:14px;line-height:1.7}.dialog-close{position:absolute;right:15px;top:10px;border:0;background:none;font-size:28px}.dialog-note{color:var(--muted);font-size:12px!important}.dialog-done{margin-top:14px}.skip{position:fixed;top:-100px;left:20px;background:var(--yellow);z-index:5;padding:15px}.skip:focus{top:15px}
+@media(min-width:1500px){.hero{gap:65px}.hero h1{font-size:97px}.hero-description{max-width:410px}.ride-preview{min-height:600px}.hero-detail{max-width:420px}.hero-actions{gap:30px}}
+@media(max-width:1100px){.wrap{width:calc(100% - 64px)}.header nav{gap:20px;margin-right:0}.hero{gap:30px}.hero h1{font-size:68px;letter-spacing:-4.5px}.hero-description{font-size:17px}.hero-actions{gap:14px;flex-wrap:wrap}.hero-actions .button{padding:15px}.ride-preview{min-height:0}.hero-notes{font-size:9px;gap:10px}.hero-notes span+span{padding-left:10px}.performance{gap:40px}.spec strong{font-size:52px}.spec strong span{font-size:16px}.spec>div{width:140px}.feature-grid{gap:20px}.feature-grid h3{font-size:18px}.feature-grid p{font-size:12px;min-height:180px}.progress-art{gap:10px;padding:17px}.badge{width:60px}.progress-art b{font-size:14px}.contribute{gap:20px;padding:28px}.contribute-symbol{display:none}.contribute p{max-width:450px}.ticker>.wrap{font-size:9px;gap:15px}.philosophy-heading{gap:40px}}
+@media(max-width:760px){.wrap{width:calc(100% - 40px)}.header{height:79px;gap:15px}.brand{font-size:25px}.brand svg{width:29px;height:29px}.header nav{display:none}.header .small{font-size:10px;padding:10px 12px;gap:10px;min-height:39px}.hero{grid-template-columns:1fr;gap:35px;padding-top:43px;padding-bottom:32px}.hero h1{font-size:clamp(58px,12vw,82px);letter-spacing:-4.5px}.eyebrow{font-size:9px;letter-spacing:1.2px;margin-bottom:25px}.hero-description{font-size:19px;max-width:350px}.hero-detail{font-size:14px;max-width:440px}.hero-actions{gap:25px;margin-top:25px}.hero-actions .button{padding:16px 20px}.hero-notes{font-size:9px;margin-top:16px}.ride-preview{min-height:0;height:auto;aspect-ratio:16/10;max-height:none}.landscape{height:100%;width:100%}.scene-top{top:19px;left:19px;right:19px}.route-tag{left:18px;right:18px;bottom:61px}.scene-bottom{left:19px;right:19px}.ticker>.wrap{justify-content:space-between;gap:10px;min-height:55px;flex-wrap:wrap;font-size:8px;letter-spacing:1px}.ticker>.wrap{justify-content:center;gap:12px}.ticker-divider{display:none}.section{padding-top:62px;padding-bottom:62px}h2{font-size:36px;letter-spacing:-1.8px}.performance{grid-template-columns:1fr;gap:40px}.section-intro{font-size:14px}.spec strong{font-size:64px}.spec>div{width:170px}.spec{padding:17px 0}.section-heading{display:block;margin-bottom:31px}.section-heading h2{margin-bottom:20px}.section-heading .section-intro{max-width:400px;margin-bottom:0}.feature-grid{grid-template-columns:1fr;gap:40px}.feature-art{height:235px;margin-bottom:22px}.feature-grid h3{font-size:22px}.feature-grid p{font-size:14px;min-height:0}.feature-grid .inline-link{font-size:12px}.progress-art{padding:40px;gap:25px}.badge{width:95px}.progress-art b{font-size:24px}.progress-art>div>small{font-size:8px}.badge-label{font-size:8px}.feature-art>span:last-child{font-size:9px}.trainer-art svg{height:170px;top:36px}.connection{font-size:10px}.trainer-mode{font-size:9px;top:50px}.compatibility{margin-top:40px}.compatibility summary{font-size:13px}.philosophy-heading{grid-template-columns:1fr;gap:13px}.philosophy h2{font-size:50px;letter-spacing:-2.8px}.philosophy .section-intro{font-size:16px;max-width:400px}.license-chip{font-size:7px}.philosophy-top .eyebrow{font-size:8px}.principles{grid-template-columns:1fr;gap:20px;margin-top:40px;padding-top:28px}.principles p{max-width:100%;font-size:13px}.principles h3{font-size:18px}.download-section h2{font-size:49px;letter-spacing:-2.6px}.platforms{flex-direction:column;max-width:400px;gap:10px}.platform{padding:17px 22px;gap:20px}.platform b{font-size:18px}.contribute{display:block;padding:28px;margin-top:48px}.contribute h3{font-size:23px}.contribute p{font-size:13px}.contribute .button{margin-top:23px}.footer{gap:17px;padding-top:27px}.footer>.brand{flex-basis:100%}.footer>p{font-size:10px}.footer>div{gap:17px;margin-left:0;flex-basis:100%;padding-top:8px}.footer>p.attribution{margin-top:5px}dialog{padding:32px 25px}.dialog-close{right:12px}dialog h2{font-size:29px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
+
+.architecture-row{border-bottom:1px solid var(--line);padding:23px 0 25px}.architecture-label{display:block;font-size:9px;letter-spacing:1.4px;color:var(--muted);font-weight:600}.architecture-row strong{display:block;font-family:var(--heading);font-size:clamp(30px,3.5vw,50px);line-height:1.12;font-weight:550;letter-spacing:-2px;margin:14px 0 11px}.architecture-row:first-child strong{font-size:clamp(58px,6vw,82px);letter-spacing:-4px}.architecture-row p{font-size:13px;line-height:1.7;color:var(--muted);margin:0}
+
+.community-build{background:var(--yellow);border-top:1px solid #d7e960;border-bottom:1px solid #d7e960}.community-build .eyebrow{margin-bottom:32px}.community-build-heading{display:grid;grid-template-columns:1.15fr 1fr;gap:70px;align-items:start}.community-build h2{font-size:clamp(46px,5.1vw,74px);line-height:1.08;letter-spacing:-3.8px;margin-bottom:22px}.community-promise{font-size:15px;font-weight:550;letter-spacing:-.2px;margin:0}.community-invitation .community-lead{font-size:23px;line-height:1.45;font-weight:550;letter-spacing:-.5px;color:var(--ink);margin:0 0 15px}.community-invitation>p{font-size:15px;line-height:1.8;color:#46502d;max-width:485px;margin:0 0 25px}.community-invitation .button{min-width:230px}.contribution-paths{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:45px;border-top:1px solid #aabc50;margin-top:55px;padding-top:32px}.contribution-paths .feature-number{color:#4f5e2f;font-size:9px}.contribution-paths h3{font-family:var(--heading);font-weight:650;font-size:20px;letter-spacing:-.6px;line-height:1.35;margin:13px 0 10px}.contribution-paths p{font-size:13px;line-height:1.8;color:#46502d;margin:0;max-width:345px}.community-welcome{font-size:12px;line-height:1.7;border-top:1px solid #aabc50;padding-top:23px;margin:33px 0 0;font-weight:500}
+@media(max-width:1100px){.community-build-heading{gap:40px}.community-build h2{font-size:55px;letter-spacing:-2.8px}.community-invitation .community-lead{font-size:20px}.contribution-paths{gap:28px}.contribution-paths h3{font-size:18px}}
+@media(max-width:760px){.community-build-heading{grid-template-columns:1fr;gap:28px}.community-build h2{font-size:clamp(42px,10.5vw,64px);letter-spacing:-2.5px}.community-build .eyebrow{margin-bottom:25px}.community-promise{font-size:14px}.community-invitation .community-lead{font-size:21px}.community-invitation>p{font-size:14px;max-width:none}.community-invitation .button{width:100%;min-width:0}.contribution-paths{grid-template-columns:1fr;gap:27px;margin-top:38px;padding-top:29px}.contribution-paths h3{font-size:21px}.contribution-paths p{font-size:14px;max-width:none}.community-welcome{font-size:12px;line-height:1.8;margin-top:29px}}
+
+.release-status{max-width:650px;margin:20px auto 28px;font-size:13px;line-height:1.8;color:var(--muted)}.release-status a{text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
+
+.route-teaser{display:flex;justify-content:space-between;align-items:center;gap:40px;background:#eef1df;border:1px solid var(--line);border-radius:6px;padding:32px 36px;margin-top:38px;margin-bottom:50px}.route-teaser .eyebrow{font-size:9px;margin-bottom:12px}.route-teaser h2{font-size:30px;letter-spacing:-1px;margin:0 0 10px}.route-teaser p:not(.eyebrow){font-size:13px;line-height:1.8;max-width:640px;margin:0}.route-teaser .button{flex-shrink:0;white-space:nowrap}@media(max-width:760px){.route-teaser{display:block;padding:27px 25px;margin-bottom:35px}.route-teaser h2{font-size:27px}.route-teaser .button{margin-top:22px;width:100%}}
+
+.app-tour{background:#151a13;color:#f2f3e8;border-top:1px solid #374130;border-bottom:1px solid #374130;scroll-margin-top:20px}.app-tour-heading{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:end;margin-bottom:38px}.app-tour-heading .eyebrow{color:#b9c69a}.app-tour-heading h2{font-size:clamp(44px,5vw,68px);letter-spacing:-3.5px;line-height:1.02;margin:0}.app-tour-heading h2 em{font-style:normal;color:var(--yellow)}.app-tour-heading .section-intro{color:#c4cbb9;font-size:16px;max-width:470px;margin:0 0 13px}.app-tour-note{font:10px/1.6 ui-monospace,monospace;letter-spacing:.05em;color:#9ca78e}.app-tour-feature{display:grid;grid-template-columns:1.55fr .75fr;gap:34px;align-items:center;margin-bottom:27px}.app-tour-main-media{position:relative;margin:0;overflow:hidden;border:1px solid #59654a;border-radius:5px;background:#090c08}.app-tour-main-media video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}.app-tour-main-media figcaption{position:absolute;left:14px;bottom:14px;padding:8px 10px;background:#10150edc;color:var(--yellow);font:700 9px ui-monospace,monospace;letter-spacing:.12em}.app-tour-feature-copy{padding:15px 10px}.app-tour-feature-copy .eyebrow{color:#b9c69a;font-size:9px}.app-tour-feature-copy h3{font-family:var(--heading);font-size:clamp(26px,3vw,38px);line-height:1.12;letter-spacing:-1.6px;margin:17px 0 13px}.app-tour-feature-copy>p:not(.eyebrow){color:#bec6b2;line-height:1.8;font-size:13px;max-width:310px}.app-tour-feature-copy .inline-link{color:var(--yellow);border-color:#687750}.app-tour-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.app-tour-card{margin:0;overflow:hidden;background:#1c221a;border:1px solid #374130;border-radius:4px}.app-tour-card img,.app-tour-card video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#080a07}.app-tour-card figcaption{padding:13px 14px 15px;display:grid;gap:5px}.app-tour-card figcaption span{font:700 8px ui-monospace,monospace;letter-spacing:.12em;color:#b9c69a}.app-tour-card figcaption strong{font-size:13px;letter-spacing:-.2px;font-weight:550}.app-tour-credit{font-size:9px;color:#9ca78e;margin:18px 0 0;text-align:right}
+@media(max-width:1100px){.app-tour-heading{gap:35px}.app-tour-feature{gap:25px}.app-tour-grid{gap:12px}}
+@media(max-width:760px){.app-tour-heading{grid-template-columns:1fr;gap:18px;margin-bottom:25px}.app-tour-heading h2{font-size:clamp(42px,10vw,60px);letter-spacing:-2.7px}.app-tour-heading .section-intro{font-size:14px}.app-tour-feature{grid-template-columns:1fr;gap:12px;margin-bottom:19px}.app-tour-feature-copy{padding:12px 2px 16px}.app-tour-feature-copy h3{font-size:30px;margin:10px 0}.app-tour-feature-copy>p:not(.eyebrow){font-size:14px}.app-tour-grid{grid-template-columns:1fr;gap:13px}.app-tour-card figcaption{padding:13px 14px 16px}.app-tour-card figcaption strong{font-size:15px}.app-tour-credit{text-align:left;line-height:1.6}}
+
+</style><style>
+.planner-intro{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:60px;padding:48px 0 40px}.planner-intro .eyebrow{margin-bottom:17px}.planner-intro h1{font-family:var(--heading);font-size:clamp(48px,5.3vw,78px);line-height:1.04;font-weight:600;letter-spacing:-4px;margin:0}.planner-intro h1 em{font-style:normal;color:#7c8f4d}.planner-intro>div>p:not(.eyebrow){font-size:17px;line-height:1.7;max-width:470px;margin:0 0 18px}.planner-pill{display:inline-block;background:var(--yellow);font-size:11px;font-weight:600;padding:9px 12px;border-radius:3px}.planner-shell{display:grid;grid-template-columns:320px minmax(0,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fffef8;align-items:start}.planner-controls{padding:26px 24px;border-right:1px solid var(--line);background:#fafaf3}.planner-controls fieldset{border:0;border-bottom:1px solid var(--line);padding:0 0 23px;margin:0 0 24px;min-width:0}.planner-controls legend{font-family:var(--heading);font-size:15px;font-weight:700;letter-spacing:-.3px;padding:0;margin-bottom:19px;float:left;width:100%}.planner-controls legend span{font-family:var(--font);font-size:9px;letter-spacing:1px;color:var(--muted);margin-right:9px}.planner-controls label,.export-panel label{display:block;font-size:11px;font-weight:600;line-height:1.5;margin-bottom:12px}.planner-controls input:not([type=checkbox]):not([type=range]):not([type=file]),.planner-controls select,.export-panel input{display:block;width:100%;min-width:0;height:41px;margin-top:6px;padding:9px 10px;background:#fffef8;border:1px solid #d2d7c7;border-radius:4px;font:400 12px var(--font);color:var(--ink)}.planner-controls input:focus,.planner-controls select:focus,.export-panel input:focus{outline:2px solid #879f44;outline-offset:1px}.planner-controls input:disabled,.planner-controls select:disabled{opacity:.5}.control-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.distance-row{grid-template-columns:1fr 78px}.search-row{display:flex;margin-bottom:12px}.search-row input{margin-top:0!important;border-radius:4px 0 0 4px!important}.search-row button{border:0;border-radius:0 4px 4px 0;background:var(--ink);color:var(--yellow);font-size:26px;width:45px;flex-shrink:0}.search-results:empty{display:none}.search-results{border:1px solid var(--line);border-radius:4px;margin-bottom:14px;overflow:hidden}.search-results button{display:block;width:100%;padding:10px 12px;border:0;border-bottom:1px solid var(--line);font-size:11px;line-height:1.6;background:#fff;text-align:left}.search-results button:hover{background:#f0f5dc}.search-results p{font-size:12px;padding:10px;margin:0}.waypoint-list{list-style:none;padding:0;margin:9px 0 13px}.waypoint-list li{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:11px;min-width:0}.waypoint-list .point-index{background:var(--ink);color:var(--yellow);border-radius:50%;width:21px;height:21px;display:grid;place-items:center;flex-shrink:0;font-size:9px}.waypoint-list .point-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.waypoint-list button{background:none;border:1px solid var(--line);border-radius:3px;font-size:11px;padding:3px 6px}.waypoint-list .point-remove{border:0;font-size:17px}.field-help{font-size:10px;line-height:1.75;color:var(--muted);margin:10px 0 0}.planner-controls details>summary{font-size:11px;cursor:pointer;line-height:1.6}.planner-controls details[open]>summary{margin-bottom:14px}.coordinate-entry{margin-top:15px}.subtle{font-weight:400;font-size:9px;color:var(--muted)}#distance-range{width:100%;accent-color:#6e8541;margin:0 0 20px;height:15px}.advanced-settings{margin-top:16px}.planner-controls .check-label{display:flex;align-items:center;gap:9px;font-size:12px;margin-bottom:0;cursor:pointer}.check-label input{accent-color:#4b6535;width:17px;height:17px;margin:0}.planner-controls .interval-toggle{font-size:13px}#interval-fields{margin-top:18px}.generate-button{width:100%}.generate-button:disabled{opacity:.6;cursor:wait;transform:none}.minor-button{border:0;background:transparent;text-decoration:underline;text-underline-offset:3px;font-size:11px;padding:8px 0;color:var(--muted)}.planner-status{font-size:11px;line-height:1.7;color:var(--muted);margin:14px 0}.planner-status.error{color:#9b3930}.planner-status.loading:before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:#7c8f4d;margin-right:7px;animation:pulse 1.1s infinite}.import-row{border-top:1px solid var(--line);padding-top:16px}.import-row label{font-size:10px;color:var(--muted);font-weight:400;line-height:1.8}.import-row label span{text-decoration:underline;color:var(--ink);font-weight:600}.import-row input{font-size:10px;max-width:100%}.planner-workspace{min-width:0}.map-panel{position:relative;border-bottom:1px solid var(--line)}#route-map{height:505px;background:#e6ebdc;z-index:0}.map-toolbar{background:#fffef8;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;gap:10px;border-bottom:1px solid var(--line);font-size:10px}.map-toolbar label{display:flex;gap:9px;align-items:center;font-weight:600}.map-toolbar select{font:400 11px var(--font);padding:7px;border:1px solid var(--line);background:#fffef8;border-radius:3px;color:var(--ink)}.map-toolbar button{font-size:10px;background:transparent;border:1px solid var(--line);padding:8px 10px;border-radius:3px;margin-left:5px}.map-caption{padding:11px 17px;display:flex;justify-content:space-between;gap:14px;font-size:8px;letter-spacing:1px}.map-caption a{font-size:9px;letter-spacing:0;color:var(--muted)}.route-marker{background:#252d24!important;border:3px solid #e9ff60!important;border-radius:50%;color:white;font:bold 12px Arial;display:grid;place-items:center;box-shadow:0 2px 5px #0003}.leaflet-container{font-family:var(--font)!important}.leaflet-control-attribution{font-size:10px!important}.leaflet-tooltip{font-size:11px}.empty-route{display:flex;gap:25px;padding:40px 30px;align-items:center}.empty-icon{font-size:56px;color:#7c8f4d}.empty-route h2{font-size:25px;letter-spacing:-.8px;margin:0 0 10px}.empty-route p{font-size:13px;line-height:1.8;max-width:450px;color:var(--muted);margin:0}.route-result{padding:30px}.result-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.result-heading .eyebrow{font-size:8px;letter-spacing:1.3px;margin-bottom:12px}.result-heading h2{font-size:29px;letter-spacing:-1px;margin:0}.source-tag{font-size:8px;padding:7px 9px;border:1px solid var(--line);border-radius:3px;white-space:nowrap}.route-alternatives{display:flex;gap:8px;margin-top:23px;flex-wrap:wrap}.route-alternatives button{background:transparent;border:1px solid var(--line);border-radius:4px;padding:10px 12px;text-align:left;font-size:10px;flex:1;min-width:110px}.route-alternatives button[aria-pressed=true]{background:var(--yellow);border-color:#b3c74e}.route-alternatives strong{display:block;margin-bottom:5px;font-size:11px}.route-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:22px 16px;padding:27px 0;border-bottom:1px solid var(--line)}.route-stats small{font-size:9px;letter-spacing:.3px;color:var(--muted);display:block;margin-bottom:7px}.route-stats strong{font-size:25px;font-family:var(--heading);letter-spacing:-.9px;font-weight:650}.route-stats strong span{font-family:var(--font);font-size:11px;letter-spacing:0;margin-left:4px;font-weight:400}.elevation-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:23px 0 12px}.elevation-heading h3{font-size:14px;letter-spacing:-.2px;margin:0;font-weight:650}.elevation-heading>span{font-size:9px;color:var(--muted)}.elevation-chart{background:#f2f4e9;border:1px solid #e3e8d7;border-radius:4px;padding:10px;min-height:110px}.elevation-chart svg{display:block;width:100%;height:auto;min-height:120px}.elevation-chart p{font-size:12px;padding:25px 10px;line-height:1.8;margin:0}.route-match{font-size:11px;line-height:1.8;color:var(--muted);margin:14px 0 23px}.interval-result{border-top:1px solid var(--line);padding-bottom:22px}.interval-result>p:not(.field-help){font-size:11px;line-height:1.8}.effort-key{color:#b16b38!important}.effort-list{padding:0;list-style:none;margin:15px 0}.effort-list li{display:flex;align-items:center;gap:12px;border-top:1px solid var(--line);padding:10px 0;font-size:11px}.effort-list button{border:0;background:#f0e3d5;border-radius:4px;min-width:32px;height:29px;font-weight:650;font-size:11px}.effort-list small{margin-left:auto;color:var(--muted);font-size:10px}.export-panel{border-top:1px solid var(--line);padding-top:23px;display:flex;align-items:end;justify-content:space-between;gap:20px}.export-panel label{flex:1;margin:0}.export-panel input{font-size:12px}.export-panel .button{white-space:nowrap;margin-bottom:0}.export-panel [aria-disabled=true]{opacity:.5;pointer-events:none}.import-tip{font-size:10px;line-height:1.8;color:var(--muted);margin:12px 0 0}.planner-footnote{display:grid;grid-template-columns:1fr 1fr;gap:90px;padding:65px 0}.planner-footnote h2{font-size:40px;letter-spacing:-1.8px;margin:0 0 18px}.planner-footnote h3{font-size:16px;margin:0 0 16px}.planner-footnote p{font-size:12px;color:var(--muted);line-height:1.9;max-width:490px}.planner-footnote .text-button{font-size:12px}.planner-footnote summary{font-size:12px;cursor:pointer}.planner-footnote details a{text-decoration:underline;text-underline-offset:3px}.planner-page [hidden]{display:none!important}.planner-page .footer{margin-bottom:20px}.planner-error-banner{background:#fff2eb;color:#923f27;font-size:12px;line-height:1.7;padding:20px}.route-teaser{display:flex;justify-content:space-between;align-items:center;gap:40px;background:#eef1df;border:1px solid var(--line);border-radius:6px;padding:32px 36px;margin-top:38px;margin-bottom:50px}.route-teaser .eyebrow{font-size:9px;margin-bottom:12px}.route-teaser h2{font-size:30px;letter-spacing:-1px;margin:0 0 10px}.route-teaser p:not(.eyebrow){font-size:13px;line-height:1.8;max-width:640px;margin:0}.route-teaser .button{flex-shrink:0;white-space:nowrap}@keyframes pulse{50%{opacity:.3}}
+@media(min-width:1500px){.planner-page .wrap{width:min(1440px,calc(100% - 112px))}.planner-shell{grid-template-columns:350px minmax(0,1fr)}#route-map{height:570px}}
+@media(max-width:1050px){.planner-page .wrap{width:calc(100% - 48px)}.planner-shell{grid-template-columns:285px minmax(0,1fr)}.planner-controls{padding:23px 18px}.result-heading{display:block}.source-tag{display:inline-block;margin-top:14px}.route-result{padding:24px}.map-toolbar{padding:10px}.map-toolbar button{padding:7px}.map-caption{letter-spacing:.4px;padding:10px;font-size:7px}.map-caption a{font-size:8px}.export-panel{flex-wrap:wrap}.export-panel label{flex-basis:100%}.export-panel .button{width:100%}.planner-intro{gap:32px}.planner-intro>div>p:not(.eyebrow){font-size:15px}.planner-footnote{gap:45px}.route-stats strong{font-size:22px}}
+@media(max-width:760px){.planner-page .wrap{width:calc(100% - 32px)}.planner-intro{grid-template-columns:1fr;gap:23px;padding:35px 0 29px}.planner-intro h1{font-size:54px;letter-spacing:-3px}.planner-intro>div>p:not(.eyebrow){font-size:14px;max-width:430px}.planner-pill{font-size:10px}.planner-shell{grid-template-columns:1fr}.planner-controls{padding:25px 22px;border-right:0;border-bottom:1px solid var(--line)}.planner-controls fieldset{margin-bottom:23px;padding-bottom:23px}.planner-controls legend{font-size:17px}.planner-controls label{font-size:12px}.planner-controls input:not([type=checkbox]):not([type=range]):not([type=file]),.planner-controls select{font-size:14px;height:44px}.planner-controls .field-help{font-size:11px}.planner-controls .control-row{gap:15px}.planner-controls .search-results button{font-size:12px}.planner-workspace{display:contents}.map-panel{grid-row:1}.planner-controls{grid-row:2}#route-map{height:330px}.map-toolbar{padding:10px;gap:5px}.map-toolbar label{font-size:9px;gap:5px}.map-toolbar select{font-size:10px;max-width:115px}.map-toolbar button{font-size:9px;padding:8px 6px;margin-left:2px}.map-caption{font-size:7px;gap:5px;padding:10px}.map-caption a{font-size:8px}.empty-route,.route-result{grid-row:3;padding:26px 22px}.empty-route{gap:18px}.empty-route h2{font-size:23px}.empty-route p{font-size:12px}.result-heading h2{font-size:28px}.source-tag{font-size:8px}.route-stats{gap:23px 10px}.route-stats small{font-size:8px}.route-stats strong{font-size:23px}.elevation-heading{align-items:start}.elevation-heading h3{font-size:13px}.elevation-heading>span{font-size:8px}.elevation-chart{padding:5px}.effort-list li{flex-wrap:wrap;gap:8px}.effort-list small{font-size:9px}.planner-footnote{grid-template-columns:1fr;gap:32px;padding:42px 0}.planner-footnote h2{font-size:36px}.planner-footnote p{font-size:13px}.route-teaser{display:block;padding:27px 25px;margin-bottom:35px}.route-teaser h2{font-size:27px}.route-teaser .button{margin-top:22px;width:100%}}
+.planner-controls legend{float:none}
+@media(prefers-reduced-motion:reduce){.planner-status.loading:before{animation:none}html{scroll-behavior:auto}}
+
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+</head>
+<body class="planner-page">
+<a class="skip" href="#planner">Skip to route planner</a>
+<header class="header wrap"><a class="brand" href="/" aria-label="VeloPopuli home">velo<span>populi</span></a><nav aria-label="Main navigation"><a href="/#the-ride">The app</a><a href="/#contribute">Help build ↗</a></nav><a class="button small dark" href="/#download">Try an early build <span>↗</span></a></header>
+<main>
+<section class="planner-intro wrap"><div><p class="eyebrow"><span class="status-dot"></span> FREE GPX ROUTE PLANNER</p><h1>Plan your next ride.</h1></div><div><p>Choose a start point and distance, then pick road style, climbing and intervals. The planner finds real roads and exports a GPX for your indoor ride.</p><span class="planner-pill">Free to use. No account needed.</span></div></section>
+<section class="planner-shell wrap" id="planner" aria-label="GPX route generator">
+<aside class="planner-controls">
+<form id="planner-form">
+<fieldset><legend><span>01</span> Where are you starting?</legend>
+<label for="place-search">Search for a place</label><div class="search-row"><input id="place-search" type="search" placeholder="e.g. Oxford or Mont Ventoux" maxlength="180" autocomplete="off"><button type="button" id="search-button" aria-label="Search for a place">⌕</button></div>
+<div id="search-results" class="search-results" aria-live="polite"></div>
+<div class="control-row"><label>Add as<select id="search-role"><option value="start">Start</option><option value="stop">Stop or finish</option></select></label><label>Route shape<select id="shape"><option value="loop">Round trip</option><option value="outback">Out &amp; back</option><option value="point">Point to point</option></select></label></div>
+<ol id="waypoint-list" class="waypoint-list" aria-label="Route points"></ol>
+<p class="field-help">Search for a place, or click the map. Drag a marker to move it; add stops to steer the route.</p>
+<div class="coordinate-entry"><details><summary>Enter map coordinates instead</summary><div class="control-row"><label>Latitude<input id="manual-lat" type="number" min="-85" max="85" step="any" placeholder="51.752"></label><label>Longitude<input id="manual-lon" type="number" min="-180" max="180" step="any" placeholder="-1.258"></label></div><button class="minor-button" type="button" id="add-coordinates">Add this point ↗</button></details></div>
+</fieldset>
+<fieldset><legend><span>02</span> What sort of ride?</legend>
+<div class="control-row distance-row"><label for="distance">Target distance <span class="subtle" id="distance-hint">approximate</span><input id="distance" type="number" min="5" max="160" step="0.1" value="40" required></label><label for="units">Units<select id="units"><option value="km">km</option><option value="mi">miles</option></select></label></div>
+<input id="distance-range" aria-label="Target distance slider" type="range" min="5" max="160" value="40" step="1">
+<label>Road style<select id="style"><option value="road">Road ride · direct</option><option value="twisty">Twistier · more bends</option></select></label>
+<label>Climbing<select id="terrain"><option value="balanced">Balanced</option><option value="climb">More climbing</option><option value="flat">Flatter, please</option></select></label>
+<details class="advanced-settings"><summary>More route options</summary>
+<label>Road surface<select id="surface"><option value="road">Prefer paved roads</option><option value="mixed">Mixed surfaces / gravel friendly</option></select></label>
+<div class="control-row"><label>Direction<select id="direction"><option value="any">Any direction</option><option value="0">North</option><option value="90">East</option><option value="180">South</option><option value="270">West</option></select></label><label>Route planning speed (<span data-speed-unit>km/h</span>)<input id="pace" type="number" min="5" max="60" value="25" step="0.1" required></label></div>
+<label class="check-label"><input id="quiet" type="checkbox" checked> Prefer quieter roads</label>
+<p class="field-help">Roads and surfaces come from OpenStreetMap. Map detail varies by area.</p>
+</details></fieldset>
+<fieldset><legend><span>03</span> Add intervals (optional)</legend>
+<label class="check-label interval-toggle"><input id="intervals" type="checkbox"> Add intervals on real roads</label>
+<div id="interval-fields" hidden>
+<label>Effort terrain<select id="interval-type"><option value="hill">Climbing · 2–10% average</option><option value="flat">Flat · within ±1% average</option><option value="rolling">Any terrain · by distance</option></select></label>
+<div class="control-row"><label>Repeats<input id="repeats" type="number" min="1" max="20" value="6" step="1" required></label><label>Effort (<span data-distance-unit>km</span>)<input id="work" type="number" min="0.2" max="10" value="1" step="0.1" required></label></div>
+<div class="control-row"><label>Recovery (minimum) (<span data-distance-unit>km</span>)<input id="recovery" type="number" min="0.1" max="10" value="0.75" step="0.05" required></label><label>Warm-up (<span data-distance-unit>km</span>)<input id="warmup" type="number" min="0" max="30" value="3" step="0.1" required></label></div>
+<label>Cool-down (minimum) (<span data-distance-unit>km</span>)<input id="cooldown" type="number" min="0" max="30" value="2" step="0.1" required></label>
+<p class="field-help">The planner looks for sections that match your chosen terrain. If the route has no suitable climbs or flat stretches, it may not find every interval.</p>
+</div></fieldset>
+<button type="submit" id="generate" class="button dark generate-button">Plan my route <span>↗</span></button><button type="button" id="cancel" class="minor-button" hidden>Cancel</button>
+<p id="planner-status" class="planner-status" role="status" aria-live="polite">Choose a start point, or try the Oxford route on the map.</p>
+<div class="import-row"><label for="gpx-import">Already have a GPX? <span>Import it ↑</span></label><input type="file" id="gpx-import" accept=".gpx,application/gpx+xml,application/xml,text/xml"></div>
+</form></aside>
+<div class="planner-workspace">
+<div class="map-panel"><div class="map-toolbar"><label>Click the map to<select id="map-mode" aria-label="Map click action"><option value="start">Set start point</option><option value="stop">Add stop or finish</option></select></label><div><button id="undo" type="button" title="Remove the last extra stop">Undo stop</button><button id="fit-map" type="button">Fit route ⤢</button></div></div>
+<div id="route-map" aria-label="Interactive route map"></div><div class="map-caption"><span id="map-state">CLICK THE MAP TO SET YOUR START</span><a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Report a map issue ↗</a></div></div>
+<div id="empty-route" class="empty-route"><span class="empty-icon">↝</span><div><h2>Your route will appear here.</h2><p>Search for a place, set your ride preferences and choose Plan my route. We’ll compare up to three routes and show the closest match.</p></div></div>
+<section id="route-result" class="route-result" hidden aria-label="Your generated route">
+<div class="result-heading"><div><p class="eyebrow">ROUTE OPTIONS</p><h2 id="route-heading">Your route details</h2></div><span id="result-source" class="source-tag">BRouter + OpenStreetMap</span></div>
+<div id="alternatives" class="route-alternatives" aria-label="Compare route options"></div>
+<div id="route-stats" class="route-stats"></div>
+<div class="elevation-heading"><h3>Climbing along the route</h3><span id="elevation-note">Estimated elevation</span></div>
+<div id="elevation-chart" class="elevation-chart"></div>
+<p id="route-match" class="route-match"></p>
+<section id="interval-result" class="interval-result" hidden aria-label="Matched intervals"><div class="elevation-heading"><h3 id="interval-heading">Intervals on this route</h3><span class="effort-key">● Effort</span></div><p id="interval-summary"></p><ol id="effort-list" class="effort-list"></ol><p class="field-help">The GPX marks where each interval starts and ends. It won’t set your power or create an ERG workout; use VeloPopuli workouts for that.</p></section>
+<div class="export-panel"><label for="route-name">Name this route<input id="route-name" maxlength="80" value="My VeloPopuli ride"></label><a id="export-gpx" class="button dark" aria-disabled="true">Download GPX <span>↓</span></a></div>
+<p class="import-tip">In VeloPopuli, open Routes and choose Import GPX to ride it indoors.</p>
+</section>
+</div></section>
+<section class="planner-footnote wrap"><div><h2>Help make route planning better.</h2><p>Found a problem or have an idea? Tell us on GitHub. This planner is part of VeloPopuli, a free project built in the open.</p><a class="text-button" href="https://github.com/pepperstm/velopopuli">Share feedback on GitHub ↗</a></div><div><h3>Before you export</h3><p>Distances, climbs and gradients are estimates based on the roads and elevation data available in your area. Check the map and profile before you export.</p><p>This planner is designed for indoor rides. If you ride the route outside, check local access, road surfaces and conditions first.</p><details><summary>Privacy and map credits</summary><p>Place searches go to Photon, and route requests go to BRouter through this website. We cache routes for up to seven days and refresh them after a day; requests may be briefly rate-limited to keep the service available. Imported GPX files are processed in your browser. Map tiles come from OpenStreetMap. We don’t create an account or save a route history.</p><p><a href="https://github.com/komoot/photon">Photon</a> · <a href="https://brouter.de/">BRouter</a> · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> · <a href="https://leafletjs.com/">Leaflet</a></p></details></div></section>
+</main>
+<footer class="footer wrap"><a class="brand" href="/">velo<span>populi</span></a><p>The people’s indoor ride. Free now and forever.</p><div><a href="/">Back to VeloPopuli ↗</a><a href="https://github.com/pepperstm/velopopuli">GitHub ↗</a></div></footer>
+<noscript><p class="wrap">Please enable JavaScript to use the interactive route planner.</p></noscript>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+/* VeloPopuli route tools. MIT licensed. Geometry is always supplied by the router or an imported GPX. */
+(function (root) {
+  'use strict';
+  const rad = v => v * Math.PI / 180;
+  const deg = v => v * 180 / Math.PI;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function distance(a, b) {
+    const dlat = rad(b[1] - a[1]), dlon = rad(b[0] - a[0]);
+    const h = Math.sin(dlat / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(dlon / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(clamp(h, 0, 1)), Math.sqrt(clamp(1 - h, 0, 1)));
+  }
+  function destination(p, metres, bearing) {
+    const d = metres / 6371000, t = rad(bearing), lat = rad(p[1]), lon = rad(p[0]);
+    const y = Math.asin(Math.sin(lat) * Math.cos(d) + Math.cos(lat) * Math.sin(d) * Math.cos(t));
+    const x = lon + Math.atan2(Math.sin(t) * Math.sin(d) * Math.cos(lat), Math.cos(d) - Math.sin(lat) * Math.sin(y));
+    return [((deg(x) + 540) % 360) - 180, deg(y)];
+  }
+  function validPoint(p) { return Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 85; }
+  function analyse(raw, properties = {}) {
+    if (!Array.isArray(raw) || raw.length < 2 || raw.length > 60000 || raw.some(p => !validPoint(p))) throw new Error('The route has invalid or too many track points.');
+    const coords = raw.map(p => [p[0], p[1], Number.isFinite(p[2]) ? p[2] : null]);
+    const cumulative = [0];
+    for (let i = 1; i < coords.length; i++) cumulative.push(cumulative[i - 1] + distance(coords[i - 1], coords[i]));
+    const length = cumulative.at(-1);
+    if (length < 100) throw new Error('Choose a route at least 100 metres long.');
+    const elevation = coords.every(p => p[2] !== null);
+    const samples = []; let ix = 0;
+    // Sample observed track vertices approximately every 100 m, never invent elevations.
+    for (let d = 0; d <= length; d += 100) {
+      while (ix < coords.length - 1 && cumulative[ix] < d) ix++;
+      if (!samples.length || samples.at(-1).i !== ix) samples.push({i: ix, d: cumulative[ix], ele: coords[ix][2], p: coords[ix]});
+    }
+    if (samples.at(-1).i !== coords.length - 1) {
+      const last={i: coords.length - 1, d: length, ele: coords.at(-1)[2], p: coords.at(-1)};
+      if(samples.at(-1).d===length)samples[samples.length-1]=last;else samples.push(last);
+    }
+    let ascent = 0, descent = 0, gradeMax = 0, turns = 0;
+    // A 3 m hysteresis avoids counting every tiny height fluctuation as climbing.
+    if (elevation) {
+      let anchor = samples[0].ele;
+      for (const s of samples.slice(1)) {
+        const change = s.ele - anchor;
+        if (Math.abs(change) >= 3) { if (change > 0) ascent += change; else descent -= change; anchor = s.ele; }
+      }
+      const remainder = samples.at(-1).ele - anchor;
+      if (remainder > 0) ascent += remainder; else descent -= remainder;
+      for (let i = 1; i < samples.length; i++) {
+        const d = samples[i].d - samples[i - 1].d;
+        if (d >= 50) gradeMax = Math.max(gradeMax, Math.abs(100 * (samples[i].ele - samples[i - 1].ele) / d));
+      }
+    }
+    function bearing(a,b) { const dl = rad(b[0]-a[0]); return Math.atan2(Math.sin(dl)*Math.cos(rad(b[1])), Math.cos(rad(a[1]))*Math.sin(rad(b[1]))-Math.sin(rad(a[1]))*Math.cos(rad(b[1]))*Math.cos(dl)); }
+    for (let i=2;i<samples.length;i++) {
+      let delta = Math.abs(deg(bearing(samples[i-2].p,samples[i-1].p)-bearing(samples[i-1].p,samples[i].p))) % 360;
+      delta = Math.min(delta,360-delta);
+      if (delta >= 12 && delta <= 150) turns += delta;
+    }
+    return {coords, cumulative, samples, length, ascent: elevation ? ascent : null, descent: elevation ? descent : null,
+      high: elevation ? Math.max(...samples.map(s=>s.ele)) : null, gradeMax: elevation ? gradeMax : null,
+      elevation, twist: turns / (length/1000), properties};
+  }
+  function score(route, settings) {
+    const km = route.length / 1000, target = settings.distance;
+    let value = Math.abs(km - target) / target * 5;
+    const climbing = route.elevation ? route.ascent / km : 0;
+    if (settings.terrain === 'flat') value += climbing / 15;
+    if (settings.terrain === 'climb') value -= Math.min(climbing, 45) / 22;
+    if (settings.style === 'twisty') value -= Math.min(route.twist, 500) / 260;
+    if (settings.intervals) value -= intervals(route, settings).length * 0.12;
+    return value;
+  }
+  function plans(start, settings, seed = 0) {
+    const bearing = settings.direction === 'any' ? (seed * 47) % 360 : Number(settings.direction);
+    const metres = settings.distance * 1000;
+    return [0, 1, 2].map(n => {
+      const heading = bearing + (settings.direction === 'any' ? n * 120 : (n - 1) * 35);
+      if (settings.shape === 'outback') return [start, destination(start, metres / 2.6, heading), start];
+      const r = metres / (settings.style === 'twisty' ? 5.6 : 4.35);
+      const stops = [start, destination(start, r, heading), destination(start, r, heading + 80)];
+      if (settings.style === 'twisty') stops.push(destination(start, r * 0.8, heading + 145));
+      return [...stops, start];
+    });
+  }
+  function intervals(route, settings) {
+    if (!settings.intervals) return [];
+    const type = settings.intervalType, samples = route.samples, work = settings.work * 1000;
+    if (!route.elevation && type !== 'rolling') return [];
+    let cursor = settings.warmup * 1000; const result = [];
+    for (let rep=0; rep<settings.repeats; rep++) {
+      let match = null;
+      for (let a=0;a<samples.length-1;a++) {
+        if (samples[a].d < cursor) continue;
+        let b=a+1;
+        while (b<samples.length && samples[b].d-samples[a].d < work) b++;
+        if (b>=samples.length || samples[b].d > route.length - settings.cooldown*1000) break;
+        const d=samples[b].d-samples[a].d;
+        if (d > work*1.35) continue;
+        const grade=route.elevation ? (samples[b].ele-samples[a].ele)/d*100 : null;
+        let max=0;
+        if (route.elevation) for(let j=a+1;j<=b;j++) max=Math.max(max,Math.abs((samples[j].ele-samples[j-1].ele)/(samples[j].d-samples[j-1].d)*100));
+        const qualifies = type==='rolling' || (type==='hill' ? grade>=2 && grade<=10 && max<=18 : Math.abs(grade)<=1 && max<=3);
+        if (qualifies) { match={start:samples[a].i,end:samples[b].i,from:samples[a].d,to:samples[b].d,grade,number:rep+1}; break; }
+      }
+      if (!match) break;
+      result.push(match); cursor=match.to+settings.recovery*1000;
+    }
+    return result;
+  }
+  const escapeXML = v => String(v).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[ch]));
+  function gpx(route, name, efforts = []) {
+    const point = (tag,p,extra='') => `<${tag} lat="${p[1].toFixed(7)}" lon="${p[0].toFixed(7)}">${p[2]===null?'':`<ele>${p[2].toFixed(1)}</ele>`}${extra}</${tag}>`;
+    const wpts=efforts.flatMap(e=>[
+      point('wpt',route.coords[e.start],`<name>Effort ${e.number} start</name><desc>${escapeXML(`${((e.to-e.from)/1000).toFixed(2)} km; average grade ${e.grade===null?'unavailable':e.grade.toFixed(1)+'%'}. GPX terrain marker, not an ERG target.`)}</desc>`),
+      point('wpt',route.coords[e.end],`<name>Effort ${e.number} end / recovery</name>`)
+    ]).join('\n');
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="VeloPopuli route planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapeXML(name)}</name><desc>Real-road route. Map data © OpenStreetMap contributors; routing and elevation by BRouter, or supplied by imported GPX.</desc><link href="https://velopopuli.com/"><text>VeloPopuli</text></link></metadata>\n${wpts}\n<trk><name>${escapeXML(name)}</name><trkseg>\n${route.coords.map(p=>point('trkpt',p)).join('\n')}\n</trkseg></trk></gpx>`;
+  }
+  const api={distance,destination,validPoint,analyse,score,plans,intervals,gpx,escapeXML};
+  if (typeof module!=='undefined' && module.exports) module.exports=api; else root.RouteCore=api;
+})(typeof window!=='undefined'?window:globalThis);
+
+</script><script>
+(() => {
+  'use strict';
+  const C=window.RouteCore, $=id=>document.getElementById(id);
+  const points=[{p:[-1.2577,51.752],name:'Oxford, UK'}];
+  let map=null, routeLayer=null, effortLayer=null, markers=[], routes=[], current=null, activeSettings=null;
+  let busy=false, dirty=false, seed=0, generation=null, searchJob=null, blobURL=null, oldUnits='km';
+  const searchCache=new Map();
+  const unitFactor=()=> $('units').value==='mi'?1.609344:1;
+  const unit=()=> $('units').value==='mi'?'mi':'km';
+  const lengthText=metres=>{const value=metres/1000/unitFactor();return `${value.toFixed(value>0&&value<1?2:1)} ${unit()}`;};
+  const safeNumber=(id,fallback)=>Number.isFinite(Number($(id).value))&&$(id).value!==''?Number($(id).value):fallback;
+  function settings() {
+    const f=unitFactor();
+    return {shape:$('shape').value,distance:safeNumber('distance',40)*f,style:$('style').value,terrain:$('terrain').value,
+      surface:$('surface').value,direction:$('direction').value,quiet:$('quiet').checked,pace:safeNumber('pace',25)*f,
+      intervals:$('intervals').checked,intervalType:$('interval-type').value,repeats:Math.round(safeNumber('repeats',6)),
+      work:safeNumber('work',1)*f,recovery:safeNumber('recovery',0.75)*f,warmup:safeNumber('warmup',3)*f,cooldown:safeNumber('cooldown',2)*f};
+  }
+  function status(text,type='') { $('planner-status').textContent=text;$('planner-status').className='planner-status '+type; }
+  function setBusy(value) {
+    busy=value;
+    $('planner-form').querySelectorAll('input,select,button').forEach(el=>{if(el.id!=='cancel')el.disabled=value;});
+    $('generate').innerHTML=value?'Looking for a route… <span>↝</span>':'Plan my route <span>↗</span>';
+    $('cancel').hidden=!value;$('planner-form').setAttribute('aria-busy',String(value));
+  }
+  async function request(payload,signal) {
+    const controller=new AbortController();
+    const abort=()=>controller.abort(); if(signal) {if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});}
+    const timer=setTimeout(()=>controller.abort(),55000);
+    try {
+      const response=await fetch('route-api.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
+      let data;try{data=await response.json();}catch{throw new Error('Route planning is having a moment. Please try again shortly.');}
+      if(!response.ok||data.error)throw new Error(data.error||'The map service couldn’t finish that request. Please try again.');
+      return data;
+    } finally {clearTimeout(timer);if(signal)signal.removeEventListener('abort',abort);}
+  }
+  function makeButton(text,label,action,className='') {const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',label);b.className=className;b.addEventListener('click',action);return b;}
+  function markDirty() {
+    if(busy)return;
+    dirty=Boolean(current);updateDownload();
+    status('Preferences updated. Plan again to see a new route.');
+    if(current){$('map-state').textContent='SETTINGS CHANGED · GENERATE TO APPLY';$('route-match').textContent='You’ve changed your settings. Plan again to see the new route and download its GPX.';}
+  }
+  function renderPoints() {
+    const list=$('waypoint-list');list.replaceChildren();
+    points.forEach((point,i)=>{
+      const li=document.createElement('li'), badge=document.createElement('span'),name=document.createElement('span');
+      badge.className='point-index';badge.textContent=i===0?'S':i;name.className='point-name';name.textContent=point.name;name.title=`${point.name} (${point.p[1].toFixed(5)}, ${point.p[0].toFixed(5)})`;
+      li.append(badge,name);
+      if(i>1)li.append(makeButton('↑',`Move stop ${i} earlier`,()=>{if(busy)return;[points[i-1],points[i]]=[points[i],points[i-1]];renderPoints();markDirty();}));
+      if(i>0&&i<points.length-1)li.append(makeButton('↓',`Move stop ${i} later`,()=>{if(busy)return;[points[i+1],points[i]]=[points[i],points[i+1]];renderPoints();markDirty();}));
+      if(i>0)li.append(makeButton('×',`Remove stop ${i}`,()=>{if(busy)return;points.splice(i,1);renderPoints();markDirty();},'point-remove'));
+      list.append(li);
+    });
+    if(!map)return;
+    markers.forEach(marker=>marker.remove());
+    markers=points.map((point,i)=>{
+      const marker=L.marker([point.p[1],point.p[0]],{draggable:true,keyboard:true,title:i===0?'Start point':`Stop ${i}`,icon:L.divIcon({className:'route-marker',html:i===0?'S':String(i),iconSize:[28,28],iconAnchor:[14,14]})}).addTo(map);
+      marker.bindTooltip(document.createTextNode(point.name));
+      marker.on('dragend',()=>{if(busy){marker.setLatLng([point.p[1],point.p[0]]);return;}const p=marker.getLatLng();point.p=[p.lng,p.lat];point.name=`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;renderPoints();markDirty();});
+      return marker;
+    });
+  }
+  function place(p,name,role) {
+    if(busy||!C.validPoint(p))return;
+    if(role==='start')points[0]={p,name};
+    else {if(points.length>=8){status('You can pin up to seven extra stops. Remove one before adding another.','error');return;}points.push({p,name});}
+    renderPoints();markDirty();if(map)map.setView([p[1],p[0]],Math.max(map.getZoom(),11));
+  }
+  if(window.L) {
+    map=L.map('route-map',{scrollWheelZoom:false}).setView([51.752,-1.2577],11);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+    routeLayer=L.layerGroup().addTo(map);effortLayer=L.layerGroup().addTo(map);
+    map.on('click',e=>place([e.latlng.lng,e.latlng.lat],`${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`,$('map-mode').value));
+  } else {$('route-map').innerHTML='<p class="planner-error-banner">The map library could not load. You can still search for places or enter coordinates, generate a route and export GPX. Reload to try the map again.</p>';}
+  renderPoints();
+  $('map-mode').addEventListener('change',()=>{$('search-role').value=$('map-mode').value;});
+  $('search-role').addEventListener('change',()=>{$('map-mode').value=$('search-role').value;});
+  $('undo').addEventListener('click',()=>{if(busy)return;if(points.length>1){points.pop();renderPoints();markDirty();}else status('There are no extra stops to undo.');});
+  function fit() {
+    if(!map)return;
+    const coords=current&&!dirty?current.coords:points.map(p=>p.p);
+    if(coords.length===1)map.setView([coords[0][1],coords[0][0]],12);
+    else map.fitBounds(coords.map(p=>[p[1],p[0]]),{padding:[30,30],maxZoom:15});
+  }
+  $('fit-map').addEventListener('click',fit);
+  $('add-coordinates').addEventListener('click',()=>{
+    const lat=$('manual-lat'),lon=$('manual-lon');
+    if(!lat.value||!lon.value||!lat.reportValidity()||!lon.reportValidity()){status('Enter a latitude and longitude first.','error');return;}
+    place([Number(lon.value),Number(lat.value)],`${Number(lat.value).toFixed(4)}, ${Number(lon.value).toFixed(4)}`,$('search-role').value);
+  });
+  async function search() {
+    if(busy)return;const q=$('place-search').value.trim();if(q.length<3){status('Enter at least three characters, or select a point on the map.','error');return;}
+    if(searchJob)searchJob.abort();searchJob=new AbortController();$('search-button').disabled=true;status('Finding places…','loading');$('search-results').replaceChildren();
+    try {
+      const key=q.toLowerCase(),data=searchCache.get(key)||await request({mode:'search',q},searchJob.signal);searchCache.set(key,data);
+      if(!data.features?.length){status('No places found. Try a nearby town, add a country, or use the map.','error');return;}
+      data.features.forEach(feature=>{
+        const p=feature.geometry?.coordinates;if(!C.validPoint(p))return;const props=feature.properties||{};
+        const parts=[props.name,props.street,props.city||props.town||props.village,props.state,props.country].filter(Boolean);
+        const name=[...new Set(parts)].join(', ')||`${p[1].toFixed(4)}, ${p[0].toFixed(4)}`;
+        $('search-results').append(makeButton(name,`Choose ${name}`,()=>{place(p,name,$('search-role').value);$('search-results').replaceChildren();$('place-search').value='';status('Point placed. Set your ride preferences and generate.');}));
+      });status('Choose a result to place it on your route.');
+    } catch(e){if(e.name!=='AbortError')status(e.message,'error');}finally{$('search-button').disabled=false;}
+  }
+  $('search-button').addEventListener('click',search);
+  $('place-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search();}});
+  $('distance').addEventListener('input',()=>{$('distance-range').value=$('distance').value;});
+  $('distance-range').addEventListener('input',()=>{$('distance').value=$('distance-range').value;});
+  $('units').addEventListener('change',()=>{
+    const prev=oldUnits==='mi'?1.609344:1, next=unitFactor();
+    ['distance','work','recovery','warmup','cooldown','pace'].forEach(id=>{const el=$(id);el.value=(Number(el.value)*prev/next).toFixed(2).replace(/\.?0+$/,'');el.min=String(Number(el.min)*prev/next);el.max=String(Number(el.max)*prev/next);el.step='any';});
+    $('distance-range').min=String(5/next);$('distance-range').max=String(160/next);$('distance-range').step='0.1';$('distance-range').value=$('distance').value;
+    document.querySelectorAll('[data-distance-unit]').forEach(el=>el.textContent=unit());document.querySelectorAll('[data-speed-unit]').forEach(el=>el.textContent=unit()+'/h');oldUnits=$('units').value;
+    if(current)refreshResult();
+  });
+  $('intervals').addEventListener('change',()=>{$('interval-fields').hidden=!$('intervals').checked;if(current)refreshResult();});
+  const intervalIDs=['interval-type','repeats','work','recovery','warmup','cooldown'];
+  intervalIDs.forEach(id=>$(id).addEventListener('change',()=>{if(current)refreshResult();}));
+  ['shape','distance','distance-range','style','terrain','surface','direction','quiet'].forEach(id=>$(id).addEventListener('change',markDirty));
+  $('pace').addEventListener('change',()=>{if(current)refreshResult();});
+  $('shape').addEventListener('change',()=>{$('distance-hint').textContent=$('shape').value==='point'?'stops set the length':'approximate';});
+  $('cancel').addEventListener('click',()=>generation?.abort());
+  $('planner-form').addEventListener('submit',async e=>{
+    e.preventDefault();if(busy||!$('planner-form').reportValidity())return;
+    const s=settings();
+    if(s.shape==='point'&&points.length<2){status('Add a finish point: choose “Extra stop / finish” beside the search box, or “Add stop / finish” above the map.','error');return;}
+    if(s.shape==='outback'&&points.length>5){status('Out & back supports a start and up to four extra stops. Remove a stop or choose Round trip.','error');return;}
+    let candidates;
+    if(points.length>1) {
+      let list=points.map(p=>p.p);
+      if(s.shape==='loop')list=[...list,list[0]];
+      if(s.shape==='outback')list=[...list,...list.slice(0,-1).reverse()];
+      candidates=[list];
+    } else candidates=C.plans(points[0].p,s,seed++);
+    generation=new AbortController();const signal=generation.signal,found=[];let lastError=null;
+    setBusy(true);status('Checking the roads…','loading');
+    try {
+      for(let i=0;i<candidates.length;i++) {
+        if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+        status(`Checking route ${i+1} of ${candidates.length}…`,'loading');
+        try {
+          const data=await request({mode:'route',points:candidates[i],surface:s.surface,terrain:s.terrain,quiet:s.quiet},signal);
+          const feature=data.features.find(f=>f.geometry?.type==='LineString');if(!feature)throw new Error('No continuous road route was returned. Try moving your points.');
+          const route=C.analyse(feature.geometry.coordinates,feature.properties);route.pinned=points.length>1;route.source='BRouter + OpenStreetMap';found.push(route);
+        }catch(err){if(signal.aborted)throw err;lastError=err;}
+      }
+      if(!found.length)throw lastError||new Error('No road route was found. Try another place or shorter distance.');
+      found.sort((a,b)=>C.score(a,s)-C.score(b,s));routes=found;activeSettings=s;dirty=false;chooseRoute(0);
+      status(`${found.length===1?'Found a route that fits your settings.':`Compared ${found.length} routes. Best match selected.`}${found.length<candidates.length?' Some directions could not be routed.':''}`);
+    }catch(err){status(signal.aborted?'Route planning cancelled. Your previous route is still here.':err.message,'error');}
+    finally{setBusy(false);generation=null;}
+  });
+  function chooseRoute(index) {current=routes[index];refreshResult();fit();}
+  function stat(label,value,suffix='') {return `<div><small>${C.escapeXML(label)}</small><strong>${C.escapeXML(value)}<span>${C.escapeXML(suffix)}</span></strong></div>`;}
+  function refreshResult() {
+    if(!current)return;
+    $('empty-route').hidden=true;$('route-result').hidden=false;$('result-source').textContent=current.source;
+    $('route-heading').textContent=current.source==='Imported GPX'?'Imported GPX route':'Your route details';
+    $('alternatives').replaceChildren();
+    if(routes.length>1)routes.forEach((route,index)=>{
+      const b=makeButton('',`Select road option ${index+1}`,()=>chooseRoute(index));
+      const title=document.createElement('strong');title.textContent=index===0?'Best match':`Option ${index+1}`;
+      b.append(title,document.createTextNode(`${lengthText(route.length)} · ${route.ascent===null?'height unknown':Math.round(route.ascent)+' m ↑'}`));b.setAttribute('aria-pressed',String(route===current));$('alternatives').append(b);
+    });
+    const s=settings(),minutes=Math.round(current.length/1000/s.pace*60);
+    $('route-stats').innerHTML=stat('DISTANCE',(current.length/1000/unitFactor()).toFixed(1),unit())+stat('CLIMBING',current.ascent===null?'—':Math.round(current.ascent),'m')+stat('DESCENDING',current.descent===null?'—':Math.round(current.descent),'m')+stat('HIGHEST POINT',current.high===null?'—':Math.round(current.high),'m')+stat('PEAK GRADE · ~100 M',current.gradeMax===null?'—':current.gradeMax.toFixed(1),'%')+stat(`TIME AT ${(s.pace/unitFactor()).toFixed(0)} ${unit().toUpperCase()}/H`,`${Math.floor(minutes/60)}h ${minutes%60}m`);
+    const efforts=C.intervals(current,s);drawRoute(efforts);drawElevation(efforts);renderIntervals(efforts,s);updateDownload(efforts);
+    const chosen=activeSettings||s;
+    let match=current.source==='Imported GPX'?'Your original track and elevation stay in the GPX export.':current.pinned?'Routed through your pinned points. These stops determine the distance.':`Actual distance: ${lengthText(current.length)}. Target: ${lengthText(chosen.distance*1000)}. Distance is approximate because the route follows real roads.`;
+    if(current.source!=='Imported GPX')match+=chosen.terrain==='flat'?' Flatter routes are ranked by less climbing per kilometre.':chosen.terrain==='climb'?' Routes with more climbing per kilometre are ranked higher.':'';
+    if(dirty)match='You’ve changed your settings. Plan again to see the new route and download its GPX.';
+    $('route-match').textContent=match;$('map-state').textContent=dirty?'SETTINGS CHANGED · GENERATE TO APPLY':`${lengthText(current.length).toUpperCase()} · ${efforts.length?efforts.length+' MAPPED EFFORTS':'YOUR NEXT RIDE'}`;
+  }
+  function drawRoute(efforts) {
+    if(!map)return;routeLayer.clearLayers();effortLayer.clearLayers();
+    L.polyline(current.coords.map(p=>[p[1],p[0]]),{color:'#fffef8',weight:8,opacity:.95}).addTo(routeLayer);
+    L.polyline(current.coords.map(p=>[p[1],p[0]]),{color:'#455f35',weight:4,opacity:dirty?.45:1}).addTo(routeLayer);
+    efforts.forEach(e=>{
+      const section=current.coords.slice(e.start,e.end+1).map(p=>[p[1],p[0]]);
+      L.polyline(section,{color:'#c5723b',weight:6}).bindTooltip(`Effort ${e.number}: ${lengthText(e.to-e.from)}`).addTo(effortLayer);
+    });
+  }
+  function drawElevation(efforts) {
+    const chart=$('elevation-chart');
+    if(!current.elevation){chart.innerHTML='<p>This GPX doesn’t include full elevation data. You can still export it, choose Any terrain intervals, or plan a new route with elevation.</p>';$('elevation-note').textContent='Elevation unavailable';return;}
+    const samples=current.samples,low=Math.min(...samples.map(s=>s.ele)),high=Math.max(...samples.map(s=>s.ele));
+    const bottom=Math.floor((low-5)/10)*10,top=Math.max(bottom+20,Math.ceil((high+5)/10)*10),x=d=>45+d/current.length*630,y=h=>145-(h-bottom)/(top-bottom)*120;
+    const skip=Math.max(1,Math.floor(samples.length/550));const display=samples.filter((_,i)=>i%skip===0||i===samples.length-1);
+    const line=display.map((s,i)=>`${i?'L':'M'}${x(s.d).toFixed(1)},${y(s.ele).toFixed(1)}`).join(' ');
+    const rects=efforts.map(e=>`<rect x="${x(e.from).toFixed(1)}" y="15" width="${(x(e.to)-x(e.from)).toFixed(1)}" height="130" fill="#e1b48e" opacity=".45"/>`).join('');
+    chart.innerHTML=`<svg viewBox="0 0 700 180" role="img" aria-label="Elevation profile: ${Math.round(low)} to ${Math.round(high)} metres over ${C.escapeXML(lengthText(current.length))}. ${efforts.length} efforts highlighted."><path d="M45 25H675M45 85H675M45 145H675" fill="none" stroke="#d6deca" stroke-dasharray="3 4"/>${rects}<path d="${line} L675 145 L45 145Z" fill="#9daf79" opacity=".5"/><path d="${line}" fill="none" stroke="#526b3e" stroke-width="2"/><g fill="#626e54" font-size="10" font-family="Arial"><text x="3" y="29">${Math.round(top)}m</text><text x="3" y="148">${Math.round(bottom)}m</text><text x="45" y="170">0</text><text x="675" y="170" text-anchor="end">${C.escapeXML(lengthText(current.length))}</text></g></svg>`;
+    $('elevation-note').textContent='Estimates from mapped terrain';
+  }
+  function renderIntervals(efforts,s) {
+    $('interval-result').hidden=!s.intervals;$('effort-list').replaceChildren();
+    if(!s.intervals)return;
+    $('interval-heading').textContent=`${efforts.length} of ${s.repeats} efforts found`;
+    $('interval-summary').textContent=efforts.length===s.repeats?`${s.repeats} × ${lengthText(s.work*1000)} efforts with at least ${lengthText(s.recovery*1000)} recovery. Orange sections follow the real route.`:efforts.length?`I found ${efforts.length} of the ${s.repeats} intervals you asked for. Try a longer route, shorter efforts or different terrain to fit more.`:!current.elevation&&s.intervalType!=='rolling'?'This GPX doesn’t include full elevation data. Choose Any terrain intervals or plan a new route with elevation.':'I couldn’t find stretches that fit. Try more climbing for hill efforts, flatter roads for flat efforts, shorter efforts or a longer ride.';
+    efforts.forEach(e=>{
+      const li=document.createElement('li'),button=makeButton(String(e.number),`Show effort ${e.number} on the map`,()=>{if(map)map.fitBounds(current.coords.slice(e.start,e.end+1).map(p=>[p[1],p[0]]),{padding:[40,40],maxZoom:16});});
+      const label=document.createElement('span');label.textContent=`${lengthText(e.from)} → ${lengthText(e.to)}`;
+      const grade=document.createElement('small');grade.textContent=e.grade===null?'Elevation unknown':`${e.grade>=0?'+':''}${e.grade.toFixed(1)}% average`;
+      li.append(button,label,grade);$('effort-list').append(li);
+    });
+  }
+  function updateDownload(efforts) {
+    const anchor=$('export-gpx');if(blobURL){URL.revokeObjectURL(blobURL);blobURL=null;}
+    if(!current||dirty){anchor.removeAttribute('href');anchor.setAttribute('aria-disabled','true');return;}
+    const name=$('route-name').value.trim()||'My VeloPopuli ride';
+    blobURL=URL.createObjectURL(new Blob([C.gpx(current,name,efforts||C.intervals(current,settings()))],{type:'application/gpx+xml'}));
+    anchor.href=blobURL;anchor.download=(name.normalize('NFKD').replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,'-').slice(0,70)||'velopopuli-ride')+'.gpx';anchor.setAttribute('aria-disabled','false');
+  }
+  $('route-name').addEventListener('input',()=>updateDownload());
+  $('gpx-import').addEventListener('change',async e=>{
+    const file=e.target.files[0];if(!file||busy)return;
+    try {
+      if(file.size>8*1024*1024)throw new Error('Choose a GPX smaller than 8 MB.');
+      const xml=new DOMParser().parseFromString(await file.text(),'application/xml');
+      if(xml.querySelector('parsererror'))throw new Error('This file is not valid GPX XML.');
+      const segments=[...xml.getElementsByTagNameNS('*','trkseg')];
+      if(segments.length!==1)throw new Error('Choose a GPX with one continuous track segment, so separate tracks are not joined by invented roads.');
+      const coords=[...segments[0].getElementsByTagNameNS('*','trkpt')].map(el=>{
+        if(!el.hasAttribute('lat')||!el.hasAttribute('lon')||el.getAttribute('lat').trim()===''||el.getAttribute('lon').trim()==='')throw new Error('A GPX point is missing its coordinates.');
+        const ele=el.getElementsByTagNameNS('*','ele')[0];
+        return [Number(el.getAttribute('lon')),Number(el.getAttribute('lat')),ele&&ele.textContent.trim()!==''?Number(ele.textContent):null];
+      });
+      const route=C.analyse(coords);route.source='Imported GPX';routes=[route];current=route;activeSettings=settings();dirty=false;
+      points.splice(0,points.length,{p:coords[0].slice(0,2),name:'Imported start'});if(C.distance(coords[0],coords.at(-1))>100)points.push({p:coords.at(-1).slice(0,2),name:'Imported finish'});
+      $('shape').value=points.length===1?'loop':'point';$('route-name').value=file.name.replace(/\.gpx$/i,'').slice(0,80)||'Imported VeloPopuli ride';renderPoints();refreshResult();fit();
+      status('GPX imported in your browser. Your file has not been uploaded. Adjust intervals or export when ready.');
+    }catch(err){status(err.message,'error');}finally{e.target.value='';}
+  });
+})();
+
+</script>
+</body></html>

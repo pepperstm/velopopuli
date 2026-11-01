@@ -1,0 +1,71 @@
+name: Update website
+on:
+  release:
+    types: [published, edited]
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['website/**', '.github/workflows/website.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ionos-website
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) &&
+      (github.event_name != 'release' || (!github.event.release.prerelease && !github.event.release.draft))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Always run trusted default-branch website code, not code from a release tag.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Fetch latest stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/pepperstm/velopopuli/releases/latest > "$RUNNER_TEMP/release.json"
+      - name: Build version, installer links and notes
+        run: python3 website/scripts/build.py "$RUNNER_TEMP/release.json" website/build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: website/build/
+      - name: Check deployment secrets
+        env:
+          IONOS_HOST: ${{ secrets.IONOS_HOST }}
+          IONOS_USER: ${{ secrets.IONOS_USER }}
+          IONOS_PASSWORD: ${{ secrets.IONOS_PASSWORD }}
+          IONOS_PATH: ${{ secrets.IONOS_PATH }}
+          IONOS_KNOWN_HOSTS: ${{ secrets.IONOS_KNOWN_HOSTS }}
+        run: |
+          for name in IONOS_HOST IONOS_USER IONOS_PASSWORD IONOS_PATH IONOS_KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then echo "::error::Missing GitHub Actions secret: $name"; exit 1; fi
+          done
+      - name: Install SFTP client library
+        run: sudo apt-get update -qq && sudo apt-get install -y python3-paramiko
+      - name: Deploy to IONOS with pinned SSH host key
+        env:
+          IONOS_HOST: ${{ secrets.IONOS_HOST }}
+          IONOS_USER: ${{ secrets.IONOS_USER }}
+          IONOS_PASSWORD: ${{ secrets.IONOS_PASSWORD }}
+          IONOS_PATH: ${{ secrets.IONOS_PATH }}
+          IONOS_KNOWN_HOSTS: ${{ secrets.IONOS_KNOWN_HOSTS }}
+        run: /usr/bin/python3 website/scripts/deploy.py
+      - name: Verify public release
+        run: |
+          curl --fail --retry 4 --retry-delay 5 'https://velopopuli.com/release.json' -o "$RUNNER_TEMP/live.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          expected = json.loads(Path('website/build/release.json').read_text())
+          actual = json.loads((Path(os.environ['RUNNER_TEMP']) / 'live.json').read_text())
+          assert actual == expected, 'Live website release did not match the deployment'
+          PY
