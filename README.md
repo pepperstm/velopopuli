@@ -30,7 +30,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 
 | | |
 |---|---|
-| <img src="docs/images/ride-town.jpg" alt="Riding through Bourg d'Oisans between crowd barriers, with buildings and side roads from OpenStreetMap"> | <img src="docs/images/ride-cobbles.jpg" alt="The Trouée d'Arenberg cobbles from Paris–Roubaix, a narrow track between barriers"> |
+| <img src="docs/images/ride-town.jpg" alt="Riding through Bourg d'Oisans between crowd barriers, with buildings and side roads from OpenStreetMap"> | <img src="docs/images/ride-cobbles.jpg" alt="The Trouée d'Arenberg cobbles from Paris–Roubaix, a narrow track through the woods"> |
 | **A closed road through the real town** — buildings, side roads and landmarks from OpenStreetMap | **The real surface and width** — the Arenberg trench on its setts, three metres wide |
 | <img src="docs/images/ride-hairpins.jpg" alt="Overhead view of the Alpe d'Huez hairpins"> | <img src="docs/images/ride-workout.jpg" alt="A sweet-spot workout in ERG with the step targets shown above the road"> |
 | **Real terrain** — the Alpe d'Huez switchbacks from the overhead camera | **Structured workouts** on any route, the trainer holding each target |
@@ -48,7 +48,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 
 ## How it is built
 
-About two thirds of the code is Rust, and everything that computes or talks to hardware is in it: route building, physics, the ride simulation, workouts, the Bluetooth and ANT+ protocols and the 3D world's meshes are a library with no I/O and its own tests (`crates/core`); the app around it is Tauri 2 (`src-tauri`); the group-ride relay is a small server of its own (`crates/relay`). The full map of the code, and how a ride flows through it, is on the wiki's [Architecture](https://github.com/pepperstm/velopopuli/wiki/Architecture) page.
+About three quarters of the code is Rust, and everything that computes or talks to hardware is in it: route building, physics, the ride simulation, workouts, the Bluetooth and ANT+ protocols and the 3D world's meshes are a library with no I/O and its own tests (`crates/core`); the app around it is Tauri 2 (`src-tauri`); the group-ride relay is a small server of its own (`crates/relay`). The full map of the code, and how a ride flows through it, is on the wiki's [Architecture](https://github.com/pepperstm/velopopuli/wiki/Architecture) page.
 
 The web layer (`web/`, TypeScript, React, three.js) contains no ride logic: it receives state from Rust about 20 times a second, glides between updates, and draws. Terrain meshes are generated on Rust worker threads, so building landscape never stalls a frame. The window is the operating system's own webview (WebKit on macOS/Linux, WebView2 on Windows) rather than a bundled browser, which keeps the app to about 17 MB.
 
@@ -58,14 +58,14 @@ Be aware of what has and has not been proven:
 
 | Area | Status |
 | --- | --- |
-| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 62 core tests) |
+| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 86 core tests) |
 | Group-ride relay | Tested in-process (`cargo test -p velopopuli-relay`) and with two app instances riding together through a local relay |
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
 | Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain |
 | Waymarked MTB routes | Listed and joined from the live Overpass API around Finale Ligure (a 23 km route joined with no gaps); the joining is unit-tested. The screen itself was only type-checked, not clicked through |
 | Strava segments and ghosts from Strava | Matching is unit-tested; the Strava calls have **not** been made against the live API |
 | Street-level photos | Selection unit-tested and a bad token is reported correctly; not tried with a real Mapillary token |
-| Native renderer | Screenshots from the automated run match the built-in renderer (day, dusk with rain fog, high camera). The HUD on top of it was not checked in a screenshot of the real window |
+| Native renderer | Screenshots from the automated run match the built-in renderer (day, dusk with rain fog, high camera, and the leaning barriers and tree sprites of 0.3.6). The HUD on top of it was not checked in a screenshot of the real window |
 | FIT export | Unit-tested by decoding the output with an independent FIT parser |
 | Bluetooth and ANT+ **protocol** encoding/decoding (FTMS, Cycling Power, CSC, HR, ANT framing, ANT+ HR/power/speed/cadence/FE-C pages) | Unit-tested against hand-built packets |
 | Full app: import → real-terrain download → ride → save FIT → personal best → summary | Verified by automated runs with the demo rider on macOS (Apple Silicon), in debug, dev-server and release builds |
@@ -165,7 +165,7 @@ Your browser opens for approval. The key and tokens are stored in the system key
 - Hardware testing across trainers and sensors; pairing to specific ANT+ devices; multiple devices per type
 - Native renderer: Windows and Linux, and making it the default
 - More from OpenStreetMap: mapped roof shapes, other land cover (farmland, rock, glaciers), mapped leaf types, squares and car parks, cuttings and embankments for the side roads
-- Wahoo legacy protocol, steering and virtual gears
+- Wahoo legacy protocol and steering; Di2 and Zwift Click/Play controllers as shifters for virtual gears
 
 ### Stretch: self-hosted group-ride servers
 
