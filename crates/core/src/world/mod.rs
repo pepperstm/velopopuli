@@ -6,6 +6,7 @@ mod barriers;
 mod berms;
 mod buildings;
 mod dem;
+mod fields;
 mod fords;
 mod height;
 mod landmarks;
@@ -20,6 +21,7 @@ mod trees;
 pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
+pub use fields::{parse_boundaries, Boundary, MappedBoundary};
 pub use fords::{FORD_DEPTH, FORD_MAX_SPEED, FORD_REACH, FORD_ROLLING};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
 pub use landmarks::{landmarks, Landmark};
@@ -116,6 +118,11 @@ pub struct World {
     pub scene: Scene,
     tree_line: f64,
 }
+
+/// Made-up field boundaries are drawn in chunks whose middle is this close to the route.
+const FIELDS_REACH: f64 = 1000.0;
+/// The share of a hedgerow's points (one every six metres) with a tree growing out of it.
+const HEDGEROW_TREES: f64 = 0.05;
 
 /// Depth of water over a lake or river bed, and how far its surface lies below the banks.
 const WATER_DEPTH: f64 = 1.6;
@@ -411,6 +418,61 @@ impl World {
             let shade = 0.82 + r(5) * 0.36;
             planted.push((kind, [tx as f32, (ty - 0.2) as f32, tz as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, shade as f32]));
         };
+
+        // Field boundaries: the mapped ones, and made-up ones in open country near the route,
+        // away from the mapped ones. They are drawn with the buildings, in plain colours.
+        let countryside = fields::Countryside::new(self.route.lat0, self.route.lon0, self.tree_line);
+        let centre = (x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
+        let farmed = (0..self.route.n).step_by(((20.0 / self.route.step) as usize).max(1)).any(|i| (self.route.x[i] - centre.0).hypot(self.route.z[i] - centre.1) < FIELDS_REACH);
+        // Whether a piece from `p` to `q` can stand: not on a road, the route or water, nor in a house;
+        // made-up ones not in a wood, on a cliff or near a town either.
+        let clear = |p: (f64, f64), q: (f64, f64), made_up: bool| -> bool {
+            let mid = ((p.0 + q.0) / 2.0, (p.1 + q.1) / 2.0);
+            let (fx, fz) = ((mid.0 - x0) / cell + m as f64, (mid.1 - z0) / cell + m as f64);
+            let k = (fz.max(0.0) as usize).min(pad - 2) * pad + (fx.max(0.0) as usize).min(pad - 2);
+            let corners = [k, k + 1, k + pad, k + pad + 1];
+            if corners.iter().any(|&c| wet[c] || trench[c]) || on_mesh(&near, pad, fx, fz) < if made_up { 16.0 } else { 6.0 } {
+                return false;
+            }
+            let margin = if made_up { 2.5 } else { 0.8 };
+            if ways.clone().any(|s| [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + margin)) || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0) {
+                return false;
+            }
+            if self.buildings.covers(mid.0, mid.1) {
+                return false;
+            }
+            let drop = corners.iter().map(|&c| h[c]).fold(f64::MIN, f64::max) - corners.iter().map(|&c| h[c]).fold(f64::MAX, f64::min);
+            !made_up || !(scene.forest.at(mid.0, mid.1) || drop > 6.0 || self.buildings.near(mid.0, mid.1, 15.0) || scene.near_mapped_boundary(mid.0, mid.1))
+        };
+        let ground_at = |p: &(f64, f64)| on_mesh(&h, pad, (p.0 - x0) / cell + m as f64, (p.1 - z0) / cell + m as f64);
+        for (n, run) in scene.boundaries.get(&(cx, cz)).into_iter().flatten().enumerate() {
+            for points in fields::runs(&run.points, |p, q| clear(p, q, false)) {
+                let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                fields::draw(&mut mesh.buildings, run.kind, &points, &ys, cx.wrapping_mul(7919) ^ cz.wrapping_mul(104_729) ^ n as i32, countryside.warm());
+            }
+        }
+        if farmed {
+            let hedgerow_trees = matches!(countryside.region, fields::Region::Hedgerows | fields::Region::Bocage);
+            for edge in countryside.edges(cx, cz) {
+                let Some(kind) = countryside.kind(self.field.surroundings(edge.middle.0, edge.middle.1), edge.roll) else { continue };
+                let seed = ((edge.middle.0 * 3.0) as i32).wrapping_mul(92_821) ^ (edge.middle.1 * 3.0) as i32;
+                for points in fields::runs(&edge.points, |p, q| clear(p, q, true)) {
+                    let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                    fields::draw(&mut mesh.buildings, kind, &points, &ys, seed, countryside.warm());
+                    // Now and then a tree grows out of a hedge.
+                    if kind == fields::Boundary::Hedge && hedgerow_trees {
+                        for (k, p) in points.iter().enumerate() {
+                            let spot = ((p.0 * 4.0) as i32, (p.1 * 4.0) as i32);
+                            if hash2(spot.0.wrapping_mul(13) ^ seed, spot.1) < HEDGEROW_TREES {
+                                if let Some(ty) = plant(p.0, p.1) {
+                                    grow(p.0, p.1, ty, false, (spot.0.wrapping_add(k as i32), spot.1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Mapped forest: most of a lattice of 5 m squares, each tree somewhere in its square.
         if scene.forest.touches(cx, cz) {
