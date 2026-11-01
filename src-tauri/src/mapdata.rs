@@ -14,7 +14,10 @@ use futures::future::select_ok;
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use velopopuli_core::gpx::Route;
-use velopopuli_core::world::{corridor_tiles, overpass_query, parse_overpass, parse_tile, parse_ways, route_corridor, way_query, Footprint, MapTile, MappedWay, RoadKind, Scenery, MAP_ZOOM, WAY_TAGS};
+use velopopuli_core::world::{
+    corridor_tiles, overpass_query, parse_boundaries, parse_overpass, parse_tile, parse_ways, route_corridor, way_query, Footprint, MapTile, MappedBoundary, MappedWay, RoadKind, Scenery, MAP_ZOOM,
+    WAY_TAGS,
+};
 
 use crate::now_ms;
 use crate::store::Store;
@@ -102,13 +105,17 @@ async fn overpass_request(http: &reqwest::Client, endpoint: &'static str, query:
     Ok((parse_overpass(&text)?, endpoint))
 }
 
-async fn way_request(http: &reqwest::Client, endpoint: &'static str, query: &str) -> Result<(Vec<MappedWay>, &'static str), String> {
+/// The roads in an Overpass reply, and the hedges, walls and fences.
+type Ways = (Vec<MappedWay>, Vec<MappedBoundary>);
+
+async fn way_request(http: &reqwest::Client, endpoint: &'static str, query: &str) -> Result<(Ways, &'static str), String> {
     let (text, endpoint) = overpass_text(http, endpoint, query).await?;
-    Ok((parse_ways(&text)?, endpoint))
+    Ok(((parse_ways(&text)?, parse_boundaries(&text)?), endpoint))
 }
 
-/// The roads the route follows with their surface and width tags, from the Overpass API (the tiles don't carry them).
-async fn ways_from_overpass(http: &reqwest::Client, route: &Route) -> Result<Vec<MappedWay>, String> {
+/// The roads the route follows with their surface and width tags, from the Overpass API (the tiles don't carry
+/// them), and the field boundaries near it.
+async fn ways_from_overpass(http: &reqwest::Client, route: &Route) -> Result<Ways, String> {
     if std::env::var_os("VP_SKIP_OVERPASS").is_some() {
         return Err("skipped by VP_SKIP_OVERPASS".into());
     }
@@ -118,7 +125,9 @@ async fn ways_from_overpass(http: &reqwest::Client, route: &Route) -> Result<Vec
     let ((mut all, server), _) = tokio::time::timeout(OVERPASS_FIRST_ANSWER, race).await.map_err(|_| "no Overpass server answered in time".to_string())??;
     let rest = async {
         for query in &stretches[1..] {
-            all.extend(way_request(http, server, query).await?.0);
+            let (ways, boundaries) = way_request(http, server, query).await?.0;
+            all.0.extend(ways);
+            all.1.extend(boundaries);
         }
         Ok::<_, String>(all)
     };
@@ -269,9 +278,10 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
         }
     };
     match (surfaces, scenery.as_mut()) {
-        (Some(Ok(ways)), Some(s)) => {
-            crate::diag::event("map", format!("road tags: {} mapped ways along the route", ways.len()));
+        (Some(Ok((ways, boundaries))), Some(s)) => {
+            crate::diag::event("map", format!("road tags: {} mapped ways along the route, {} hedges, walls and fences near it", ways.len(), boundaries.len()));
             s.ways = ways;
+            s.boundaries = boundaries;
             s.way_tags = WAY_TAGS;
             save(s);
         }
