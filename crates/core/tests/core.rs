@@ -1662,8 +1662,8 @@ mod scenery {
     }
 
     /// The boundaries' triangles (all the "buildings" there are, with no houses) in the chunks
-    /// around a stretch of route, as (x, along the route, green enough to be a hedge).
-    fn boundary_points(world: &World, from: f64, to: f64) -> Vec<(f64, f64, bool)> {
+    /// around a stretch of route, as (x, along the route, height, green enough to be a hedge).
+    fn boundary_points(world: &World, from: f64, to: f64) -> Vec<(f64, f64, f64, bool)> {
         let (zs, ze) = (z(to), z(from));
         let mut out = Vec::new();
         for cz in (zs / CHUNK).floor() as i32..=(ze / CHUNK).floor() as i32 {
@@ -1671,7 +1671,7 @@ mod scenery {
                 let b = world.chunk(cx, cz).buildings;
                 for (p, c) in b.positions.chunks(3).zip(b.colors.chunks(3)) {
                     let (x, along) = (p[0] as f64, z(0.0) - p[2] as f64);
-                    out.push((x, along, c[1] > c[0] * 1.3));
+                    out.push((x, along, p[1] as f64, c[1] > c[0] * 1.3));
                 }
             }
         }
@@ -1686,7 +1686,7 @@ mod scenery {
         let route = Arc::new(build_route("devon", &points).unwrap());
         let made_up = World::new(route.clone(), Some(level_ground(&route, 100.0)), 0.0);
         let found = boundary_points(&made_up, 500.0, 2500.0);
-        assert!(found.iter().filter(|p| p.2).count() > 600, "too few hedges: {}", found.len());
+        assert!(found.iter().filter(|p| p.3).count() > 600, "too few hedges: {}", found.len());
         // None on the road or its verges.
         assert!(found.iter().all(|p| p.0.abs() > 12.0), "a boundary on the road: {:?}", found.iter().find(|p| p.0.abs() <= 12.0));
 
@@ -1695,8 +1695,32 @@ mod scenery {
         let scenery = Scenery { boundaries: vec![wall], way_tags: WAY_TAGS, ..Scenery::default() };
         let mapped = World::with_map(route.clone(), Some(level_ground(&route, 100.0)), 0.0, Some(&scenery), &[]);
         let found = boundary_points(&mapped, 1000.0, 1300.0);
-        assert!(found.iter().filter(|p| !p.2 && (p.0 - 60.0).abs() < 1.0).count() > 60, "no wall");
-        assert!(found.iter().all(|p| !(p.2 && (p.0 - 60.0).abs() < 15.0)), "a made-up hedge beside the mapped wall");
+        assert!(found.iter().filter(|p| !p.3 && (p.0 - 60.0).abs() < 1.0).count() > 60, "no wall");
+        assert!(found.iter().all(|p| !(p.3 && (p.0 - 60.0).abs() < 15.0)), "a made-up hedge beside the mapped wall");
+    }
+
+    #[test]
+    fn devon_lanes_run_between_hedge_banks() {
+        // A 5 m lane through Devon fields, with a lane joining from the east at 1500 m.
+        let points: Vec<RawPoint> = (0..=300).map(|i| RawPoint { lat: 50.7 + i as f64 * 10.0 / M_PER_DEG, lon: -3.5, ele: None }).collect();
+        let route = Arc::new(build_route("devon", &points).unwrap());
+        let lane = MappedWay { highway: "unclassified".into(), surface: None, width: None, mtb: None, hiking: None, line: geo(&route, &[(0.0, 0.0), (0.0, 3000.0)]) };
+        let joining = Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(2.5, 1500.0), (300.0, 1500.0)]) };
+        let scenery = Scenery { roads: vec![joining], ways: vec![lane], way_tags: WAY_TAGS, ..Scenery::default() };
+        let world = World::with_map(route.clone(), Some(level_ground(&route, 100.0)), 0.0, Some(&scenery), &[]);
+        assert!((world.half_width(route.n / 2) - 2.5).abs() < 0.01);
+        let found = boundary_points(&world, 1000.0, 2000.0);
+        // High banks just beyond the barriers both sides: earth and hedge, about 3 m high.
+        let bank = |p: &&(f64, f64, f64, bool)| (3.5..6.5).contains(&p.0.abs());
+        for side in [-1.0, 1.0] {
+            let tops: Vec<f64> = found.iter().filter(|p| bank(p) && p.0 * side > 0.0).map(|p| p.2).collect();
+            let rise = tops.iter().cloned().fold(f64::MIN, f64::max) - tops.iter().cloned().fold(f64::MAX, f64::min);
+            assert!(tops.len() > 300 && rise > 2.9, "no bank on side {side}: {} points, {rise:.2} m from foot to top", tops.len());
+        }
+        // Open where the side lane comes in, and banks along that lane instead.
+        assert!(!found.iter().any(|p| bank(&p) && p.0 > 0.0 && (p.1 - 1500.0).abs() < 3.0), "the junction is walled off");
+        // (The banks' earthen feet aren't green enough to be a hedge on its own.)
+        assert!(found.iter().filter(|p| p.0 > 20.0 && (2.5..6.0).contains(&(p.1 - 1500.0).abs()) && !p.3).count() > 100, "no banks along the side lane");
     }
 }
 

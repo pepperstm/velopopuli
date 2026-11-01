@@ -121,6 +121,16 @@ pub struct World {
 
 /// Made-up field boundaries are drawn in chunks whose middle is this close to the route.
 const FIELDS_REACH: f64 = 1000.0;
+/// In hedge country the route runs between hedge banks where it is this narrow or narrower (a
+/// lane; side roads from the map tiles carry no width, so every minor road and track there
+/// gets them), and only below this height: higher up, the lanes cross open moor.
+const HOLLOWAY_WIDTH: f64 = 6.0;
+const HOLLOWAY_TOP: f64 = 260.0;
+/// …centred this far beyond the route's edge (clear of its barriers) or a side lane's.
+const ROUTE_BANK_OFFSET: f64 = 2.4;
+const SIDE_BANK_OFFSET: f64 = 1.6;
+/// The share of a bank's pieces left open as a gateway.
+const GATEWAYS: f64 = 0.03;
 /// The share of a hedgerow's points (one every six metres) with a tree growing out of it.
 const HEDGEROW_TREES: f64 = 0.05;
 
@@ -431,11 +441,30 @@ impl World {
             let (fx, fz) = ((mid.0 - x0) / cell + m as f64, (mid.1 - z0) / cell + m as f64);
             let k = (fz.max(0.0) as usize).min(pad - 2) * pad + (fx.max(0.0) as usize).min(pad - 2);
             let corners = [k, k + 1, k + pad, k + pad + 1];
-            if corners.iter().any(|&c| wet[c] || trench[c]) || on_mesh(&near, pad, fx, fz) < if made_up { 16.0 } else { 6.0 } {
+            // In hedge country the lanes' own banks stand in for the hedges mapped right beside them.
+            let banked = countryside.lanes_banked();
+            if corners.iter().any(|&c| wet[c] || trench[c])
+                || on_mesh(&near, pad, fx, fz)
+                    < if made_up {
+                        16.0
+                    } else if banked {
+                        9.0
+                    } else {
+                        6.0
+                    }
+            {
                 return false;
             }
-            let margin = if made_up { 2.5 } else { 0.8 };
-            if ways.clone().any(|s| [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + margin)) || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0) {
+            let margin = |s: &scenery::RoadStrip| {
+                if made_up {
+                    2.5
+                } else if banked && matches!(s.kind, scenery::RoadKind::Minor | scenery::RoadKind::Track) {
+                    3.0
+                } else {
+                    0.8
+                }
+            };
+            if ways.clone().any(|s| [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + margin(s))) || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0) {
                 return false;
             }
             if self.buildings.covers(mid.0, mid.1) {
@@ -469,6 +498,91 @@ impl World {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Holloways: in hedge country, narrow lanes run between high hedge banks, the route
+        // (just behind its barriers) and the side lanes alike. Gaps where another road, a
+        // stream or a house meets the lane, and now and then for a gateway.
+        if farmed && countryside.lanes_banked() {
+            let chunk_of = |p: (f64, f64), q: (f64, f64)| ((((p.0 + q.0) / 2.0) / CHUNK).floor() as i32, (((p.1 + q.1) / 2.0) / CHUNK).floor() as i32);
+            let bank_clear = |p: (f64, f64), q: (f64, f64), lane: Option<&scenery::RoadStrip>| -> bool {
+                let mid = ((p.0 + q.0) / 2.0, (p.1 + q.1) / 2.0);
+                let (fx, fz) = ((mid.0 - x0) / cell + m as f64, (mid.1 - z0) / cell + m as f64);
+                let k = (fz.max(0.0) as usize).min(pad - 2) * pad + (fx.max(0.0) as usize).min(pad - 2);
+                if [k, k + 1, k + pad, k + pad + 1].iter().any(|&c| wet[c] || trench[c]) || self.field.surroundings(mid.0, mid.1) > HOLLOWAY_TOP {
+                    return false;
+                }
+                if lane.is_some() && on_mesh(&near, pad, fx, fz) < 12.0 {
+                    return false;
+                }
+                let other = |s: &scenery::RoadStrip| lane.is_none_or(|l| !std::ptr::eq(l, s));
+                !(ways.clone().any(|s| other(s) && [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + 1.0))
+                    || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0)
+                    || self.buildings.near(mid.0, mid.1, 4.0)
+                    || scene.forest.at(mid.0, mid.1))
+            };
+            let gateway = |p: (f64, f64)| hash2((p.0 * 2.0) as i32, (p.1 * 2.0) as i32) < GATEWAYS;
+            let mut bank = |points: &[(f64, f64)], seed: i32| {
+                let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                fields::draw(&mut mesh.buildings, fields::Boundary::HedgeBank, points, &ys, seed, false);
+            };
+            // Along the route, where it is a narrow lane on open ground.
+            let r = &self.route;
+            let lane = |i: usize| self.half_width(i) * 2.0 <= HOLLOWAY_WIDTH && scene.kinds.get(i).is_none_or(|&k| k == OPEN);
+            for side in [-1.0f64, 1.0] {
+                let beside = |i: usize| {
+                    let (a, b) = (i.saturating_sub(1), (i + 1).min(r.n - 1));
+                    let (tx, tz) = (r.x[b] - r.x[a], r.z[b] - r.z[a]);
+                    let len = tx.hypot(tz).max(1e-9);
+                    let off = side * (self.half_width(i) + ROUTE_BANK_OFFSET);
+                    (r.x[i] + tz / len * off, r.z[i] - tx / len * off)
+                };
+                let mut run: Vec<(f64, f64)> = Vec::new();
+                let mut last = usize::MAX;
+                for i in 0..r.n.saturating_sub(1) {
+                    let near_chunk = (r.x[i] - centre.0).abs() < CHUNK && (r.z[i] - centre.1).abs() < CHUNK;
+                    if !near_chunk || !lane(i) || !lane(i + 1) {
+                        continue;
+                    }
+                    let (p, q) = (beside(i), beside(i + 1));
+                    // Inside a bend tighter than the offset, the bank would fold back on itself.
+                    let forward = (q.0 - p.0) * (r.x[i + 1] - r.x[i]) + (q.1 - p.1) * (r.z[i + 1] - r.z[i]) > 0.0;
+                    if !forward || chunk_of(p, q) != (cx, cz) || gateway(p) || !bank_clear(p, q, None) {
+                        continue;
+                    }
+                    if last.wrapping_add(1) != i && run.len() >= 2 {
+                        bank(&run, i as i32 * 2 + side as i32);
+                        run.clear();
+                    }
+                    if run.is_empty() || last.wrapping_add(1) != i {
+                        run = vec![p];
+                    }
+                    run.push(q);
+                    last = i;
+                }
+                if run.len() >= 2 {
+                    bank(&run, last as i32 * 2 + side as i32);
+                }
+            }
+            // Along the minor roads and tracks around it.
+            for s in ways.clone().filter(|s| matches!(s.kind, scenery::RoadKind::Minor | scenery::RoadKind::Track) && !s.steel && !s.casing && !s.cap) {
+                let len = (s.b.0 - s.a.0).hypot(s.b.1 - s.a.1).max(1e-9);
+                let n = ((s.a.1 - s.b.1) / len, (s.b.0 - s.a.0) / len);
+                for side in [-1.0f64, 1.0] {
+                    let off = side * (s.half + SIDE_BANK_OFFSET);
+                    // In pieces, as a strip can be long: each piece is then near enough its own chunk to stand on its ground.
+                    let pieces = (len / fields::PIECE).ceil().max(1.0) as usize;
+                    let line: Vec<(f64, f64)> = (0..=pieces)
+                        .map(|k| {
+                            let t = k as f64 / pieces as f64;
+                            (s.a.0 + (s.b.0 - s.a.0) * t + n.0 * off, s.a.1 + (s.b.1 - s.a.1) * t + n.1 * off)
+                        })
+                        .collect();
+                    for run in fields::runs(&line, |p, q| chunk_of(p, q) == (cx, cz) && !gateway(p) && bank_clear(p, q, Some(s))) {
+                        bank(&run, (run[0].0 * 3.0) as i32 ^ (run[0].1 * 7.0) as i32);
                     }
                 }
             }

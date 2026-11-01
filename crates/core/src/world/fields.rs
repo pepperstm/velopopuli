@@ -18,6 +18,8 @@ pub enum Boundary {
     Hedge,
     Wall,
     Fence,
+    /// A hedge on an earth bank, as either side of a Devon lane.
+    HedgeBank,
 }
 
 impl Boundary {
@@ -25,7 +27,8 @@ impl Boundary {
     /// aren't field boundaries; nor are kerbs, gates and the rest.
     pub fn from_osm(barrier: &str, wall: Option<&str>) -> Option<Self> {
         match barrier {
-            "hedge" | "hedge_bank" => Some(Boundary::Hedge),
+            "hedge" => Some(Boundary::Hedge),
+            "hedge_bank" => Some(Boundary::HedgeBank),
             "wall" if !matches!(wall, Some("retaining" | "noise_barrier" | "flood_wall" | "castle_wall")) => Some(Boundary::Wall),
             "fence" => Some(Boundary::Fence),
             _ => None,
@@ -154,6 +157,11 @@ impl Countryside {
         })
     }
 
+    /// Whether narrow lanes run between hedge banks.
+    pub fn lanes_banked(&self) -> bool {
+        matches!(self.region, Region::Hedgerows | Region::Bocage)
+    }
+
     /// Whether walls are of warmer stone: round the Mediterranean.
     pub fn warm(&self) -> bool {
         self.region == Region::Mediterranean
@@ -228,19 +236,26 @@ pub(super) fn runs(points: &[(f64, f64)], keep: impl Fn((f64, f64), (f64, f64)) 
     out
 }
 
-/// A hedge's or wall's cross-section, from one foot over the top to the other (across, up);
-/// the feet are this far below the ground, and the rest is scaled by its height, `tall.0` plus
-/// up to `tall.1`. Colours, in sRGB: at the foot, on the sides, on top.
+/// A hedge's or wall's cross-section, from one foot over the top to the other: (across, up,
+/// which of `colours`). Feet are that far below the ground; the rest is scaled by the height,
+/// `tall.0` plus up to `tall.1`. Colours are in sRGB.
 struct Section {
-    profile: &'static [(f64, f64)],
+    profile: &'static [(f64, f64, usize)],
     tall: (f64, f64),
-    colours: [[f64; 3]; 3],
+    colours: &'static [[f64; 3]],
 }
 
-const HEDGE: Section =
-    Section { profile: &[(-0.85, -0.5), (-0.8, 0.65), (0.0, 1.0), (0.8, 0.65), (0.85, -0.5)], tall: (1.5, 0.7), colours: [[0.16, 0.25, 0.11], [0.24, 0.37, 0.16], [0.30, 0.44, 0.19]] };
-const WALL: Section = Section { profile: &[(-0.34, -0.4), (-0.26, 1.0), (0.26, 1.0), (0.34, -0.4)], tall: (1.0, 0.3), colours: [[0.38, 0.37, 0.34], [0.52, 0.51, 0.47], [0.44, 0.43, 0.40]] };
-const WARM_WALL: Section = Section { colours: [[0.52, 0.46, 0.37], [0.66, 0.59, 0.47], [0.58, 0.53, 0.44]], ..WALL };
+const LEAVES: [[f64; 3]; 3] = [[0.16, 0.25, 0.11], [0.24, 0.37, 0.16], [0.30, 0.44, 0.19]];
+const HEDGE: Section = Section { profile: &[(-0.85, -0.5, 0), (-0.8, 0.65, 1), (0.0, 1.0, 2), (0.8, 0.65, 1), (0.85, -0.5, 0)], tall: (1.5, 0.7), colours: &LEAVES };
+const WALL: Section =
+    Section { profile: &[(-0.34, -0.4, 0), (-0.26, 1.0, 1), (0.26, 1.0, 2), (0.34, -0.4, 0)], tall: (1.0, 0.3), colours: &[[0.38, 0.37, 0.34], [0.52, 0.51, 0.47], [0.44, 0.43, 0.40]] };
+const WARM_WALL: Section = Section { colours: &[[0.52, 0.46, 0.37], [0.66, 0.59, 0.47], [0.58, 0.53, 0.44]], ..WALL };
+/// Steep grassy earth to about 1.2 m with a hedge on top: 2.6 to 3.4 m in all.
+const HEDGE_BANK: Section = Section {
+    profile: &[(-1.4, -0.5, 3), (-1.05, 0.4, 4), (-0.8, 0.45, 1), (-0.7, 0.85, 1), (0.0, 1.0, 2), (0.7, 0.85, 1), (0.8, 0.45, 1), (1.05, 0.4, 4), (1.4, -0.5, 3)],
+    tall: (2.6, 0.8),
+    colours: &[LEAVES[0], LEAVES[1], LEAVES[2], [0.30, 0.31, 0.18], [0.27, 0.35, 0.17]],
+};
 
 /// Adds a run of boundary to `mesh`, standing on the ground at `ys` (one height per point).
 /// `seed` varies its height and colour; `warm` makes a wall of warmer stone.
@@ -265,26 +280,18 @@ pub(super) fn draw(mesh: &mut TriMesh, kind: Boundary, points: &[(f64, f64)], ys
         ((b.0 - a.0) / len, (b.1 - a.1) / len)
     };
     match kind {
-        Boundary::Hedge | Boundary::Wall => {
+        Boundary::Hedge | Boundary::Wall | Boundary::HedgeBank => {
             // Sunk into the ground a little, so a slope across it leaves no gap.
             let Section { profile, tall, colours } = match kind {
                 Boundary::Hedge => HEDGE,
+                Boundary::HedgeBank => HEDGE_BANK,
                 _ if warm => WARM_WALL,
                 _ => WALL,
             };
             let height: Vec<f64> = (0..n).map(|k| tall.0 + tall.1 * r(k, 3)).collect();
             let shade: Vec<f64> = (0..n).map(|k| 0.85 + 0.3 * r(k, 5)).collect();
-            let place = |k: usize, q: (f64, f64)| at(k, (q.0, if q.1 < 0.0 { q.1 } else { q.1 * height[k] }));
-            let colour = |k: usize, q: usize| {
-                let c = colours[if profile[q].1 < 0.0 {
-                    0
-                } else if q == 0 || q + 1 == profile.len() || profile[q].1 < 0.66 {
-                    1
-                } else {
-                    2
-                }];
-                linear(c.map(|v| (v * shade[k]).min(1.0)))
-            };
+            let place = |k: usize, q: (f64, f64, usize)| at(k, (q.0, if q.1 < 0.0 { q.1 } else { q.1 * height[k] }));
+            let colour = |k: usize, q: usize| linear(colours[profile[q].2].map(|v| (v * shade[k]).min(1.0)));
             for (k, &(ax, az)) in across.iter().enumerate().take(n - 1) {
                 for q in 0..profile.len() - 1 {
                     let (dl, du) = (profile[q + 1].0 - profile[q].0, profile[q + 1].1 - profile[q].1);
