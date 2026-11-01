@@ -170,8 +170,13 @@ pub struct WorldLook {
     /// Street-level photos from Mapillary (needs a free client token).
     pub photos: bool,
     pub mapillary_token: String,
-    /// Satellite and aerial imagery on the ground.
-    pub imagery: bool,
+    /// How the ground looks (see [`WorldLook::style`]); `None` in profiles saved before there
+    /// was a choice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<VisualStyle>,
+    /// What older profiles saved instead of `style`: whether imagery was on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imagery: Option<bool>,
     /// The rider's own imagery provider: a tile URL with `{z}`, `{x}` and `{y}` (and their key).
     /// Empty for the open sources.
     pub imagery_url: String,
@@ -182,7 +187,36 @@ pub struct WorldLook {
 
 impl Default for WorldLook {
     fn default() -> Self {
-        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new(), imagery: true, imagery_url: String::new(), wind_effect: 100 }
+        Self {
+            time_of_day: "day".into(),
+            weather: "clear".into(),
+            landmarks: true,
+            photos: false,
+            mapillary_token: String::new(),
+            style: None,
+            imagery: None,
+            imagery_url: String::new(),
+            wind_effect: 100,
+        }
+    }
+}
+
+/// The world's visual style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum VisualStyle {
+    /// The painted ground: colours from the land cover, nothing downloaded for it.
+    Simple,
+    /// Aerial and satellite imagery on the ground.
+    #[default]
+    Satellite,
+}
+
+impl WorldLook {
+    /// The visual style chosen, or for a profile from before the choice, the one matching
+    /// its imagery switch (off: simple).
+    pub fn style(&self) -> VisualStyle {
+        self.style.unwrap_or(if self.imagery == Some(false) { VisualStyle::Simple } else { VisualStyle::Satellite })
     }
 }
 

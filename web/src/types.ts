@@ -3,6 +3,8 @@
 
 import type { Climb } from './core/gpx'
 
+export type VisualStyle = 'simple' | 'satellite'
+
 export interface Settings {
   rider: { name: string; weightKg: number; bikeKg: number; ftp: number; maxHr: number }
   physics: { cda: number; crr: number; maxSpeedKph: number; roadSurfaces: boolean }
@@ -21,7 +23,8 @@ export interface Settings {
     landmarks: boolean
     photos: boolean
     mapillaryToken: string
-    imagery: boolean
+    /** How the ground looks: painted (simple) or covered with aerial and satellite imagery. */
+    style: VisualStyle
     imageryUrl: string
     /** With live weather, how much of the wind the rider feels, percent (0: only seen). */
     windEffect: number
@@ -82,7 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stravaAutoUpload: false,
   exportDir: '',
   goal: { name: 'Winter miles', distanceKm: 1000, deadline: '', from: '' },
-  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '', imagery: true, imageryUrl: '', windEffect: 100 },
+  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '', style: 'satellite', imageryUrl: '', windEffect: 100 },
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
   nativeRenderer: false,

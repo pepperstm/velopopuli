@@ -7,7 +7,7 @@ use velopopuli_core::gamify::streaks;
 use velopopuli_core::gpx::{build_route, parse_gpx_track_times, parse_iso_time, RawPoint, M_PER_DEG};
 use velopopuli_core::ride::{GhostTrace, RideEngine, RideInput, RideOptions};
 use velopopuli_core::segments::{decode_polyline, follow_track, ghost_trace, place_segment, Segment, SegmentSource};
-use velopopuli_core::types::{Settings, TrainerSettings};
+use velopopuli_core::types::{Settings, TrainerSettings, VisualStyle};
 use velopopuli_core::workout::{builtin_workouts, parse_erg, parse_zwo, StepKind};
 
 fn close(a: f64, b: f64, tol: f64) -> bool {
@@ -430,4 +430,21 @@ mod gearing {
         assert!((rpm - 80.8).abs() < 1.0, "{rpm}");
         assert_eq!(cadence(5.0, 0.0, 2105.0), 0.0);
     }
+}
+
+#[test]
+fn visual_style_carries_over_from_the_imagery_switch() {
+    let style = |json: &str| serde_json::from_str::<Settings>(json).unwrap().look.style();
+    // A new profile, and one from before there was a choice with imagery left on: satellite.
+    assert_eq!(style("{}"), VisualStyle::Satellite);
+    assert_eq!(style(r#"{"look":{"imagery":true}}"#), VisualStyle::Satellite);
+    // Imagery turned off becomes the simple style.
+    assert_eq!(style(r#"{"look":{"imagery":false}}"#), VisualStyle::Simple);
+    // Once a style is chosen, it wins (the page drops the old switch, but a stray one is ignored).
+    assert_eq!(style(r#"{"look":{"style":"simple"}}"#), VisualStyle::Simple);
+    assert_eq!(style(r#"{"look":{"style":"satellite","imagery":false}}"#), VisualStyle::Satellite);
+    // Saved again, the style is kept and nothing is invented.
+    let look = serde_json::to_value(serde_json::from_str::<Settings>(r#"{"look":{"style":"simple"}}"#).unwrap().look).unwrap();
+    assert_eq!(look["style"], "simple");
+    assert!(look.get("imagery").is_none());
 }

@@ -18,7 +18,7 @@ use velopopuli_core::gearing;
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
 use velopopuli_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
-use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
+use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode, VisualStyle};
 use velopopuli_core::workout::{Workout, WorkoutPos};
 use velopopuli_core::world::{align_dem_with, landmarks, route_structures, Landmark, SceneryCounts, World, WorldLayout, LAYOUT};
 
@@ -388,7 +388,7 @@ impl Session {
         );
         devices.command_trainer(TrainerCommand::UserConfig { rider_kg: settings.rider.weight_kg, bike_kg: settings.rider.bike_kg });
 
-        let imagery = (settings.look.imagery && real_place).then(|| crate::imagery::Imagery::new(http.clone(), store.dir(), world.route.clone(), &settings.look.imagery_url));
+        let imagery = (settings.look.style() == VisualStyle::Satellite && real_place).then(|| crate::imagery::Imagery::new(http.clone(), store.dir(), world.route.clone(), &settings.look.imagery_url));
         let session = Arc::new(Session {
             route_id: route_id.to_string(),
             world,

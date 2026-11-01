@@ -15,11 +15,20 @@ export function mergeSettings(stored: Partial<Settings> | null): Settings {
     trainer: { ...DEFAULT_SETTINGS.trainer, ...s.trainer },
     bots: { ...DEFAULT_SETTINGS.bots, ...s.bots },
     goal: { ...DEFAULT_SETTINGS.goal, ...s.goal },
-    look: { ...DEFAULT_SETTINGS.look, ...s.look },
+    look: mergeLook(s.look),
     smart: { ...DEFAULT_SETTINGS.smart, ...s.smart },
     group: { ...DEFAULT_SETTINGS.group, ...s.group },
     gears: { ...DEFAULT_SETTINGS.gears, ...s.gears }
   }
+}
+
+/**
+ * The look, with profiles from before the visual style carried over: imagery turned off
+ * becomes the simple style. The old switch is dropped, so it can't contradict the style later.
+ */
+function mergeLook(stored: (Partial<Settings['look']> & { imagery?: boolean }) | undefined): Settings['look'] {
+  const { imagery, ...look } = stored ?? {}
+  return { ...DEFAULT_SETTINGS.look, ...(imagery === false ? { style: 'simple' as const } : {}), ...look }
 }
 
 export interface SettingsStore {

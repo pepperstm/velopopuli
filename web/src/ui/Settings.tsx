@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { api, useSettings } from '../state'
-import type { GearPreview, GearSettings, Settings, StravaStatus } from '../types'
+import type { GearPreview, GearSettings, Settings, StravaStatus, VisualStyle } from '../types'
 import { ReportButton } from './Diagnostics'
 
 function Num(props: {
@@ -52,6 +52,11 @@ function Toggle(props: { label: string; value: boolean; onChange: (v: boolean) =
     </label>
   )
 }
+
+const VISUAL_STYLES: [VisualStyle, string][] = [
+  ['simple', 'Simple'],
+  ['satellite', 'Satellite']
+]
 
 const WHEELS: [string, number][] = [
   ['700 × 25c', 2105],
@@ -583,6 +588,22 @@ export function SettingsScreen(): React.JSX.Element {
 
       <section className="card">
         <h2>Virtual world</h2>
+        <div className="field">
+          <span>Visual style</span>
+          <div className="seg visual-style">
+            {VISUAL_STYLES.map(([style, name]) => (
+              <button key={style} className={settings.look.style === style ? 'on' : ''} onClick={() => look({ style })}>
+                {name}
+              </button>
+            ))}
+          </div>
+          <small>
+            {settings.look.style === 'simple'
+              ? 'The ground is painted: meadow, rock on steep faces, scree and snow up high. Nothing extra to download.'
+              : 'The ground near the route is covered with real imagery, downloaded as you ride and kept for next time: national aerial photos in Switzerland, France, Spain, the Netherlands and the US, and Sentinel-2 satellite imagery everywhere else.'}{' '}
+            Takes effect from the next ride.
+          </small>
+        </div>
         <Toggle
           label="Real terrain around the route"
           hint="Downloads open elevation data for the area so the mountains match the real place. Off (or offline) uses generated hills."
@@ -601,13 +622,7 @@ export function SettingsScreen(): React.JSX.Element {
           value={settings.scenery}
           onChange={(v) => update((s) => ({ ...s, scenery: v }))}
         />
-        <Toggle
-          label="Satellite and aerial imagery on the ground"
-          hint="Covers the ground near the route with real imagery, downloaded as you ride and kept for next time: national aerial photos in Switzerland, France, Spain, the Netherlands and the US, and Sentinel-2 satellite imagery everywhere else."
-          value={settings.look.imagery}
-          onChange={(v) => look({ imagery: v })}
-        />
-        {settings.look.imagery && (
+        {settings.look.style === 'satellite' && (
           <label className="field">
             <span>Your own imagery provider (optional)</span>
             <input
