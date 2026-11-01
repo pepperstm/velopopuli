@@ -2,11 +2,12 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
-## What's new in 0.3.0
+## What's new in 0.3.6
 
-- **Virtual gears** (optional): leave the bike in one gear and shift with keys, a Bluetooth remote or on-screen buttons. Set up your own chainrings and cassette or pick a preset; the trainer's resistance changes so each gear feels real. Riders who shift their bike's own gears don't need to change anything. [How it works](https://github.com/pepperstm/velopopuli/wiki/Virtual-gears)
-- **Now licensed under the GNU GPL v3 or later**, so VeloPopuli and anything built from it stays open source. Earlier versions have been relicensed too.
-- For contributors: a contribution guide, project handoff notes, issue and pull-request templates, and automatic formatting checks.
+- **Barriers lean with the road.** On a hill each barrier section now stands on its feet at both ends and tilts with the slope, instead of standing level and floating or sinking.
+- **Denser woods, and six kinds of tree.** Mapped forests are planted much more thickly, with spruce, pine, broadleaf, birch, tall columnar trees and bushes, mixed by latitude, altitude (conifers take over towards the tree line) and stands that change across a wood.
+- **Distant trees as sprites.** Beyond about 200 m a tree is drawn as a flat picture of itself and becomes a 3D model as you get closer, so the denser woods cost only a little more to draw than the old sparse ones.
+- The README and guides have fresh screenshots from this version.
 
 ## Download
 

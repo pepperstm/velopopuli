@@ -17,7 +17,7 @@ Every push is built and tested by GitHub Actions on Windows, macOS and Linux; th
 
 ## Tests
 
-- `cargo test -p velopopuli-core` — the pure-Rust core: route building, physics, recording, workouts, fitness, segments, sensor protocols, terrain, buildings, scenery, surfaces, road widths and barriers.
+- `cargo test -p velopopuli-core` — the pure-Rust core: route building, physics, recording, workouts, fitness, segments, sensor protocols, terrain, buildings, scenery, surfaces, road widths, barriers and trees.
 - `cargo test -p velopopuli` — the app (diagnostics, GitHub issue links, smart plugs, …).
 - `cargo test -p velopopuli-relay` — the group-ride relay.
 
@@ -49,7 +49,7 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_SMOKE_SCROLL` | Scroll to the section with this heading before capturing (e.g. `Gears` on the Settings screen) |
 | `VP_SKIP_OVERPASS` | Don't ask the Overpass API (tests the fallbacks) |
 
-The ride uses the newest route in the library (or the Demo Loop) and the simulated demo rider. A window that opens behind others gets few animation frames; the `.txt` reports how many were drawn.
+The ride uses the newest route in the library (or the Demo Loop) and the simulated demo rider. A window that opens behind others gets few animation frames; the `.txt` reports how many were drawn, and for the last frame the triangles, draw calls and average milliseconds a frame (for comparing the cost of a change at the same spot).
 
 Turn clip frames into a video with `ffmpeg -framerate 15 -i shot.frames/%04d.png -c:v libx264 -pix_fmt yuv420p clip.mp4`.
 
