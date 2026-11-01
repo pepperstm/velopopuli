@@ -87,6 +87,12 @@ impl RoadKind {
         matches!(self, RoadKind::Tram | RoadKind::Rail)
     }
 
+    /// Whether it is built level across, cut into a hillside and carried on embankments. Paths,
+    /// footways and driveways follow the ground as it is.
+    pub(super) fn banked(self) -> bool {
+        matches!(self, RoadKind::Track | RoadKind::Minor | RoadKind::Main | RoadKind::Major | RoadKind::Rail)
+    }
+
     /// Whether the surface has an edge line each side and a broken one down the middle.
     pub(super) fn marked(self) -> bool {
         matches!(self, RoadKind::Main | RoadKind::Major)
@@ -368,9 +374,15 @@ fn bucket(x: f64, z: f64) -> (i32, i32) {
 
 /// Distance from a point to a line segment.
 pub(super) fn to_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let q = nearest_on_segment(p, a, b);
+    (p.0 - q.0).hypot(p.1 - q.1)
+}
+
+/// The point on segment `a→b` nearest to `p`.
+pub(super) fn nearest_on_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
     let (dx, dz) = (b.0 - a.0, b.1 - a.1);
     let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dz) / (dx * dx + dz * dz).max(1e-12)).clamp(0.0, 1.0);
-    (p.0 - a.0 - dx * t).hypot(p.1 - a.1 - dz * t)
+    (a.0 + dx * t, a.1 + dz * t)
 }
 
 /// Where segment `a→b` crosses `c→d`, as the fraction along `a→b`.
