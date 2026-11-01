@@ -16,16 +16,21 @@ const FLAT: f64 = 16.0;
 /// Below the road it can fall away sooner, from this distance: a cell leaning down past the
 /// edge goes under the road, whose embankment and retaining wall cover it.
 const FILL_FROM: f64 = 8.0;
-/// Past those the ground rises to the hillside as a cutting this steep (rise over run: about 50°, steep
-/// enough to show as rock), or falls to it as an embankment this steep (about 34°, a grassed
-/// slope)…
+/// Past those the ground rises to the hillside as a cutting this steep (rise over run: about
+/// 50°, steep enough to show as rock), or falls to it as an embankment this steep (about 34°,
+/// a grassed slope)…
 const CUT_SLOPE: f64 = 1.2;
 const FILL_SLOPE: f64 = 0.67;
 /// …up to this height. A real cutting or embankment can be taller, but most of a bigger
-/// difference is the terrain data being coarse, and is blended away instead.
+/// difference is the terrain data being coarse, and is blended away instead…
 const FACE_MAX: f64 = 7.0;
-/// …and is the surrounding terrain whatever beyond this distance.
+/// …and the ground is the surrounding terrain whatever beyond this distance.
 pub(super) const BLEND: f64 = 90.0;
+/// Other roads and railways are level this far past their edges, with faces up to this high,
+/// and are back on the hillside this much further out.
+const SIDE_FLAT: f64 = 8.0;
+const SIDE_FACE_MAX: f64 = 4.0;
+const SIDE_REACH: f64 = 20.0;
 /// Another stretch of the route this close (a hairpin's other arm) shares the ground.
 const SHARED: f64 = 18.0;
 /// Within this distance of the centreline the ground follows the nearest stretch of road only.
@@ -351,24 +356,52 @@ impl HeightField {
         // Approaching a tunnel the cutting narrows to the width of the tunnel's own trench.
         let narrow = self.shape[nearest] as f64;
         let trench = mix(level, around, smoothstep(mix(FLAT, TRENCH_FLAT, narrow), mix(BLEND, TRENCH_BLEND, narrow), d));
-        mix(cross_section(d, level, around), trench, narrow)
+        mix(bank(d, level, around, &Bank::ROUTE), trench, narrow)
     }
 }
 
-/// A road's cross-section: the ground at road level out to `FLAT` (`FILL_FROM` below the road),
-/// then a cutting face up to the hillside or an embankment down to it, as steep as a road
-/// builder would make them and up to `FACE_MAX` high. Any more difference than that (mostly
-/// where coarse terrain data disagrees with the route's own elevation) is blended away gently
-/// over the road's whole reach, as is everything by the edge of it.
-fn cross_section(d: f64, level: f64, around: f64) -> f64 {
+/// The shape of the ground across a road, for [`bank`].
+pub(super) struct Bank {
+    /// Level with the road out to this distance from its centre on the uphill side…
+    pub flat: f64,
+    /// …and this on the downhill side.
+    pub fill_from: f64,
+    /// The tallest a cutting or embankment is made.
+    pub face_max: f64,
+    /// The natural ground again by this distance, blended in over the last `fade` metres.
+    pub reach: f64,
+    pub fade: f64,
+}
+
+impl Bank {
+    /// The route's own road: level out to `FLAT` uphill (a 10 m terrain cell can't then tilt
+    /// up over its edge), to `FILL_FROM` downhill (a cell leaning down goes under the road's
+    /// embankment and retaining wall).
+    const ROUTE: Bank = Bank { flat: FLAT, fill_from: FILL_FROM, face_max: FACE_MAX, reach: BLEND, fade: 20.0 };
+
+    /// Another road or a railway `half` wide either side: level a cell's width past both
+    /// edges (it is draped on the ground, with nothing to cover a lean), smaller faces, and
+    /// back to the hillside within the distance the chunk sees roads beyond its edge.
+    pub(super) fn side(half: f64) -> Bank {
+        let flat = half + SIDE_FLAT;
+        Bank { flat, fill_from: flat, face_max: SIDE_FACE_MAX, reach: flat + SIDE_REACH, fade: 10.0 }
+    }
+}
+
+/// The ground across a road at `d` from its centre, the road being at `level` and the natural
+/// ground at `around`: level beside it, then a cutting face up to the hillside or an embankment
+/// down to it, as steep as a road builder would make them and up to `face_max` high. Any more
+/// difference than that (mostly where coarse terrain data disagrees with the road's own
+/// elevation) is blended away gently over the road's whole reach.
+pub(super) fn bank(d: f64, level: f64, around: f64, b: &Bank) -> f64 {
     let rise = around - level;
     let height = rise.abs();
-    let out = (d - if rise >= 0.0 { FLAT } else { FILL_FROM }).max(0.0);
-    let face = height.min(FACE_MAX);
+    let out = (d - if rise >= 0.0 { b.flat } else { b.fill_from }).max(0.0);
+    let face = height.min(b.face_max);
     let slope = if rise >= 0.0 { CUT_SLOPE } else { FILL_SLOPE };
     // The top of a cutting (or the foot of an embankment) is rounded off a little.
-    let held = smooth_min(face, slope * out, 0.4 * face) + (height - face) * smoothstep(FLAT, BLEND, d);
-    mix(level + held.copysign(rise), around, smoothstep(BLEND - 20.0, BLEND, d))
+    let held = smooth_min(face, slope * out, 0.4 * face) + (height - face) * smoothstep(b.flat, b.reach, d);
+    mix(level + held.copysign(rise), around, smoothstep(b.reach - b.fade, b.reach, d))
 }
 
 /// The smaller of `a` and `b`, with the corner between them rounded over about `k`.

@@ -272,6 +272,32 @@ impl World {
                 level[k] = around(k).filter(|&n| wet[n]).map(|n| settled[n]).fold(f64::INFINITY, f64::min).min(h[k] - 0.3);
             }
         }
+        // Other roads and railways are level across, cut into hillsides and carried on
+        // embankments, like the route; close to the route its own cross-section wins.
+        let banked: Vec<&scenery::RoadStrip> = scene.roads_in(cx, cz).filter(|s| s.kind.banked() && !s.steel && !s.casing && !s.cap).collect();
+        if !banked.is_empty() {
+            for j in 0..pad {
+                for i in 0..pad {
+                    let k = j * pad + i;
+                    let weight = smoothstep(18.0, 40.0, near[k]);
+                    if wet[k] || trench[k] || weight <= 0.0 {
+                        continue;
+                    }
+                    let at = (x0 + (i as f64 - m as f64) * cell, z0 + (j as f64 - m as f64) * cell);
+                    let nearest = banked
+                        .iter()
+                        .map(|s| (s, scenery::nearest_on_segment(at, s.a, s.b)))
+                        .map(|(s, q)| (s, q, (at.0 - q.0).hypot(at.1 - q.1)))
+                        .filter(|(s, _, d)| *d < height::Bank::side(s.half).reach)
+                        .min_by(|a, b| a.2.total_cmp(&b.2));
+                    if let Some((s, q, d)) = nearest {
+                        // The road is as high as the smooth ground under its centre.
+                        let level = self.field.probe(q.0, q.1, 0.0).ground;
+                        h[k] += (height::bank(d, level, h[k], &height::Bank::side(s.half)) - h[k]) * weight;
+                    }
+                }
+            }
+        }
         let row = CELLS + 1;
         let mut mesh = GridMesh {
             positions: Vec::with_capacity(row * row * 3),
