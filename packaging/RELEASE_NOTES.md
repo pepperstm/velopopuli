@@ -2,13 +2,12 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
-## What's new in 0.3.5
+## What's new in 0.3.6
 
-- **Road surfaces you can feel** (optional): concrete, gravel, cobbles and earth roll heavier than tarmac, so you slow on screen and the trainer gets harder by the same force. Turn it off under **Settings → Trainer & physics → Feel the road surface**.
-- **Mountain-bike trails:** ride graded singletrack, paths and bridleways from OpenStreetMap. Harder grades roll heavier and have a speed limit; trails are narrow with no barriers, look like worn singletrack, bank into berms on tight turns, cross streams on log bridges and splash through fords where there is no bridge.
-- **Find waymarked mountain-bike routes** in an area and ride one.
-- **Off the mapped roads**, a route rides a dirt track instead of tarmac.
-- The trail and surface feel is new and hasn't yet been tuned on real trainers — feedback welcome.
+- **Barriers lean with the road.** On a hill each barrier section now stands on its feet at both ends and tilts with the slope, instead of standing level and floating or sinking.
+- **Denser woods, and six kinds of tree.** Mapped forests are planted much more thickly, with spruce, pine, broadleaf, birch, tall columnar trees and bushes, mixed by latitude, altitude (conifers take over towards the tree line) and stands that change across a wood.
+- **Distant trees as sprites.** Beyond about 200 m a tree is drawn as a flat picture of itself and becomes a 3D model as you get closer, so the denser woods cost only a little more to draw than the old sparse ones.
+- The README and guides have fresh screenshots from this version.
 
 ## Download
 

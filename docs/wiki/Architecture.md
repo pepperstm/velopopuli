@@ -1,6 +1,6 @@
 # Architecture
 
-About two thirds of the code is Rust; everything that computes or talks to hardware is in it. The web layer (React + three.js) draws the screens and the 3D world from data the Rust side prepares.
+About three quarters of the code is Rust; everything that computes or talks to hardware is in it. The web layer (React + three.js) draws the screens and the 3D world from data the Rust side prepares.
 
 ```
 crates/core/      Pure Rust library, no I/O — fully unit-tested
