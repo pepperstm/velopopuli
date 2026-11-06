@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use chrono::{Local, Offset, TimeZone};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use velopopuli_core::devices::TrainerCommand;
+use velopopuli_core::devices::{obc, TrainerCommand};
 use velopopuli_core::fit::encode_fit;
 use velopopuli_core::fitness::{estimate_ftp, power_curve};
 use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
@@ -417,6 +417,17 @@ impl Session {
             engine.gear_shifted = true;
             crate::diag::raw("ride", format!("shift to gear {}/{count}", next + 1));
         }
+    }
+
+    /// What decides between the actions one controller press can mean.
+    pub fn controller_context(&self) -> obc::Context {
+        let (virtual_gears, trainer) = {
+            let s = self.settings.lock().unwrap();
+            (!gearing::gears(&s.gears).is_empty(), s.trainer.clone())
+        };
+        // The same rule as the trainer commands in `run`: workouts hold their targets in ERG if set to.
+        let erg = if self.engine.lock().unwrap().workout.is_some() { trainer.workout_erg } else { trainer.mode == TrainerMode::Erg };
+        obc::Context { virtual_gears, erg }
     }
 
     /// Skips to the next workout step.

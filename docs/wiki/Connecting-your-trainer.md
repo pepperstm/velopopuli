@@ -21,6 +21,7 @@ Open **Devices**. VeloPopuli talks to trainers and sensors directly — over you
 | Power meters | Cycling Power service |
 | Heart-rate straps and broadcasting watches | Heart Rate service |
 | Speed and cadence sensors | CSC service |
+| Handlebar controllers | **OpenBikeControl**: shifting, ERG and workout controls — see [Virtual gears](Virtual-gears#controllers) |
 
 Not supported yet: older Wahoo KICKRs that only speak Wahoo's proprietary protocol (connect those over ANT+ FE-C instead).
 

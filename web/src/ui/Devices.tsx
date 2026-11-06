@@ -9,7 +9,8 @@ const KIND_LABEL: Record<DeviceInfo['kind'], string> = {
   power: 'Power meter',
   hr: 'Heart rate',
   cadence: 'Cadence',
-  speed: 'Speed'
+  speed: 'Speed',
+  controller: 'Controller'
 }
 
 const STATUS_LABEL: Record<DeviceInfo['status'], string> = {

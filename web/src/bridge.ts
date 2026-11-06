@@ -11,6 +11,7 @@ import type {
   WorkoutMeta,
   Badge,
   BtCandidate,
+  ControllerAction,
   DevicesSnapshot,
   RideInit,
   RideState,
@@ -73,7 +74,8 @@ export const api = {
     finish: () => invoke<RideSummary | null>('ride_finish'),
     abort: () => invoke<void>('ride_abort'),
     onState: (cb: (s: RideState) => void) => on('ride:state', cb),
-    onLoading: (cb: (message: string) => void) => on('ride:loading', cb)
+    onLoading: (cb: (message: string) => void) => on('ride:loading', cb),
+    onControllerAction: (cb: (action: ControllerAction) => void) => on('controller:action', cb)
   },
   strava: {
     status: () => invoke<StravaStatus>('strava_status'),

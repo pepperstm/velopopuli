@@ -15,6 +15,7 @@ use tokio::sync::{mpsc, watch, OnceCell};
 use uuid::Uuid;
 use velopopuli_core::devices::ant::{encode_message, msg};
 use velopopuli_core::devices::ble::*;
+use velopopuli_core::devices::obc::{self, Buttons, CHR_OBC_APP_INFO, CHR_OBC_BUTTONS, SVC_OBC};
 use velopopuli_core::devices::profiles::{decode_fec, fec_pages};
 use velopopuli_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Readings, RevCounter, TrainerCommand, Transport, WHEEL_CIRCUMFERENCE};
 
@@ -33,8 +34,9 @@ pub struct Ble {
     scanning: Arc<AtomicBool>,
 }
 
-fn sensor_services() -> [Uuid; 5] {
-    [uuid_from_u16(SVC_FTMS), uuid_from_u16(SVC_CYCLING_POWER), uuid_from_u16(SVC_HEART_RATE), uuid_from_u16(SVC_CSC), Uuid::from_u128(SVC_TACX_FEC)]
+/// What a device must advertise to be listed: a cycling sensor, or an OpenBikeControl controller.
+fn sensor_services() -> [Uuid; 6] {
+    [uuid_from_u16(SVC_FTMS), uuid_from_u16(SVC_CYCLING_POWER), uuid_from_u16(SVC_HEART_RATE), uuid_from_u16(SVC_CSC), Uuid::from_u128(SVC_TACX_FEC), Uuid::from_u128(SVC_OBC)]
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -165,6 +167,7 @@ struct Session {
     crank: RevCounter,
     wheel: RevCounter,
     power_wheel: RevCounter,
+    buttons: Buttons,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -206,6 +209,8 @@ impl Link {
         let power = find(uuid_from_u16(SVC_CYCLING_POWER), uuid_from_u16(CHR_CYCLING_POWER));
         let hr = find(uuid_from_u16(SVC_HEART_RATE), uuid_from_u16(CHR_HEART_RATE));
         let csc = find(uuid_from_u16(SVC_CSC), uuid_from_u16(CHR_CSC));
+        let obc_buttons = find(Uuid::from_u128(SVC_OBC), Uuid::from_u128(CHR_OBC_BUTTONS));
+        let obc_app_info = find(Uuid::from_u128(SVC_OBC), Uuid::from_u128(CHR_OBC_APP_INFO));
 
         // Tacx's FE-C tunnel is only used when the trainer has no standard FTMS service.
         let tacx_rx = if ibd.is_some() { None } else { tacx_rx };
@@ -217,11 +222,25 @@ impl Link {
             DeviceKind::Hr
         } else if csc.is_some() {
             DeviceKind::Cadence
+        } else if obc_buttons.is_some() {
+            // Buttons on a trainer or sensor are used too; only a device with nothing else is a controller.
+            DeviceKind::Controller
         } else {
             return Err("This device has no cycling sensors.".into());
         };
 
-        diag::event("ble", format!("dev={id} kind={kind:?} using ftms={} tacx_fec={} power={} hr={} csc={}", ibd.is_some(), tacx_rx.is_some(), power.is_some(), hr.is_some(), csc.is_some()));
+        diag::event(
+            "ble",
+            format!(
+                "dev={id} kind={kind:?} using ftms={} tacx_fec={} power={} hr={} csc={} obc={}",
+                ibd.is_some(),
+                tacx_rx.is_some(),
+                power.is_some(),
+                hr.is_some(),
+                csc.is_some(),
+                obc_buttons.is_some()
+            ),
+        );
         for c in [&ibd, &tacx_rx, &power, &hr, &csc].into_iter().flatten() {
             if let Err(e) = p.subscribe(c).await {
                 diag::event("ble", format!("dev={id} subscribe chr={} failed: {e}", short_uuid(&c.uuid)));
@@ -248,6 +267,27 @@ impl Link {
             control = Some((tx.clone(), Dialect::TacxFec));
         }
 
+        // A trainer or sensor whose buttons fail is still worth keeping for its measurements.
+        let obc_buttons = match &obc_buttons {
+            Some(c) => match p.subscribe(c).await {
+                Ok(()) => obc_buttons,
+                Err(e) if kind == DeviceKind::Controller => return Err(format!("Could not subscribe to the buttons: {e}")),
+                Err(e) => {
+                    diag::event("ble", format!("dev={id} subscribe chr={} failed: {e}", short_uuid(&c.uuid)));
+                    None
+                }
+            },
+            None => None,
+        };
+        // OpenBikeControl: tell the controller which app this is and which buttons it uses.
+        if let (Some(c), true) = (&obc_app_info, obc_buttons.is_some()) {
+            let info = obc::app_info("velopopuli", env!("CARGO_PKG_VERSION"));
+            let write_type = if c.properties.contains(CharPropFlags::WRITE) { WriteType::WithResponse } else { WriteType::WithoutResponse };
+            if let Err(e) = p.write(c, &info, write_type).await {
+                diag::event("ble", format!("dev={id} OpenBikeControl app info failed: {e}"));
+            }
+        }
+
         let notifications = p.notifications().await.map_err(err)?;
         let controllable = control.is_some();
         diag::event(
@@ -267,7 +307,14 @@ impl Link {
             d.controllable = controllable;
             d.status = DeviceStatus::Connected;
         });
-        Ok(Session { notifications, control, crank: RevCounter::new(65536, 1024.0), wheel: RevCounter::new(1 << 32, 1024.0), power_wheel: RevCounter::new(1 << 32, 2048.0) })
+        Ok(Session {
+            notifications,
+            control,
+            crank: RevCounter::new(65536, 1024.0),
+            wheel: RevCounter::new(1 << 32, 1024.0),
+            power_wheel: RevCounter::new(1 << 32, 2048.0),
+            buttons: Buttons::default(),
+        })
     }
 
     /// Pumps one connection until it drops, then keeps reconnecting until the device is removed.
@@ -379,6 +426,13 @@ impl Link {
         } else if n.uuid == Uuid::from_u128(CHR_TACX_NOTIFY) {
             // Payload is a whole ANT message: SYNC, len, id, channel, 8-byte page, checksum.
             (v.len() >= 12 && v[0] == 0xa4).then(|| <[u8; 8]>::try_from(&v[4..12]).ok()).flatten().and_then(|page| decode_fec(&page))
+        } else if n.uuid == Uuid::from_u128(CHR_OBC_BUTTONS) {
+            // Presses are tracked outside a ride too, so a button held when one starts doesn't count as a press.
+            let ctx = self.devices.controller_context();
+            if let Some(action) = s.buttons.update(v, ctx.unwrap_or_default()).filter(|_| ctx.is_some()) {
+                self.devices.controller_action(&self.id, action);
+            }
+            None
         } else {
             None
         };

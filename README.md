@@ -15,7 +15,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 - **A closed road, race-day style.** The road you ride is set apart from the map's road network: steel crowd barriers line both sides (with banners on some, each section standing on its feet and leaning with the road on hills), its surface is the real one — tarmac, concrete slabs, cobbles, gravel or dirt — and so is its width: a 7 m main road, a 5 m village street, a 3 m farm track. Both come from OpenStreetMap's tags for the roads along the route (`surface`, `width`, `lanes`, and the road class), or are guessed from the road class when those can't be fetched. Where the route leaves the mapped roads for 100 m or more — across a field, along an unmapped trail — it becomes a dirt track. Widths change gradually, and buildings, signs, other riders and the barriers all follow them. Ride the Arenberg trench on its setts and the Strade Bianche on white gravel — and feel them: rougher surfaces roll heavier, so you slow down on screen and the trainer gets harder.
 - **Mountain-bike trails.** Where the route follows an unpaved path, a bridleway, a walking trail or a trail graded for mountain bikes (OpenStreetMap's `mtb:scale`, S0–S6, or estimated from the hiking grade), you ride a narrow earth singletrack with no barriers, the HUD shows the grade, and the harder the grade the heavier it rolls — on screen and on the trainer.
 - **Find a route in the app.** Search for a place, click waypoints on the map and get a route along bike-friendly roads with real elevation (BRouter), or pick one of eight famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). Mountain bikers can plan along trails, or pick from the **waymarked MTB routes** mapped in the area on screen.
-- **Smart trainer control.** Gradient simulation or ERG mode, over Bluetooth FTMS, Tacx FE-C-over-Bluetooth, or ANT+ FE-C. The gradient "feel" scales the real slope, softens descents and caps the steepest pitch (so a 15% ramp is rideable on any trainer). Shift your bike's own gears as normal, or set up **virtual gears** — your own chainrings and cassette or a preset — and shift with keys, a Bluetooth remote or on-screen buttons.
+- **Smart trainer control.** Gradient simulation or ERG mode, over Bluetooth FTMS, Tacx FE-C-over-Bluetooth, or ANT+ FE-C. The gradient "feel" scales the real slope, softens descents and caps the steepest pitch (so a 15% ramp is rideable on any trainer). Shift your bike's own gears as normal, or set up **virtual gears** — your own chainrings and cassette or a preset — and shift with keys, a Bluetooth remote, an [OpenBikeControl](https://openbikecontrol.org) controller or on-screen buttons.
 - **Structured workouts on any route.** Import Zwift `.zwo`, `.erg` or `.mrc` files, or use the built-in sessions (endurance, sweet spot, threshold, VO₂max, over-unders, sprints and an FTP ramp test). The trainer holds each target in ERG while the route scrolls by; adjust the intensity or skip a step mid-ride.
 - **Fitness tracking.** Power curve (5 s to 1 h), an FTP estimate you can apply in one click, power zones on the HUD, and a training-load chart of fitness, fatigue and form.
 - **Sensors.** Power meters, heart-rate straps, speed and cadence sensors over Bluetooth and ANT+. When several devices report the same metric the most direct one wins (crank power meter over trainer estimate, strap over relayed HR). Basic trainers with only a speed sensor can use estimated power.
@@ -60,7 +60,7 @@ Be aware of what has and has not been proven:
 
 | Area | Status |
 | --- | --- |
-| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 93 core tests) |
+| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 98 core tests) |
 | Group-ride relay | Tested in-process (`cargo test -p velopopuli-relay`) and with two app instances riding together through a local relay |
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
 | Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain |
@@ -70,6 +70,7 @@ Be aware of what has and has not been proven:
 | Native renderer | Screenshots from the automated run match the built-in renderer (day, dusk with rain fog, high camera, the leaning barriers and tree sprites of 0.3.6, and the hedge banks of 0.3.7). The HUD on top of it was not checked in a screenshot of the real window |
 | FIT export | Unit-tested by decoding the output with an independent FIT parser |
 | Bluetooth and ANT+ **protocol** encoding/decoding (FTMS, Cycling Power, CSC, HR, ANT framing, ANT+ HR/power/speed/cadence/FE-C pages) | Unit-tested against hand-built packets |
+| OpenBikeControl controllers | Button messages, the one-action-per-press choice and the App Information message unit-tested against bytes from the protocol's reference encoder; **not yet tried with a real controller** |
 | Full app: import → real-terrain download → ride → save FIT → personal best → summary | Verified by automated runs with the demo rider on macOS (Apple Silicon), in debug, dev-server and release builds |
 | OpenStreetMap buildings | Verified against the live services on two Alpine routes and one across a city (about 5,900 buildings), through both data sources. Very long routes have not been tried. |
 | The surrounding road network | Verified against the live map tiles on the same three routes, from screenshots of the automated run: city streets, footways and tram lines, village junctions, forest tracks, and a suburb full of roundabouts and divided roads. Frame rate with a whole city's streets in view has not been measured (about 1.3 million extra vertices in the centre of Grenoble). |
@@ -118,7 +119,7 @@ To inspect a recorded ride: `cargo run -p velopopuli-core --example fitinfo -- p
 
 ### Bluetooth
 
-**Devices → Add Bluetooth device…** lists nearby trainers and sensors. Supported: FTMS smart trainers (Wahoo, Elite, Saris, Zwift, JetBlack and most others made since ~2018), Tacx trainers using FE-C over Bluetooth, Cycling Power meters, heart-rate monitors, and speed/cadence sensors.
+**Devices → Add Bluetooth device…** lists nearby trainers and sensors. Supported: FTMS smart trainers (Wahoo, Elite, Saris, Zwift, JetBlack and most others made since ~2018), Tacx trainers using FE-C over Bluetooth, Cycling Power meters, heart-rate monitors, speed/cadence sensors, and [OpenBikeControl](https://openbikecontrol.org) handlebar controllers (see the wiki's [Virtual gears](https://github.com/pepperstm/velopopuli/wiki/Virtual-gears#controllers)).
 
 - A Bluetooth sensor can usually talk to only one app at a time: close Zwift, the manufacturer's app, etc.
 - **macOS:** the first scan asks for Bluetooth permission.
@@ -169,7 +170,7 @@ Your browser opens for approval. The key and tokens are stored in the system key
 - Hardware testing across trainers and sensors; pairing to specific ANT+ devices; multiple devices per type
 - Native renderer: Windows and Linux, and making it the default
 - More from OpenStreetMap: mapped roof shapes, other land cover (farmland, rock, glaciers), mapped leaf types, squares and car parks
-- Wahoo legacy protocol and steering; Di2 and Zwift Click/Play controllers as shifters for virtual gears
+- Wahoo legacy protocol and steering; Di2 and Zwift Click/Play controllers as shifters for virtual gears (already possible through OpenBikeControl bridges such as BikeControl)
 
 ### Stretch: self-hosted group-ride servers
 

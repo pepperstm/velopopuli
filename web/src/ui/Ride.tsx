@@ -252,6 +252,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const nativeRef = useRef(false)
   const workoutRef = useRef(false)
   workoutRef.current = Boolean(init?.workout)
+  const pausedRef = useRef(false)
+  pausedRef.current = hud?.paused ?? false
   const togglePause = (): void => void api.ride.togglePause()
   function cycleCamera(): void {
     if (nativeRef.current) void api.native.camera()
@@ -282,6 +284,22 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Handlebar controllers (OpenBikeControl) do what the keys do; the Rust side has picked one action per press.
+  useEffect(
+    () =>
+      api.ride.onControllerAction((action) => {
+        if (action === 'shiftHarder') void api.ride.shift(1)
+        else if (action === 'shiftEasier') void api.ride.shift(-1)
+        else if (action === 'harder') nudge(10)
+        else if (action === 'easier') nudge(-10)
+        else if (action === 'skipStep') void api.ride.skipStep()
+        else if (action === 'camera') cycleCamera()
+        else if ((action === 'pause') !== pausedRef.current) togglePause()
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
 
   if (error) {
     return (

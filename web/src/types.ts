@@ -286,7 +286,7 @@ export interface DeviceInfo {
   id: string
   name: string
   transport: 'ble' | 'ant' | 'sim'
-  kind: 'trainer' | 'power' | 'hr' | 'cadence' | 'speed'
+  kind: 'trainer' | 'power' | 'hr' | 'cadence' | 'speed' | 'controller'
   status: 'connecting' | 'connected' | 'searching' | 'disconnected'
   controllable: boolean
   readings: Readings
@@ -356,6 +356,9 @@ export interface ClimbResult {
   timeS: number
   previousBest: number | null
 }
+
+/** A handlebar-controller press, already narrowed to one action (see `devices/obc.rs`). */
+export type ControllerAction = 'shiftHarder' | 'shiftEasier' | 'harder' | 'easier' | 'skipStep' | 'pause' | 'resume' | 'camera'
 
 /** Streamed from the simulation about 20 times a second. */
 export interface RideState {

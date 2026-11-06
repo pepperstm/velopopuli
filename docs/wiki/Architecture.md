@@ -11,7 +11,7 @@ crates/core/      Pure Rust library, no I/O — fully unit-tested
   segments        Strava segments and other rides matched onto the route; ghosts; photos
   fit             FIT activity encoder
   waymarked       Waymarked mountain-bike routes: listing an area, joining a route's ways into one line
-  devices/        Bluetooth GATT and ANT+ protocol encode/decode; the sensor hub
+  devices/        Bluetooth GATT and ANT+ protocol encode/decode; OpenBikeControl buttons; the sensor hub
   world/          Terrain (elevation tiles, height field, chunk/horizon/road meshes),
                   OpenStreetMap buildings, scenery (forests, water, other roads, bridges and tunnels),
                   structures (decks, bores, overbridges, log bridges), the route road's surface and width,
