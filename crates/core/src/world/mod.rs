@@ -18,7 +18,7 @@ mod structures;
 mod surface;
 mod trees;
 
-pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
+pub use barriers::{barrier_model, BANNER_COLOURS, FENCE as BARRIER_FENCE, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
 pub use fields::{parse_boundaries, Boundary, MappedBoundary};
