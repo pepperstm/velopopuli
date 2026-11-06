@@ -29,7 +29,11 @@ The current gear shows on the HUD under cadence, and **− Gear +** buttons appe
 
 ## Controllers
 
-Controllers that speak [OpenBikeControl](https://openbikecontrol.org), an open protocol for handlebar buttons, connect like any sensor: **Devices → Add Bluetooth device…** and pick it (it shows as *Controller*). That includes the Stages SB200, and Zwift Click, Play and Ride, Shimano Di2 and SRAM AXS through the [BikeControl](https://bikecontrol.app) app. During a ride the buttons do what the keys do:
+Controllers that speak [OpenBikeControl](https://openbikecontrol.org), an open protocol for handlebar buttons, work over Bluetooth. The Stages SB200 has it built in.
+
+1. Choose **Virtual gears** above, so the shift buttons have gears to change. (With *My bike's gears* they do nothing; the other buttons still work.)
+2. Wake the controller, close any other app using it, then **Devices → Add Bluetooth device…** and pick it. It shows as *Controller*.
+3. Start a ride. The buttons act only during a ride, doing what the keys do:
 
 | Button | What it does |
 |---|---|
@@ -39,7 +43,7 @@ Controllers that speak [OpenBikeControl](https://openbikecontrol.org), an open p
 | Pause / Resume | Pause or resume the ride |
 | Camera view | Next camera |
 
-A controller can send several of these for one button, so that every app finds one it knows (shift up and increase difficulty, say). Each press does only one thing: shifting wins, except in ERG — or a workout held in ERG — where gears change nothing and the difficulty buttons win.
+A controller can send several of these for one button, so that every app finds one it knows (shift up and increase difficulty, say). Each press does only one thing: shifting wins, except in ERG — or a workout held in ERG — where gears change nothing and the difficulty buttons win. Holding a button counts as one press. A trainer or sensor with OpenBikeControl buttons of its own keeps working as a trainer or sensor, and its buttons work too.
 
 ## How it works
 

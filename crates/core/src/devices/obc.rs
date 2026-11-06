@@ -52,7 +52,7 @@ pub fn parse_buttons(v: &[u8]) -> Option<Vec<(u8, u8)>> {
     if *v.first()? != MSG_BUTTONS {
         return None;
     }
-    Some(v[1..].chunks_exact(2).map(|p| (p[0], p[1])).collect())
+    Some(v[1..].as_chunks::<2>().0.iter().map(|&[id, state]| (id, state)).collect())
 }
 
 /// The App Information message: app id, version and the button ids used.

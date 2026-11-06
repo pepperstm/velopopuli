@@ -14,6 +14,10 @@ Open **Devices**. VeloPopuli talks to trainers and sensors directly — over you
 
 **Devices → Add Bluetooth device…** searches and lists what it hears; click one to connect.
 
+Once connected, the device joins the list with its kind (*Smart trainer*, *Power meter*, *Heart rate*, *Cadence*, *Speed* or *Controller*), *Connected* and its live readings. A trainer says *controllable* when VeloPopuli can set its resistance, or *read-only* when it can only read it. Add each device the same way; when two measure the same thing, the most direct one is used.
+
+If a device drops out (it sleeps, or the trainer is switched off) it shows *Signal lost — searching…* and reconnects by itself when it's back. **Remove** disconnects it. Devices aren't remembered between launches yet: add them again after opening the app.
+
 | Kind of device | How VeloPopuli talks to it |
 |---|---|
 | Smart trainers made since about 2018 (Wahoo, Elite, Saris, Zwift, JetBlack and most others) | Bluetooth **FTMS**: gradient simulation and ERG |
