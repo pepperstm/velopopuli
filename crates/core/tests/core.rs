@@ -486,6 +486,59 @@ fn hairpin_ground_never_buries_the_lower_arm() {
     }
 }
 
+#[test]
+fn hairpins_get_a_fence_round_the_outside() {
+    use velopopuli_core::world::{barrier_model, BARRIER_FENCE};
+    // North for 300 m, a U-turn of 12 m radius, and back south: a hairpin.
+    let m_lon = M_PER_DEG * 45f64.to_radians().cos();
+    let at = |x: f64, z: f64| RawPoint { lat: 45.0 + z / M_PER_DEG, lon: 7.0 + x / m_lon, ele: Some(100.0) };
+    let mut pts: Vec<RawPoint> = (0..=30).map(|i| at(0.0, i as f64 * 10.0)).collect();
+    pts.extend((1..12).map(|k| {
+        let a = std::f64::consts::PI * k as f64 / 12.0;
+        at(12.0 - 12.0 * a.cos(), 300.0 + 12.0 * a.sin())
+    }));
+    pts.extend((0..=30).map(|i| at(24.0, 300.0 - i as f64 * 10.0)));
+    let route = Arc::new(build_route("hairpin", &pts).unwrap());
+    let world = World::new(route.clone(), None, 0.0);
+    let b = world.barriers();
+    assert!(b.windows(2).all(|w| w[0][4] <= w[1][4]));
+    let fence: Vec<_> = b.iter().filter(|s| s[5] as usize == BARRIER_FENCE).collect();
+    // Only round the bend (about 300 to 340 m along), none on the straights.
+    assert!(fence.len() >= 20, "{}", fence.len());
+    assert!(fence.iter().all(|s| s[4] > 280.0 && s[4] < 360.0), "{:?}", fence.iter().map(|s| s[4]).collect::<Vec<_>>());
+    // No rigid sections at the apex of the bend.
+    assert!(!b.iter().any(|s| s[5] as usize != BARRIER_FENCE && s[4] > 305.0 && s[4] < 335.0));
+    // Straights still have their barriers on both sides.
+    assert!(b.iter().filter(|s| s[4] > 100.0 && s[4] < 200.0).count() >= 70);
+    // Every panel is clear of the road, and on the outside: farther from the middle of the
+    // bend than the nearest bit of road is.
+    let arc: Vec<usize> = (0..route.n).filter(|&i| (i as f64 * route.step - 320.0).abs() < 20.0).collect();
+    let (cx, cz) = (arc.iter().map(|&i| route.x[i]).sum::<f64>() / arc.len() as f64, arc.iter().map(|&i| route.z[i]).sum::<f64>() / arc.len() as f64);
+    for s in fence.iter() {
+        let (x, z) = (s[0] as f64, s[2] as f64);
+        let near = (0..route.n).min_by(|&a, &b| (route.x[a] - x).hypot(route.z[a] - z).total_cmp(&(route.x[b] - x).hypot(route.z[b] - z))).unwrap();
+        let clear = (route.x[near] - x).hypot(route.z[near] - z);
+        assert!(clear > world.half_width(near) + 0.15, "panel at {} only {clear} m from the road", s[4]);
+        if (305.0..335.0).contains(&s[4]) {
+            assert!((x - cx).hypot(z - cz) > (route.x[near] - cx).hypot(route.z[near] - cz), "panel at {} is inside the bend", s[4]);
+        }
+    }
+    let ends = |s: &[f32; 7]| {
+        let (half, yaw) = (1.0f64, s[3] as f64);
+        [-half, half].map(|z| (s[0] as f64 + z * yaw.sin(), s[2] as f64 + z * yaw.cos()))
+    };
+    // Neighbouring panels meet end to end, with no gap and no pile-up.
+    for w in fence.windows(2) {
+        let (a, b) = (ends(w[0]), ends(w[1]));
+        let gap = [a[0], a[1]].iter().flat_map(|p| [b[0], b[1]].map(|q| (p.0 - q.0).hypot(p.1 - q.1))).fold(f64::MAX, f64::min);
+        assert!(gap < 0.15, "{gap} between panels at {} and {}", w[0][4], w[1][4]);
+    }
+    // The fence's model: posts and netting, standing on the ground, 2 m long.
+    let m = barrier_model(BARRIER_FENCE);
+    assert!(m.vertices() > 300);
+    assert!(m.positions.chunks(3).all(|p| p[1] >= 0.0 && p[1] <= 1.41 && p[2].abs() <= 1.0 + 1e-6));
+}
+
 mod buildings {
     use super::*;
     use velopopuli_core::world::{overpass_query, parse_overpass, Footprint};
