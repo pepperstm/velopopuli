@@ -2,10 +2,11 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
-## What's new in 0.3.8
+## What's new in 0.3.9
 
-- **Netting round hairpins.** On a tight bend the steel barriers used to fan apart on the outside and pile into each other on the inside. Now an orange netting fence on posts runs smoothly round the outside of the bend, and the inside is left open, as on a real climb. The straights keep their barriers and banners.
-- The hairpins picture in the README is fresh from this version.
+- **Handlebar controllers.** Controllers that speak [OpenBikeControl](https://openbikecontrol.org), an open protocol for handlebar buttons, now work over Bluetooth. Shift virtual gears, raise or lower the ERG target or workout intensity, skip a workout step, pause and switch camera without letting go of the bars. Pair one under **Devices → Add Bluetooth device…**; it shows as *Controller*. Thanks to Jonas Acker for adding it.
+- **Pairing, written up.** The README and the guides now walk through pairing a Bluetooth device step by step, and what the Devices list tells you.
+- Controller support is new and hasn't been tried with a real controller yet. If yours misbehaves, **Report a problem** in the app gathers what's needed to fix it.
 
 ## Download
 
