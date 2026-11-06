@@ -6,6 +6,10 @@
 //! every `SECTION_M` along each side; the renderers draw the ones near the rider. Like a
 //! real one, each section is a rigid frame standing on its feet at both ends, so on a hill
 //! it leans with the road, and neighbours meet at the same height.
+//!
+//! Rigid sections can't follow a hairpin: on the outside they fan apart and on the inside
+//! they pile into each other. So round a tight bend there are none on either side, and a
+//! netting fence runs round the outside instead, panel by panel along the outside edge.
 
 use super::mesh::TriMesh;
 use super::{World, OPEN, ROAD_LIFT};
@@ -19,7 +23,19 @@ const SET_BACK: f64 = 0.55;
 
 /// Banner colours (sRGB), in the order of `look` 1, 2, 3, 4: the website's lime, paper, olive and pale lime.
 pub const BANNER_COLOURS: [[f64; 3]; 4] = [[0.914, 1.0, 0.376], [0.969, 0.969, 0.937], [0.667, 0.737, 0.314], [0.855, 0.910, 0.455]];
-pub const LOOKS: usize = 1 + BANNER_COLOURS.len();
+/// The look of a netting fence panel, the last one.
+pub const FENCE: usize = 1 + BANNER_COLOURS.len();
+pub const LOOKS: usize = FENCE + 1;
+
+/// A bend tighter than this radius (metres, at the centre line) gets a fence, not barriers.
+const TIGHT_RADIUS_M: f64 = 30.0;
+/// The bend is measured over this far either side, so a single kink in the map isn't one.
+const BEND_WINDOW_M: f64 = 4.0;
+/// The fence runs on this far beyond where the bend is tight, into its entry and exit.
+const BEND_MARGIN_M: f64 = 5.0;
+/// Length and height of one fence panel.
+const PANEL_M: f64 = 2.0;
+const FENCE_HEIGHT: f64 = 1.4;
 
 fn linear(c: [f64; 3]) -> [f32; 3] {
     c.map(|v| v.powf(2.2) as f32)
@@ -49,8 +65,12 @@ fn cuboid(mesh: &mut TriMesh, lo: [f64; 3], hi: [f64; 3], colour: [f32; 3]) {
 
 /// One barrier section in its own frame: centred on the origin, standing on y = 0, running
 /// along z, with the road on its −x side. `look` 0 is plain steel; 1… carry a banner facing
-/// the road, textured from the banner texture (white with the event name in grey) and tinted.
+/// the road, textured from the banner texture (white with the event name in grey) and tinted;
+/// `FENCE` is a panel of netting fence.
 pub fn barrier_model(look: usize) -> TriMesh {
+    if look == FENCE {
+        return fence_model();
+    }
     let mut m = TriMesh::default();
     let steel = linear([0.74, 0.76, 0.78]);
     let dark = linear([0.42, 0.44, 0.46]);
@@ -84,22 +104,171 @@ pub fn barrier_model(look: usize) -> TriMesh {
     m
 }
 
+/// One panel of netting fence, `PANEL_M` long: a post at each end, a top rail, and orange
+/// diamond netting between, seen from both sides.
+fn fence_model() -> TriMesh {
+    let mut m = TriMesh::default();
+    let post = linear([0.30, 0.33, 0.30]);
+    let net = linear([0.96, 0.45, 0.12]);
+    let half = PANEL_M / 2.0;
+    // Posts set in a little from each end, so where two panels meet their posts stand side by side.
+    for z in [-half + 0.04, half - 0.04] {
+        cuboid(&mut m, [-0.03, 0.0, z - 0.03], [0.03, FENCE_HEIGHT, z + 0.03], post);
+    }
+    cuboid(&mut m, [-0.018, FENCE_HEIGHT - 0.05, -half], [0.018, FENCE_HEIGHT - 0.014, half], post);
+    // The netting: two sets of diagonal strands, crossing in diamonds.
+    let (y0, y1, x) = (0.08, FENCE_HEIGHT - 0.05, -0.035);
+    let (gap, width) = (0.25, 0.024);
+    let mut strand = |a: [f64; 2], b: [f64; 2]| {
+        // a and b are (z, y); the strand is a thin flat ribbon between them.
+        let (dz, dy) = (b[0] - a[0], b[1] - a[1]);
+        let len = dz.hypot(dy);
+        let (nz, ny) = (-dy / len * width / 2.0, dz / len * width / 2.0);
+        for (x, facing) in [(x, -1.0), (x + 0.003, 1.0)] {
+            let p = [[x, a[1] + ny, a[0] + nz], [x, b[1] + ny, b[0] + nz], [x, b[1] - ny, b[0] - nz], [x, a[1] - ny, a[0] - nz]];
+            m.triangle([p[0], p[1], p[2]], [facing, 0.0, 0.0], [net; 3], [WHITE; 3]);
+            m.triangle([p[0], p[2], p[3]], [facing, 0.0, 0.0], [net; 3], [WHITE; 3]);
+        }
+    };
+    for slope in [1.0, -1.0] {
+        // Strands z = start + slope·(y − y0), for starts every `gap` along the panel and beyond it,
+        // clipped to the panel.
+        let mut start = -half - (y1 - y0);
+        while start < half + (y1 - y0) {
+            // The heights at which the strand reaches the two ends of the panel (less its width,
+            // so it stays within them).
+            let end = half - width;
+            let (ya, yb) = (y0 + (-end - start) / slope, y0 + (end - start) / slope);
+            let (lo, hi) = (ya.min(yb).max(y0), ya.max(yb).min(y1));
+            if hi - lo > 0.02 {
+                strand([start + slope * (lo - y0), lo], [start + slope * (hi - y0), hi]);
+            }
+            start += gap;
+        }
+    }
+    m
+}
+
+/// A stretch of road bending tighter than `TIGHT_RADIUS_M`, from and to metres along the
+/// route, with the side of its outside (1 is the route's right, as in `barriers`).
+struct Bend {
+    from: f64,
+    to: f64,
+    side: f64,
+}
+
 impl World {
+    /// The route's direction at sample `i`, smoothed over a couple of metres either way.
+    fn heading_at(&self, i: usize) -> (f64, f64) {
+        let r = &self.route;
+        let w = ((2.0 / r.step).round() as usize).max(1);
+        let (a, b) = (i.saturating_sub(w), (i + w).min(r.n - 1));
+        let (tx, tz) = (r.x[b] - r.x[a], r.z[b] - r.z[a]);
+        let len = tx.hypot(tz).max(1e-9);
+        (tx / len, tz / len)
+    }
+
+    /// The route's tight bends, in order along it.
+    fn tight_bends(&self) -> Vec<Bend> {
+        let r = &self.route;
+        let w = ((BEND_WINDOW_M / r.step).round() as usize).max(1);
+        let span = w as f64 * r.step;
+        let mut bends: Vec<Bend> = Vec::new();
+        for i in w..r.n.saturating_sub(w) {
+            let (tx, tz) = self.heading_at(i);
+            let curvature = ((r.x[i + w] - 2.0 * r.x[i] + r.x[i - w]) * tz - (r.z[i + w] - 2.0 * r.z[i] + r.z[i - w]) * tx) / (span * span);
+            if curvature.abs() * TIGHT_RADIUS_M < 1.0 {
+                continue;
+            }
+            let (d, side) = (i as f64 * r.step, -curvature.signum());
+            match bends.last_mut() {
+                Some(b) if b.side == side && d - BEND_MARGIN_M <= b.to => b.to = d + BEND_MARGIN_M,
+                _ => bends.push(Bend { from: (d - BEND_MARGIN_M).max(0.0), to: (d + BEND_MARGIN_M).min(r.total), side }),
+            }
+        }
+        // Where one bend runs straight into another the other way, they meet halfway, so neither
+        // fence reaches round the inside of the next bend.
+        for k in 1..bends.len() {
+            if bends[k].from < bends[k - 1].to {
+                let mid = (bends[k].from + bends[k - 1].to) / 2.0;
+                bends[k - 1].to = mid;
+                bends[k].from = mid;
+            }
+        }
+        bends
+    }
+
+    /// Netting fence panels round the outside of `bend`, as `barriers` gives them.
+    fn bend_fence(&self, bend: &Bend, blocked: &impl Fn(usize) -> bool, out: &mut Vec<[f32; 7]>) {
+        let r = &self.route;
+        // The outside edge every half metre (x, y, z, distance along the route), broken where
+        // the road has its own sides or is a trail.
+        let mut runs: Vec<Vec<[f64; 4]>> = vec![Vec::new()];
+        let mut d = bend.from;
+        while d <= bend.to {
+            let i = ((d / r.step).round() as usize).min(r.n - 1);
+            if blocked(i) {
+                if runs.last().is_some_and(|run| !run.is_empty()) {
+                    runs.push(Vec::new());
+                }
+            } else {
+                let (tx, tz) = self.heading_at(i);
+                let p = r.sample_at(d);
+                let off = bend.side * (self.half_width(i) + SET_BACK);
+                runs.last_mut().unwrap().push([p.x + tz * off, p.ele + ROAD_LIFT - 0.12, p.z - tx * off, d]);
+            }
+            d += 0.5;
+        }
+        for run in runs.iter().filter(|run| run.len() >= 2) {
+            // Distance along the edge at each point, and the point that far along it.
+            let mut along = vec![0.0];
+            for w in run.windows(2) {
+                along.push(along.last().unwrap() + (w[1][0] - w[0][0]).hypot(w[1][2] - w[0][2]));
+            }
+            let length = *along.last().unwrap();
+            let at = |s: f64| {
+                let k = along.partition_point(|&a| a < s).clamp(1, run.len() - 1);
+                let t = ((s - along[k - 1]) / (along[k] - along[k - 1]).max(1e-9)).clamp(0.0, 1.0);
+                std::array::from_fn::<f64, 4, _>(|c| run[k - 1][c] + (run[k][c] - run[k - 1][c]) * t)
+            };
+            if length < 1.0 {
+                continue;
+            }
+            // Panels evenly spaced along the edge, a whole number of them, so neighbours meet
+            // to within a few centimetres.
+            let panels = (length / PANEL_M).round().max(1.0) as usize;
+            let spacing = length / panels as f64;
+            for k in 0..panels {
+                let mid = (k as f64 + 0.5) * spacing;
+                let (a, b) = (at(mid - PANEL_M / 2.0), at(mid + PANEL_M / 2.0));
+                let (dx, dy, dz) = (b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                let climb = dy.atan2(dx.hypot(dz).max(1e-9));
+                let yaw = dx.atan2(dz) + if bend.side > 0.0 { 0.0 } else { std::f64::consts::PI };
+                let pitch = if bend.side > 0.0 { -climb } else { climb };
+                let c = std::array::from_fn::<f64, 4, _>(|i| (a[i] + b[i]) / 2.0);
+                out.push([c[0] as f32, c[1] as f32, c[2] as f32, yaw as f32, c[3] as f32, FENCE as f32, pitch as f32]);
+            }
+        }
+    }
+
     /// Barrier sections along both sides of the route, nearest first along it:
     /// `[x, y, z, yaw, distance along the route, look, pitch]` each, where the model is
     /// tipped by `pitch` about its own x axis (Three.js's sense: positive lowers its +z end)
     /// before being turned by `yaw`. None on bridges (they have parapets) or in tunnels, nor
-    /// on the inside of a bend too tight to stand them.
+    /// on the inside of a bend too tight to stand them; round a tight bend, fence panels
+    /// (look `FENCE`) on the outside instead.
     pub fn barriers(&self) -> Vec<[f32; 7]> {
         let r = &self.route;
         let kinds = self.field.kinds();
+        let blocked = |i: usize| kinds.get(i).is_some_and(|&kind| kind != OPEN) || self.scene.trails.get(i).is_some_and(Option::is_some);
+        let bends = self.tight_bends();
         let mut out = Vec::new();
         let count = ((r.total - 8.0) / SECTION_M).floor().max(0.0) as usize;
         for k in 0..count {
             let d = 4.0 + (k as f64 + 0.5) * SECTION_M;
             let i = ((d / r.step).round() as usize).min(r.n - 1);
             // None on bridges and in tunnels (they have their own sides), nor along a trail.
-            if kinds.get(i).is_some_and(|&kind| kind != OPEN) || self.scene.trails.get(i).is_some_and(Option::is_some) {
+            if blocked(i) || bends.iter().any(|b| d + LENGTH / 2.0 > b.from && d - LENGTH / 2.0 < b.to) {
                 continue;
             }
             let (a, b) = (i.saturating_sub(1), (i + 1).min(r.n - 1));
@@ -132,6 +301,10 @@ impl World {
                 out.push([x as f32, y as f32, z as f32, yaw as f32, d as f32, look as f32, pitch as f32]);
             }
         }
+        for bend in &bends {
+            self.bend_fence(bend, &blocked, &mut out);
+        }
+        out.sort_by(|a, b| a[4].total_cmp(&b[4]));
         out
     }
 }
