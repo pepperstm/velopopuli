@@ -9,7 +9,8 @@ const KIND_LABEL: Record<DeviceInfo['kind'], string> = {
   power: 'Power meter',
   hr: 'Heart rate',
   cadence: 'Cadence',
-  speed: 'Speed'
+  speed: 'Speed',
+  controller: 'Controller'
 }
 
 const STATUS_LABEL: Record<DeviceInfo['status'], string> = {
@@ -80,8 +81,8 @@ export function Devices(): React.JSX.Element {
         <div>
           <h1>Devices</h1>
           <p className="muted">
-            Connect a smart trainer for automatic gradient resistance, plus any power meter, heart-rate strap or cadence sensor. When several devices report the
-            same thing, the most direct measurement is used.
+            Connect a smart trainer for automatic gradient resistance, plus any power meter, heart-rate strap or cadence sensor, and a handlebar controller
+            (OpenBikeControl) to shift and run the ride from the bars. When several devices report the same thing, the most direct measurement is used.
           </p>
         </div>
       </div>
@@ -127,6 +128,7 @@ export function Devices(): React.JSX.Element {
                 <div className="muted small">
                   {KIND_LABEL[d.kind]} · {d.transport === 'ble' ? 'Bluetooth' : d.transport === 'ant' ? 'ANT+' : 'Simulated'}
                   {d.kind === 'trainer' && (d.controllable ? ' · controllable' : ' · read-only')}
+                  {d.kind === 'controller' && ' · buttons work during a ride'}
                 </div>
               </div>
               <div className="readings">
@@ -147,8 +149,8 @@ export function Devices(): React.JSX.Element {
       {scanning && (
         <div className="modal-backdrop">
           <div className="modal">
-            <h2>Searching for Bluetooth sensors…</h2>
-            <p className="muted small">Make sure the sensor is awake and not connected to another app or head unit.</p>
+            <h2>Searching for Bluetooth devices…</h2>
+            <p className="muted small">Make sure it is awake (spin the pedals, press a controller button) and not connected to another app or head unit.</p>
             <div className="picker">
               {candidates.length === 0 && <div className="empty">Nothing found yet</div>}
               {candidates.map((c) => (

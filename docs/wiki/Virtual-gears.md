@@ -2,7 +2,7 @@
 
 **Most riders don't need these.** If you shift your bike's own gears on the trainer, that already works exactly as on the road — the trainer feels how fast its flywheel turns — and there is nothing to set up. That's the default (*Settings → Gears → My bike's gears*).
 
-**Virtual gears** are for leaving the bike in one gear and shifting with keys, a Bluetooth remote or on-screen buttons instead: handy for trainers with a single cog, to spare your chain and cassette, or to shift without reaching down. VeloPopuli changes the trainer's resistance so each virtual gear feels like the real thing.
+**Virtual gears** are for leaving the bike in one gear and shifting with keys, a Bluetooth remote, a [handlebar controller](#controllers) or on-screen buttons instead: handy for trainers with a single cog, to spare your chain and cassette, or to shift without reaching down. VeloPopuli changes the trainer's resistance so each virtual gear feels like the real thing.
 
 ## Setting up
 
@@ -27,6 +27,24 @@ The current gear shows on the HUD under cadence, and **− Gear +** buttons appe
 
 ![Riding in gear 13 of 22 (50×21) on a compact chainset, with Gear − + in the controls](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/gears-ride.jpg)
 
+## Controllers
+
+Controllers that speak [OpenBikeControl](https://openbikecontrol.org), an open protocol for handlebar buttons, work over Bluetooth. The Stages SB200 has it built in.
+
+1. Choose **Virtual gears** above, so the shift buttons have gears to change. (With *My bike's gears* they do nothing; the other buttons still work.)
+2. Wake the controller, close any other app using it, then **Devices → Add Bluetooth device…** and pick it. It shows as *Controller*.
+3. Start a ride. The buttons act only during a ride, doing what the keys do:
+
+| Button | What it does |
+|---|---|
+| Shift up / down | Harder / easier virtual gear (nothing with *My bike's gears*) |
+| Increase / decrease difficulty | ERG target ±10 W, or the workout ±5% |
+| Skip interval | Next workout step |
+| Pause / Resume | Pause or resume the ride |
+| Camera view | Next camera |
+
+A controller can send several of these for one button, so that every app finds one it knows (shift up and increase difficulty, say). Each press does only one thing: shifting wins, except in ERG — or a workout held in ERG — where gears change nothing and the difficulty buttons win. Holding a button counts as one press. A trainer or sensor with OpenBikeControl buttons of its own keeps working as a trainer or sensor, and its buttons work too.
+
 ## How it works
 
 Your speed in VeloPopuli always comes from your power, so gears don't make you faster — they change how that power is delivered: in a harder gear, more force per pedal stroke at a lower cadence.
@@ -42,4 +60,4 @@ A few things follow from the physics:
 
 ## Coming later
 
-Shimano Di2 hood buttons and Zwift Click/Play controllers as shifters, and the built-in virtual shifting of Zwift Hub-type trainers.
+Shimano Di2 hood buttons and Zwift Click/Play controllers as shifters without a bridge app, and the built-in virtual shifting of Zwift Hub-type trainers.

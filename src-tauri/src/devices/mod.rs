@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use velopopuli_core::devices::obc;
 use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
 
 use crate::{diag, now_ms};
@@ -122,6 +123,17 @@ impl Devices {
         if let Some(control) = self.handles.lock().unwrap().get(&id).and_then(|h| h.control.as_ref()) {
             control(cmd);
         }
+    }
+
+    /// What decides between the actions of a controller press; `None` outside a ride, where presses do nothing.
+    pub fn controller_context(&self) -> Option<obc::Context> {
+        self.app.state::<crate::AppState>().current_session().ok().map(|s| s.controller_context())
+    }
+
+    /// Hands a controller press to the ride screen, which runs it as it would the matching key.
+    pub fn controller_action(&self, id: &str, action: obc::Action) {
+        diag::raw("dev", format!("dev={id} press {action:?}"));
+        let _ = self.app.emit("controller:action", action);
     }
 
     pub fn set_ant_status(&self, state: &'static str, message: impl Into<String>) {

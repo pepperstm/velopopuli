@@ -143,8 +143,8 @@ function GearsCard(): React.JSX.Element {
       ) : (
         <>
           <p className="muted small">
-            Leave the bike in one gear and shift with keys, a Bluetooth remote or the buttons on the ride screen. VeloPopuli changes the trainer's resistance so
-            each virtual gear feels like the real thing. For trainers with a single cog, or to spare your drivetrain.
+            Leave the bike in one gear and shift with keys, a Bluetooth remote, a handlebar controller or the buttons on the ride screen. VeloPopuli changes the
+            trainer's resistance so each virtual gear feels like the real thing. For trainers with a single cog, or to spare your drivetrain.
           </p>
           <div className="fields">
             <label className="field">
@@ -256,7 +256,8 @@ function GearsCard(): React.JSX.Element {
           </div>
           <p className="muted small">
             Most Bluetooth presentation clickers and media remotes send arrow or Page Up / Page Down keys — press <b>+ Add</b>, then the button, to use one as a
-            shifter. Gears do nothing in ERG mode, where the trainer holds the power whatever gear you're in.
+            shifter. A handlebar controller that speaks OpenBikeControl needs nothing here: pair it under <b>Devices</b> and its shift buttons change gear.
+            Gears do nothing in ERG mode, where the trainer holds the power whatever gear you're in.
           </p>
         </>
       )}

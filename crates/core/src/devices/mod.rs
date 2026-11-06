@@ -4,6 +4,7 @@
 
 pub mod ant;
 pub mod ble;
+pub mod obc;
 pub mod profiles;
 
 use std::collections::HashMap;
@@ -18,6 +19,8 @@ pub enum DeviceKind {
     Hr,
     Cadence,
     Speed,
+    /// Handlebar buttons (OpenBikeControl): no readings, only presses.
+    Controller,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

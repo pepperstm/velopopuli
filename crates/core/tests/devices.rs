@@ -153,6 +153,69 @@ mod ant_profiles {
     }
 }
 
+// Byte payloads below are as encoded by the protocol repository's examples/python/protocol_parser.py.
+mod openbikecontrol {
+    use velopopuli_core::devices::obc::*;
+
+    const SIM: Context = Context { virtual_gears: true, erg: false };
+    const ERG: Context = Context { virtual_gears: true, erg: true };
+    const REAL_GEARS: Context = Context { virtual_gears: false, erg: false };
+
+    #[test]
+    fn parses_button_messages() {
+        assert_eq!(parse_buttons(&[0x01, 0x01, 0x01, 0x02, 0x00]), Some(vec![(0x01, 0x01), (0x02, 0x00)]));
+        // A stray odd byte is ignored, not read past.
+        assert_eq!(parse_buttons(&[0x01, 0x33, 0x01, 0x40]), Some(vec![(0x33, 0x01)]));
+        // Device status (0x02) and empty messages aren't button states.
+        assert_eq!(parse_buttons(&[0x02, 0x50, 0x01]), None);
+        assert_eq!(parse_buttons(&[]), None);
+    }
+
+    #[test]
+    fn app_information_message() {
+        assert_eq!(app_info("velopopuli", "0.3.7"), [4, 1, 10, 118, 101, 108, 111, 112, 111, 112, 117, 108, 105, 5, 48, 46, 51, 46, 55, 8, 1, 2, 48, 49, 50, 51, 52, 64]);
+    }
+
+    #[test]
+    fn one_press_with_several_ids_is_one_action() {
+        let mut b = Buttons::default();
+        // Shift Up + Increase Difficulty + Select, pressed and released.
+        assert_eq!(b.update(&[1, 1, 1, 48, 1, 20, 1], SIM), Some(Action::ShiftHarder));
+        assert_eq!(b.update(&[1, 1, 0, 48, 0, 20, 0], SIM), None);
+        // In ERG the same button changes the target instead.
+        assert_eq!(b.update(&[1, 1, 1, 48, 1, 20, 1], ERG), Some(Action::Harder));
+        assert_eq!(b.update(&[1, 1, 0, 48, 0, 20, 0], ERG), None);
+        // With the bike's own gears, shift ids are skipped.
+        assert_eq!(b.update(&[1, 2, 1, 49, 1], REAL_GEARS), Some(Action::Easier));
+    }
+
+    #[test]
+    fn held_buttons_act_once() {
+        let mut b = Buttons::default();
+        assert_eq!(b.update(&[1, 1, 1], SIM), Some(Action::ShiftHarder));
+        // Shift Up still held while Shift Down goes down: only the new one counts.
+        assert_eq!(b.update(&[1, 1, 1, 2, 1], SIM), Some(Action::ShiftEasier));
+        assert_eq!(b.update(&[1, 2, 0], SIM), None);
+        assert_eq!(b.update(&[1, 1, 0], SIM), None);
+        assert_eq!(b.update(&[1, 1, 1], SIM), Some(Action::ShiftHarder));
+    }
+
+    #[test]
+    fn priority_between_ids() {
+        assert_eq!(pick(&[0x30, 0x01], SIM), Some(Action::ShiftHarder));
+        assert_eq!(pick(&[0x02, 0x31], ERG), Some(Action::Easier));
+        // ERG with nothing but a shift id still shifts, as the keys do.
+        assert_eq!(pick(&[0x01], ERG), Some(Action::ShiftHarder));
+        assert_eq!(pick(&[0x01], REAL_GEARS), None);
+        assert_eq!(pick(&[0x40, 0x32, 0x14], SIM), Some(Action::SkipStep));
+        assert_eq!(pick(&[0x34], SIM), Some(Action::Resume));
+        assert_eq!(pick(&[0x33, 0x01], REAL_GEARS), Some(Action::Pause));
+        assert_eq!(pick(&[0x40], ERG), Some(Action::Camera));
+        // Ids VeloPopuli has nothing for: steering, select, emotes.
+        assert_eq!(pick(&[0x18, 0x14, 0x20], SIM), None);
+    }
+}
+
 #[test]
 fn rev_counter_handles_wrap_and_stops() {
     let mut c = RevCounter::new(65536, 1024.0);
