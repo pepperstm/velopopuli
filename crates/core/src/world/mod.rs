@@ -6,6 +6,7 @@ mod barriers;
 mod berms;
 mod buildings;
 mod dem;
+mod fields;
 mod fords;
 mod height;
 mod imagery;
@@ -20,9 +21,10 @@ mod style;
 mod surface;
 mod trees;
 
-pub use barriers::{barrier_model, BANNER_COLOURS, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
+pub use barriers::{barrier_model, BANNER_COLOURS, FENCE as BARRIER_FENCE, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
+pub use fields::{parse_boundaries, Boundary, MappedBoundary};
 pub use fords::{FORD_DEPTH, FORD_MAX_SPEED, FORD_REACH, FORD_ROLLING};
 pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
 pub use imagery::{chunk_image, far_colours, provider_at, providers, tile_url, zoom_for, ChunkImage, Provider, Tile, FAR_PX, NEAR_PX};
@@ -124,6 +126,21 @@ pub struct World {
     pub sights: Vec<Sight>,
     tree_line: f64,
 }
+
+/// Made-up field boundaries are drawn in chunks whose middle is this close to the route.
+const FIELDS_REACH: f64 = 1000.0;
+/// In hedge country the route runs between hedge banks where it is this narrow or narrower (a
+/// lane; side roads from the map tiles carry no width, so every minor road and track there
+/// gets them), and only below this height: higher up, the lanes cross open moor.
+const HOLLOWAY_WIDTH: f64 = 6.0;
+const HOLLOWAY_TOP: f64 = 260.0;
+/// …centred this far beyond the route's edge (clear of its barriers) or a side lane's.
+const ROUTE_BANK_OFFSET: f64 = 2.4;
+const SIDE_BANK_OFFSET: f64 = 1.6;
+/// The share of a bank's pieces left open as a gateway.
+const GATEWAYS: f64 = 0.03;
+/// The share of a hedgerow's points (one every six metres) with a tree growing out of it.
+const HEDGEROW_TREES: f64 = 0.05;
 
 /// Depth of water over a lake or river bed, and how far its surface lies below the banks.
 const WATER_DEPTH: f64 = 1.6;
@@ -283,6 +300,32 @@ impl World {
                 level[k] = around(k).filter(|&n| wet[n]).map(|n| settled[n]).fold(f64::INFINITY, f64::min).min(h[k] - 0.3);
             }
         }
+        // Other roads and railways are level across, cut into hillsides and carried on
+        // embankments, like the route; close to the route its own cross-section wins.
+        let banked: Vec<&scenery::RoadStrip> = scene.roads_in(cx, cz).filter(|s| s.kind.banked() && !s.steel && !s.casing && !s.cap).collect();
+        if !banked.is_empty() {
+            for j in 0..pad {
+                for i in 0..pad {
+                    let k = j * pad + i;
+                    let weight = smoothstep(18.0, 40.0, near[k]);
+                    if wet[k] || trench[k] || weight <= 0.0 {
+                        continue;
+                    }
+                    let at = (x0 + (i as f64 - m as f64) * cell, z0 + (j as f64 - m as f64) * cell);
+                    let nearest = banked
+                        .iter()
+                        .map(|s| (s, scenery::nearest_on_segment(at, s.a, s.b)))
+                        .map(|(s, q)| (s, q, (at.0 - q.0).hypot(at.1 - q.1)))
+                        .filter(|(s, _, d)| *d < height::Bank::side(s.half).reach)
+                        .min_by(|a, b| a.2.total_cmp(&b.2));
+                    if let Some((s, q, d)) = nearest {
+                        // The road is as high as the smooth ground under its centre.
+                        let level = self.field.probe(q.0, q.1, 0.0).ground;
+                        h[k] += (height::bank(d, level, h[k], &height::Bank::side(s.half)) - h[k]) * weight;
+                    }
+                }
+            }
+        }
         let row = CELLS + 1;
         let mut mesh = GridMesh {
             positions: Vec::with_capacity(row * row * 3),
@@ -396,6 +439,165 @@ impl World {
             let shade = 0.82 + r(5) * 0.36;
             planted.push((kind, [tx as f32, (ty - 0.2) as f32, tz as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, shade as f32]));
         };
+
+        // Field boundaries: the mapped ones, and made-up ones in open country near the route,
+        // away from the mapped ones. They are drawn with the buildings, in plain colours.
+        let countryside = fields::Countryside::new(self.route.lat0, self.route.lon0, self.tree_line);
+        let centre = (x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
+        let farmed = (0..self.route.n).step_by(((20.0 / self.route.step) as usize).max(1)).any(|i| (self.route.x[i] - centre.0).hypot(self.route.z[i] - centre.1) < FIELDS_REACH);
+        // Whether a piece from `p` to `q` can stand: not on a road, the route or water, nor in a house;
+        // made-up ones not in a wood, on a cliff or near a town either.
+        let clear = |p: (f64, f64), q: (f64, f64), made_up: bool| -> bool {
+            let mid = ((p.0 + q.0) / 2.0, (p.1 + q.1) / 2.0);
+            let (fx, fz) = ((mid.0 - x0) / cell + m as f64, (mid.1 - z0) / cell + m as f64);
+            let k = (fz.max(0.0) as usize).min(pad - 2) * pad + (fx.max(0.0) as usize).min(pad - 2);
+            let corners = [k, k + 1, k + pad, k + pad + 1];
+            // In hedge country the lanes' own banks stand in for the hedges mapped right beside them.
+            let banked = countryside.lanes_banked();
+            if corners.iter().any(|&c| wet[c] || trench[c])
+                || on_mesh(&near, pad, fx, fz)
+                    < if made_up {
+                        16.0
+                    } else if banked {
+                        9.0
+                    } else {
+                        6.0
+                    }
+            {
+                return false;
+            }
+            let margin = |s: &scenery::RoadStrip| {
+                if made_up {
+                    2.5
+                } else if banked && matches!(s.kind, scenery::RoadKind::Minor | scenery::RoadKind::Track) {
+                    3.0
+                } else {
+                    0.8
+                }
+            };
+            if ways.clone().any(|s| [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + margin(s))) || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0) {
+                return false;
+            }
+            if self.buildings.covers(mid.0, mid.1) {
+                return false;
+            }
+            let drop = corners.iter().map(|&c| h[c]).fold(f64::MIN, f64::max) - corners.iter().map(|&c| h[c]).fold(f64::MAX, f64::min);
+            !made_up || !(scene.forest.at(mid.0, mid.1) || drop > 6.0 || self.buildings.near(mid.0, mid.1, 15.0) || scene.near_mapped_boundary(mid.0, mid.1))
+        };
+        let ground_at = |p: &(f64, f64)| on_mesh(&h, pad, (p.0 - x0) / cell + m as f64, (p.1 - z0) / cell + m as f64);
+        for (n, run) in scene.boundaries.get(&(cx, cz)).into_iter().flatten().enumerate() {
+            for points in fields::runs(&run.points, |p, q| clear(p, q, false)) {
+                let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                fields::draw(&mut mesh.buildings, run.kind, &points, &ys, cx.wrapping_mul(7919) ^ cz.wrapping_mul(104_729) ^ n as i32, countryside.warm());
+            }
+        }
+        if farmed {
+            let hedgerow_trees = matches!(countryside.region, fields::Region::Hedgerows | fields::Region::Bocage);
+            for edge in countryside.edges(cx, cz) {
+                let Some(kind) = countryside.kind(self.field.surroundings(edge.middle.0, edge.middle.1), edge.roll) else { continue };
+                let seed = ((edge.middle.0 * 3.0) as i32).wrapping_mul(92_821) ^ (edge.middle.1 * 3.0) as i32;
+                for points in fields::runs(&edge.points, |p, q| clear(p, q, true)) {
+                    let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                    fields::draw(&mut mesh.buildings, kind, &points, &ys, seed, countryside.warm());
+                    // Now and then a tree grows out of a hedge.
+                    if kind == fields::Boundary::Hedge && hedgerow_trees {
+                        for (k, p) in points.iter().enumerate() {
+                            let spot = ((p.0 * 4.0) as i32, (p.1 * 4.0) as i32);
+                            if hash2(spot.0.wrapping_mul(13) ^ seed, spot.1) < HEDGEROW_TREES {
+                                if let Some(ty) = plant(p.0, p.1) {
+                                    grow(p.0, p.1, ty, false, (spot.0.wrapping_add(k as i32), spot.1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Holloways: in hedge country, narrow lanes run between high hedge banks, the route
+        // (just behind its barriers) and the side lanes alike. Gaps where another road, a
+        // stream or a house meets the lane, and now and then for a gateway.
+        if farmed && countryside.lanes_banked() {
+            let chunk_of = |p: (f64, f64), q: (f64, f64)| ((((p.0 + q.0) / 2.0) / CHUNK).floor() as i32, (((p.1 + q.1) / 2.0) / CHUNK).floor() as i32);
+            let bank_clear = |p: (f64, f64), q: (f64, f64), lane: Option<&scenery::RoadStrip>| -> bool {
+                let mid = ((p.0 + q.0) / 2.0, (p.1 + q.1) / 2.0);
+                let (fx, fz) = ((mid.0 - x0) / cell + m as f64, (mid.1 - z0) / cell + m as f64);
+                let k = (fz.max(0.0) as usize).min(pad - 2) * pad + (fx.max(0.0) as usize).min(pad - 2);
+                if [k, k + 1, k + pad, k + pad + 1].iter().any(|&c| wet[c] || trench[c]) || self.field.surroundings(mid.0, mid.1) > HOLLOWAY_TOP {
+                    return false;
+                }
+                if lane.is_some() && on_mesh(&near, pad, fx, fz) < 12.0 {
+                    return false;
+                }
+                let other = |s: &scenery::RoadStrip| lane.is_none_or(|l| !std::ptr::eq(l, s));
+                !(ways.clone().any(|s| other(s) && [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + 1.0))
+                    || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0)
+                    || self.buildings.near(mid.0, mid.1, 4.0)
+                    || scene.forest.at(mid.0, mid.1))
+            };
+            let gateway = |p: (f64, f64)| hash2((p.0 * 2.0) as i32, (p.1 * 2.0) as i32) < GATEWAYS;
+            let mut bank = |points: &[(f64, f64)], seed: i32| {
+                let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                fields::draw(&mut mesh.buildings, fields::Boundary::HedgeBank, points, &ys, seed, false);
+            };
+            // Along the route, where it is a narrow lane on open ground.
+            let r = &self.route;
+            let lane = |i: usize| self.half_width(i) * 2.0 <= HOLLOWAY_WIDTH && scene.kinds.get(i).is_none_or(|&k| k == OPEN);
+            for side in [-1.0f64, 1.0] {
+                let beside = |i: usize| {
+                    let (a, b) = (i.saturating_sub(1), (i + 1).min(r.n - 1));
+                    let (tx, tz) = (r.x[b] - r.x[a], r.z[b] - r.z[a]);
+                    let len = tx.hypot(tz).max(1e-9);
+                    let off = side * (self.half_width(i) + ROUTE_BANK_OFFSET);
+                    (r.x[i] + tz / len * off, r.z[i] - tx / len * off)
+                };
+                let mut run: Vec<(f64, f64)> = Vec::new();
+                let mut last = usize::MAX;
+                for i in 0..r.n.saturating_sub(1) {
+                    let near_chunk = (r.x[i] - centre.0).abs() < CHUNK && (r.z[i] - centre.1).abs() < CHUNK;
+                    if !near_chunk || !lane(i) || !lane(i + 1) {
+                        continue;
+                    }
+                    let (p, q) = (beside(i), beside(i + 1));
+                    // Inside a bend tighter than the offset, the bank would fold back on itself.
+                    let forward = (q.0 - p.0) * (r.x[i + 1] - r.x[i]) + (q.1 - p.1) * (r.z[i + 1] - r.z[i]) > 0.0;
+                    if !forward || chunk_of(p, q) != (cx, cz) || gateway(p) || !bank_clear(p, q, None) {
+                        continue;
+                    }
+                    if last.wrapping_add(1) != i && run.len() >= 2 {
+                        bank(&run, i as i32 * 2 + side as i32);
+                        run.clear();
+                    }
+                    if run.is_empty() || last.wrapping_add(1) != i {
+                        run = vec![p];
+                    }
+                    run.push(q);
+                    last = i;
+                }
+                if run.len() >= 2 {
+                    bank(&run, last as i32 * 2 + side as i32);
+                }
+            }
+            // Along the minor roads and tracks around it.
+            for s in ways.clone().filter(|s| matches!(s.kind, scenery::RoadKind::Minor | scenery::RoadKind::Track) && !s.steel && !s.casing && !s.cap) {
+                let len = (s.b.0 - s.a.0).hypot(s.b.1 - s.a.1).max(1e-9);
+                let n = ((s.a.1 - s.b.1) / len, (s.b.0 - s.a.0) / len);
+                for side in [-1.0f64, 1.0] {
+                    let off = side * (s.half + SIDE_BANK_OFFSET);
+                    // In pieces, as a strip can be long: each piece is then near enough its own chunk to stand on its ground.
+                    let pieces = (len / fields::PIECE).ceil().max(1.0) as usize;
+                    let line: Vec<(f64, f64)> = (0..=pieces)
+                        .map(|k| {
+                            let t = k as f64 / pieces as f64;
+                            (s.a.0 + (s.b.0 - s.a.0) * t + n.0 * off, s.a.1 + (s.b.1 - s.a.1) * t + n.1 * off)
+                        })
+                        .collect();
+                    for run in fields::runs(&line, |p, q| chunk_of(p, q) == (cx, cz) && !gateway(p) && bank_clear(p, q, Some(s))) {
+                        bank(&run, (run[0].0 * 3.0) as i32 ^ (run[0].1 * 7.0) as i32);
+                    }
+                }
+            }
+        }
 
         // Mapped forest: most of a lattice of 5 m squares, each tree somewhere in its square.
         if scene.forest.touches(cx, cz) {

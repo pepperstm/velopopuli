@@ -87,6 +87,12 @@ impl RoadKind {
         matches!(self, RoadKind::Tram | RoadKind::Rail)
     }
 
+    /// Whether it is built level across, cut into a hillside and carried on embankments. Paths,
+    /// footways and driveways follow the ground as it is.
+    pub(super) fn banked(self) -> bool {
+        matches!(self, RoadKind::Track | RoadKind::Minor | RoadKind::Main | RoadKind::Major | RoadKind::Rail)
+    }
+
     /// Whether the surface has an edge line each side and a broken one down the middle.
     pub(super) fn marked(self) -> bool {
         matches!(self, RoadKind::Main | RoadKind::Major)
@@ -149,6 +155,9 @@ pub struct Scenery {
     /// The roads along the route with their surface and width tags (from the Overpass API, not the tiles).
     #[serde(default)]
     pub ways: Vec<super::surface::MappedWay>,
+    /// Hedges, walls and fences mapped near the route (from the Overpass API, with the road tags).
+    #[serde(default)]
+    pub boundaries: Vec<super::fields::MappedBoundary>,
     /// `WAY_TAGS` once `ways` was asked for successfully (an empty answer is then a real one); 0 if not.
     #[serde(default)]
     pub way_tags: u32,
@@ -321,6 +330,8 @@ pub struct SceneryCounts {
     pub road_bridges: usize,
     /// Places where the route's trail fords a stream.
     pub fords: usize,
+    /// Hedges, walls and fences mapped near the route.
+    pub boundaries: usize,
 }
 
 /// Scenery placed in a route's local frame.
@@ -353,8 +364,15 @@ pub struct Scene {
     pub fords: Vec<usize>,
     /// Stretches of the route with something overhead, as `[from, to]` in metres along it.
     pub covered: Vec<[f64; 2]>,
+    /// Mapped hedges, walls and fences, per chunk (a piece belongs to the chunk holding its middle).
+    pub(super) boundaries: HashMap<(i32, i32), Vec<super::fields::Run>>,
+    /// Squares `BOUNDARY_CELL` wide that a mapped boundary passes through: no made-up fields near them.
+    boundary_cells: HashSet<(i32, i32)>,
     pub counts: SceneryCounts,
 }
+
+/// Made-up field boundaries keep a square or so this wide away from mapped ones.
+const BOUNDARY_CELL: f64 = 25.0;
 
 /// The route must run this close to a mapped bridge or tunnel, and this nearly parallel to it, to be on it.
 const MATCH_M: f64 = 9.0;
@@ -371,9 +389,15 @@ fn bucket(x: f64, z: f64) -> (i32, i32) {
 
 /// Distance from a point to a line segment.
 pub(super) fn to_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let q = nearest_on_segment(p, a, b);
+    (p.0 - q.0).hypot(p.1 - q.1)
+}
+
+/// The point on segment `a→b` nearest to `p`.
+pub(super) fn nearest_on_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
     let (dx, dz) = (b.0 - a.0, b.1 - a.1);
     let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dz) / (dx * dx + dz * dz).max(1e-12)).clamp(0.0, 1.0);
-    (p.0 - a.0 - dx * t).hypot(p.1 - a.1 - dz * t)
+    (a.0 + dx * t, a.1 + dz * t)
 }
 
 /// Where segment `a→b` crosses `c→d`, as the fraction along `a→b`.
@@ -1011,6 +1035,23 @@ impl Scene {
             }
         }
         scene.counts.overbridges = scene.overbridges.len();
+
+        for b in &scenery.boundaries {
+            let line = resample(&local(&b.line), super::fields::PIECE);
+            for w in line.windows(2) {
+                let middle = ((w[0].0 + w[1].0) / 2.0, (w[0].1 + w[1].1) / 2.0);
+                scene.boundary_cells.insert(((middle.0 / BOUNDARY_CELL).floor() as i32, (middle.1 / BOUNDARY_CELL).floor() as i32));
+            }
+            let chunk_of = |p: (f64, f64), q: (f64, f64)| (((p.0 + q.0) / 2.0 / super::CHUNK).floor() as i32, ((p.1 + q.1) / 2.0 / super::CHUNK).floor() as i32);
+            let mut keys: Vec<(i32, i32)> = line.windows(2).map(|w| chunk_of(w[0], w[1])).collect();
+            keys.dedup();
+            for key in keys {
+                for points in super::fields::runs(&line, |p, q| chunk_of(p, q) == key) {
+                    scene.boundaries.entry(key).or_default().push(super::fields::Run { kind: b.kind, points });
+                }
+            }
+        }
+        scene.counts.boundaries = scenery.boundaries.len();
         scene
     }
 
@@ -1224,6 +1265,12 @@ impl Scene {
             self.overbridges.push(Overbridge { line, width: bridge.width(), deck: top + HEADROOM, rail: bridge.kind.is_rail() });
         }
         spare
+    }
+
+    /// Whether a mapped hedge, wall or fence passes within about `BOUNDARY_CELL` of `(x, z)`.
+    pub(super) fn near_mapped_boundary(&self, x: f64, z: f64) -> bool {
+        let (i, j) = ((x / BOUNDARY_CELL).floor() as i32, (z / BOUNDARY_CELL).floor() as i32);
+        (-1..=1).any(|di| (-1..=1).any(|dj| self.boundary_cells.contains(&(i + di, j + dj))))
     }
 
     /// Whether map data was fetched for the place at local `(x, z)`.

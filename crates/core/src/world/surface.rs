@@ -175,9 +175,9 @@ pub struct MappedWay {
     pub line: Vec<[f64; 2]>,
 }
 
-/// Version of what `MappedWay` holds (and, since 4, the landmarks fetched with them); caches
-/// from older versions are fetched again.
-pub const WAY_TAGS: u32 = 4;
+/// Version of what `MappedWay` holds, and of the landmarks and boundaries fetched with them
+/// (landmarks since 4, both since 5); caches from older versions are fetched again.
+pub const WAY_TAGS: u32 = 5;
 
 /// Usual carriageway width in metres for an OpenStreetMap `highway` class.
 pub fn highway_width(highway: &str) -> Option<f64> {
@@ -225,9 +225,20 @@ pub fn tagged_width(width: Option<&str>, lanes: Option<&str>) -> Option<f64> {
 pub const MIN_WIDTH: f64 = 2.4;
 pub const MAX_WIDTH: f64 = 11.0;
 
-/// The Overpass QL query for every road within `radius_m` of a stretch of the route.
+/// Hedges, walls and fences are asked for this far either side of the route.
+pub const BOUNDARY_RADIUS_M: f64 = 120.0;
+
+/// The Overpass QL query for every road within `radius_m` of a stretch of the route, and every
+/// hedge, wall and fence within `BOUNDARY_RADIUS_M` (read with [`parse_ways`] and
+/// [`super::parse_boundaries`]).
 pub fn way_query(route: &Route, from: usize, to: usize, radius_m: f64, spacing_m: f64) -> String {
-    format!("[out:json][timeout:25];way[\"highway\"](around:{radius_m:.0},{});out tags geom;", query_line(route, from, to, spacing_m))
+    let line = query_line(route, from, to, spacing_m);
+    format!("[out:json][timeout:25];(way[\"highway\"](around:{radius_m:.0},{line});{});out tags geom;", boundary_clause(&line))
+}
+
+/// The part of a query asking for every hedge, wall and fence within `BOUNDARY_RADIUS_M` of `line`.
+pub(super) fn boundary_clause(line: &str) -> String {
+    format!("way[\"barrier\"~\"^(hedge|hedge_bank|wall|fence)$\"](around:{BOUNDARY_RADIUS_M:.0},{line});")
 }
 
 /// A stretch of the route as Overpass `around` takes it: `lat,lon` pairs every `spacing_m`.
@@ -239,22 +250,22 @@ pub(super) fn query_line(route: &Route, from: usize, to: usize, spacing_m: f64) 
 }
 
 #[derive(Deserialize)]
-struct Reply {
-    elements: Vec<Element>,
+pub(super) struct Reply {
+    pub elements: Vec<Element>,
 }
 
 #[derive(Deserialize)]
-struct Element {
+pub(super) struct Element {
     #[serde(default)]
-    tags: std::collections::HashMap<String, String>,
+    pub tags: std::collections::HashMap<String, String>,
     #[serde(default)]
-    geometry: Vec<Point>,
+    pub geometry: Vec<Point>,
 }
 
 #[derive(Deserialize)]
-struct Point {
-    lat: f64,
-    lon: f64,
+pub(super) struct Point {
+    pub lat: f64,
+    pub lon: f64,
 }
 
 /// Roads and their tags from an Overpass reply produced with `out tags geom`.

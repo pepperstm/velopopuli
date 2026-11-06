@@ -362,6 +362,16 @@ impl Buildings {
             .any(|b| (x - b.centre.0).hypot(z - b.centre.1) <= b.radius + 1.5 && inside(&b.ring, x, z))
     }
 
+    /// True if a building stands within about `reach` metres of the point.
+    pub(super) fn near(&self, x: f64, z: f64, reach: f64) -> bool {
+        let (cx, cz) = chunk_of(x, z);
+        (cx - 1..=cx + 1)
+            .flat_map(|ix| (cz - 1..=cz + 1).map(move |iz| (ix, iz)))
+            .filter_map(|key| self.by_chunk.get(&key))
+            .flatten()
+            .any(|b| (x - b.centre.0).hypot(z - b.centre.1) <= b.radius + reach)
+    }
+
     /// Extrudes the buildings whose centre lies in chunk `(cx, cz)`.
     pub fn mesh(&self, cx: i32, cz: i32) -> BuildingMesh {
         let mut mesh = BuildingMesh::default();

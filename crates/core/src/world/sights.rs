@@ -17,7 +17,7 @@ use super::height::hash2;
 use super::mesh::TriMesh;
 use super::mvt::Label;
 use super::style::{region_at, Region};
-use super::surface::query_line;
+use super::surface::{boundary_clause, query_line};
 use super::World;
 use crate::gpx::Route;
 
@@ -68,12 +68,14 @@ const SIGHT_SPACING_M: f64 = 250.0;
 /// More than this many is a wind farm seen from everywhere; the rest add little but cost.
 const MAX_SIGHTS: usize = 1500;
 
-/// The Overpass QL query for the roads along a stretch of the route (as `way_query`) and the
-/// landmarks around it, in one request: Overpass servers ration requests, not results.
+/// The Overpass QL query for the roads and field boundaries along a stretch of the route (as
+/// `way_query`) and the landmarks around it, in one request: Overpass servers ration requests,
+/// not results.
 pub fn map_query(route: &Route, from: usize, to: usize, radius_m: f64, spacing_m: f64) -> String {
     let (near, far) = (query_line(route, from, to, spacing_m), query_line(route, from, to, SIGHT_SPACING_M));
+    let boundaries = boundary_clause(&near);
     format!(
-        "[out:json][timeout:25];(way[\"highway\"](around:{radius_m:.0},{near});\
+        "[out:json][timeout:25];(way[\"highway\"](around:{radius_m:.0},{near});{boundaries}\
          node[\"generator:source\"=\"wind\"](around:{SIGHT_RADIUS_M:.0},{far});\
          nw[\"man_made\"~\"^(lighthouse|water_tower|chimney|mast|communications_tower|tower|windmill|obelisk)$\"](around:{SIGHT_RADIUS_M:.0},{far});\
          nw[\"historic\"~\"^(castle|monument)$\"](around:{CASTLE_RADIUS_M:.0},{far});\

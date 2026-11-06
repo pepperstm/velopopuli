@@ -519,6 +519,59 @@ fn hairpin_ground_never_buries_the_lower_arm() {
     }
 }
 
+#[test]
+fn hairpins_get_a_fence_round_the_outside() {
+    use velopopuli_core::world::{barrier_model, BARRIER_FENCE};
+    // North for 300 m, a U-turn of 12 m radius, and back south: a hairpin.
+    let m_lon = M_PER_DEG * 45f64.to_radians().cos();
+    let at = |x: f64, z: f64| RawPoint { lat: 45.0 + z / M_PER_DEG, lon: 7.0 + x / m_lon, ele: Some(100.0) };
+    let mut pts: Vec<RawPoint> = (0..=30).map(|i| at(0.0, i as f64 * 10.0)).collect();
+    pts.extend((1..12).map(|k| {
+        let a = std::f64::consts::PI * k as f64 / 12.0;
+        at(12.0 - 12.0 * a.cos(), 300.0 + 12.0 * a.sin())
+    }));
+    pts.extend((0..=30).map(|i| at(24.0, 300.0 - i as f64 * 10.0)));
+    let route = Arc::new(build_route("hairpin", &pts).unwrap());
+    let world = World::new(route.clone(), None, 0.0);
+    let b = world.barriers();
+    assert!(b.windows(2).all(|w| w[0][4] <= w[1][4]));
+    let fence: Vec<_> = b.iter().filter(|s| s[5] as usize == BARRIER_FENCE).collect();
+    // Only round the bend (about 300 to 340 m along), none on the straights.
+    assert!(fence.len() >= 20, "{}", fence.len());
+    assert!(fence.iter().all(|s| s[4] > 280.0 && s[4] < 360.0), "{:?}", fence.iter().map(|s| s[4]).collect::<Vec<_>>());
+    // No rigid sections at the apex of the bend.
+    assert!(!b.iter().any(|s| s[5] as usize != BARRIER_FENCE && s[4] > 305.0 && s[4] < 335.0));
+    // Straights still have their barriers on both sides.
+    assert!(b.iter().filter(|s| s[4] > 100.0 && s[4] < 200.0).count() >= 70);
+    // Every panel is clear of the road, and on the outside: farther from the middle of the
+    // bend than the nearest bit of road is.
+    let arc: Vec<usize> = (0..route.n).filter(|&i| (i as f64 * route.step - 320.0).abs() < 20.0).collect();
+    let (cx, cz) = (arc.iter().map(|&i| route.x[i]).sum::<f64>() / arc.len() as f64, arc.iter().map(|&i| route.z[i]).sum::<f64>() / arc.len() as f64);
+    for s in fence.iter() {
+        let (x, z) = (s[0] as f64, s[2] as f64);
+        let near = (0..route.n).min_by(|&a, &b| (route.x[a] - x).hypot(route.z[a] - z).total_cmp(&(route.x[b] - x).hypot(route.z[b] - z))).unwrap();
+        let clear = (route.x[near] - x).hypot(route.z[near] - z);
+        assert!(clear > world.half_width(near) + 0.15, "panel at {} only {clear} m from the road", s[4]);
+        if (305.0..335.0).contains(&s[4]) {
+            assert!((x - cx).hypot(z - cz) > (route.x[near] - cx).hypot(route.z[near] - cz), "panel at {} is inside the bend", s[4]);
+        }
+    }
+    let ends = |s: &[f32; 7]| {
+        let (half, yaw) = (1.0f64, s[3] as f64);
+        [-half, half].map(|z| (s[0] as f64 + z * yaw.sin(), s[2] as f64 + z * yaw.cos()))
+    };
+    // Neighbouring panels meet end to end, with no gap and no pile-up.
+    for w in fence.windows(2) {
+        let (a, b) = (ends(w[0]), ends(w[1]));
+        let gap = [a[0], a[1]].iter().flat_map(|p| [b[0], b[1]].map(|q| (p.0 - q.0).hypot(p.1 - q.1))).fold(f64::MAX, f64::min);
+        assert!(gap < 0.15, "{gap} between panels at {} and {}", w[0][4], w[1][4]);
+    }
+    // The fence's model: posts and netting, standing on the ground, 2 m long.
+    let m = barrier_model(BARRIER_FENCE);
+    assert!(m.vertices() > 300);
+    assert!(m.positions.chunks(3).all(|p| p[1] >= 0.0 && p[1] <= 1.41 && p[2].abs() <= 1.0 + 1e-6));
+}
+
 mod buildings {
     use super::*;
     use velopopuli_core::world::{mark_footprints, overpass_query, parse_overpass, parse_sights, BuildingTags, Footprint, Sight, SightKind};
@@ -532,7 +585,13 @@ mod buildings {
         let mut print = footprint(&route, 11, 6.0, &house);
         print.tags = tags;
         let world = World::new(route.clone(), None, 0.0).with_buildings(&[print]);
-        let mesh = world.chunk((36.0 / CHUNK).floor() as i32, ((z0 + 4.0) / CHUNK).floor() as i32).buildings;
+        let all = world.chunk((36.0 / CHUNK).floor() as i32, ((z0 + 4.0) / CHUNK).floor() as i32).buildings;
+        // Just the building, eaves included (field boundaries keep their distance from houses).
+        let on: Vec<usize> = (0..all.positions.len() / 9)
+            .filter(|&t| (0..3).all(|k| (26.0..46.0).contains(&(all.positions[t * 9 + k * 3] as f64)) && (z0 - 4.0..z0 + 12.0).contains(&(all.positions[t * 9 + k * 3 + 2] as f64))))
+            .collect();
+        let pick = |v: &[f32], w: usize| on.iter().flat_map(|&t| v[t * 3 * w..(t + 1) * 3 * w].to_vec()).collect::<Vec<f32>>();
+        let mesh = velopopuli_core::world::TriMesh { positions: pick(&all.positions, 3), normals: pick(&all.normals, 3), colors: pick(&all.colors, 3), uvs: pick(&all.uvs, 2) };
         let top = mesh.positions.chunks(3).map(|p| p[1] as f64).fold(f64::MIN, f64::max);
         // The eaves are the top of the walls: the faces with windows on them.
         let eaves = mesh.positions.chunks(3).zip(mesh.uvs.chunks(2)).filter(|(_, uv)| uv[0] != 0.04).map(|(p, _)| p[1] as f64).fold(f64::MIN, f64::max);
@@ -697,7 +756,13 @@ mod buildings {
         assert!(!world.buildings.covers(0.0, z0 + 45.0));
 
         let (cx, cz) = ((35.0 / CHUNK).floor() as i32, ((z0 + 4.0) / CHUNK).floor() as i32);
-        let mesh = world.chunk(cx, cz).buildings;
+        let all = world.chunk(cx, cz).buildings;
+        // Just the two buildings (field boundaries keep their distance from houses).
+        let near: Vec<usize> = (0..all.positions.len() / 9)
+            .filter(|&t| (0..3).all(|k| (20.0..90.0).contains(&(all.positions[t * 9 + k * 3] as f64)) && (z0 - 10.0..z0 + 30.0).contains(&(all.positions[t * 9 + k * 3 + 2] as f64))))
+            .collect();
+        let pick = |v: &[f32], w: usize| near.iter().flat_map(|&t| v[t * 3 * w..(t + 1) * 3 * w].to_vec()).collect::<Vec<f32>>();
+        let mesh = velopopuli_core::world::TriMesh { positions: pick(&all.positions, 3), normals: pick(&all.normals, 3), colors: pick(&all.colors, 3), uvs: pick(&all.uvs, 2) };
         // House: 4 walls × 2 triangles, a pitched roof of 4 (and 4 more under its eaves) and 2
         // gable ends. Barn: 6 walls × 2, plus its L-shaped flat roof in 3 or 4 triangles.
         assert!([33 * 9, 34 * 9].contains(&mesh.positions.len()), "{} floats", mesh.positions.len());
@@ -955,8 +1020,8 @@ mod vector_tiles {
 mod scenery {
     use super::*;
     use velopopuli_core::world::{
-        barrier_model, corridor_tiles, highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Crossing, GridMesh,
-        MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
+        barrier_model, corridor_tiles, highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_boundaries, parse_ways, surface_runs, tagged_width, way_query, Area, AreaKind, Boundary,
+        Crossing, GridMesh, MappedBoundary, MappedWay, Road, RoadKind, Scenery, Surface, Waterway, WaterwayKind, BRIDGE, OPEN, ROAD_SECTION, TUNNEL, UNMARKED, WAY_TAGS,
     };
 
     /// Terrain tiles at a constant height, covering the route.
@@ -1051,6 +1116,7 @@ mod scenery {
                 MappedWay { highway: "service".into(), surface: Some(Surface::Concrete), width: None, mtb: None, hiking: None, line: geo(&route, &[(0.0, 1500.0), (0.0, 1510.0)]) },
                 MappedWay { highway: "primary".into(), surface: None, width: Some(9.0), mtb: None, hiking: None, line: geo(&route, &[(0.0, 2000.0), (0.0, 2400.0)]) },
             ],
+            boundaries: Vec::new(),
             way_tags: WAY_TAGS,
             sights: Vec::new(),
         };
@@ -1489,7 +1555,7 @@ mod scenery {
         assert_eq!((hiking_grade(Some("alpine_hiking")), hiking_grade(Some("strolling"))), (Some(3), None));
         let route = build_route("q", &straight(1000.0, |_| Some(100.0))).unwrap();
         let q = way_query(&route, 0, route.n, 12.0, 40.0);
-        assert!(q.contains("way[\"highway\"](around:12,") && q.ends_with("out tags geom;"), "{q}");
+        assert!(q.contains("way[\"highway\"](around:12,") && q.contains("way[\"barrier\"") && q.ends_with("out tags geom;"), "{q}");
     }
 
     #[test]
@@ -1757,6 +1823,122 @@ mod scenery {
         assert_eq!(a.trees, b.trees);
         assert!(b.water.is_empty() && b.roads.vertices() == 0 && mapped.structures().lit.vertices() == 0);
     }
+
+    #[test]
+    fn side_roads_are_level_across_and_banked_into_hillsides() {
+        // A lane running north 150 m east of the route, along a hillside rising 0.5 m a metre to the east.
+        let mut route = build_route("hillside", &straight(3000.0, |_| None)).unwrap();
+        let first = super::hillside(&route, 0.5);
+        let offset = align_dem(&mut route, &first);
+        let (natural, dem) = (super::hillside(&route, 0.5), super::hillside(&route, 0.5));
+        let route = Arc::new(route);
+        let lane = Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(150.0, 1000.0), (150.0, 2000.0)]) };
+        let scenery = Scenery {
+            tiles: Vec::new(),
+            areas: Vec::new(),
+            waterways: Vec::new(),
+            crossings: Vec::new(),
+            roads: vec![lane],
+            labels: Vec::new(),
+            ways: Vec::new(),
+            boundaries: Vec::new(),
+            sights: Vec::new(),
+            way_tags: WAY_TAGS,
+        };
+        let world = World::with_map(route.clone(), Some(dem), offset, Some(&scenery), &[]);
+        let mid = route.n / 2;
+        let x = route.x[mid] + 150.0;
+        let (row, points) = super::across(&world, x, z(1500.0));
+        let hill = |px: f64| natural.height_at(&route, px, row) + offset;
+        let (level, side): (f64, Vec<(f64, f64)>) = (hill(x), points.iter().map(|&(px, g)| (px - x, g - hill(px))).collect());
+        // Across the lane and several metres either side the ground is level, where the hillside rises 10 m in 20.
+        let shelf: Vec<f64> = points.iter().filter(|p| (p.0 - x).abs() <= 10.0).map(|p| p.1).collect();
+        assert!(shelf.len() >= 2 && shelf.iter().all(|g| (g - level).abs() < 1.0), "not level across: {shelf:?} for {level:.1}");
+        // A cutting above it (ground below the hillside) and an embankment below (ground above it).
+        assert!(side.iter().any(|&(d, above)| d > 10.0 && d < 30.0 && above < -1.5), "no cutting: {side:?}");
+        assert!(side.iter().any(|&(d, above)| d < -10.0 && d > -30.0 && above > 1.5), "no embankment: {side:?}");
+        // The hillside again further out, and untouched along the route.
+        assert!(side.iter().filter(|p| p.0.abs() >= 35.0 && p.0.abs() <= 60.0).all(|p| p.1.abs() < 1.0), "not back on the hillside: {side:?}");
+    }
+
+    #[test]
+    fn reads_mapped_hedges_walls_and_fences() {
+        let json = r#"{"elements":[
+            {"tags":{"barrier":"hedge"},"geometry":[{"lat":50.7,"lon":-3.5},{"lat":50.701,"lon":-3.5}]},
+            {"tags":{"barrier":"wall","wall":"retaining"},"geometry":[{"lat":50.7,"lon":-3.5},{"lat":50.701,"lon":-3.5}]},
+            {"tags":{"barrier":"wall","wall":"dry_stone"},"geometry":[{"lat":50.7,"lon":-3.5},{"lat":50.701,"lon":-3.5}]},
+            {"tags":{"barrier":"gate"},"geometry":[{"lat":50.7,"lon":-3.5},{"lat":50.701,"lon":-3.5}]},
+            {"tags":{"barrier":"fence"},"geometry":[{"lat":50.7,"lon":-3.5}]},
+            {"tags":{"highway":"track","barrier":"fence"},"geometry":[{"lat":50.7,"lon":-3.5},{"lat":50.701,"lon":-3.5}]}
+        ]}"#;
+        let found = parse_boundaries(json).unwrap();
+        // Not the retaining wall, the gate, or the fence with only one point.
+        assert_eq!(found.iter().map(|b| b.kind).collect::<Vec<_>>(), vec![Boundary::Hedge, Boundary::Wall, Boundary::Fence]);
+        // A boundary is not a road, though the same reply carries both.
+        assert_eq!(parse_ways(json).unwrap().len(), 1);
+    }
+
+    /// The boundaries' triangles (all the "buildings" there are, with no houses) in the chunks
+    /// around a stretch of route, as (x, along the route, height, green enough to be a hedge).
+    fn boundary_points(world: &World, from: f64, to: f64) -> Vec<(f64, f64, f64, bool)> {
+        let (zs, ze) = (z(to), z(from));
+        let mut out = Vec::new();
+        for cz in (zs / CHUNK).floor() as i32..=(ze / CHUNK).floor() as i32 {
+            for cx in -3..3 {
+                let b = world.chunk(cx, cz).buildings;
+                for (p, c) in b.positions.chunks(3).zip(b.colors.chunks(3)) {
+                    let (x, along) = (p[0] as f64, z(0.0) - p[2] as f64);
+                    out.push((x, along, p[1] as f64, c[1] > c[0] * 1.3));
+                }
+            }
+        }
+        out.retain(|p| p.1 >= from && p.1 <= to);
+        out
+    }
+
+    #[test]
+    fn fields_are_hedged_in_hedge_country_and_mapped_walls_win() {
+        // A level lane in Devon, 100 m up: hedgerow country.
+        let points: Vec<RawPoint> = (0..=300).map(|i| RawPoint { lat: 50.7 + i as f64 * 10.0 / M_PER_DEG, lon: -3.5, ele: None }).collect();
+        let route = Arc::new(build_route("devon", &points).unwrap());
+        let made_up = World::new(route.clone(), Some(level_ground(&route, 100.0)), 0.0);
+        let found = boundary_points(&made_up, 500.0, 2500.0);
+        assert!(found.iter().filter(|p| p.3).count() > 600, "too few hedges: {}", found.len());
+        // None on the road or its verges.
+        assert!(found.iter().all(|p| p.0.abs() > 12.0), "a boundary on the road: {:?}", found.iter().find(|p| p.0.abs() <= 12.0));
+
+        // A mapped stone wall 60 m east of the lane: drawn where it is, and no made-up hedges right next to it.
+        let wall = MappedBoundary { kind: Boundary::Wall, line: geo(&route, &[(60.0, 1000.0), (60.0, 1300.0)]) };
+        let scenery = Scenery { boundaries: vec![wall], way_tags: WAY_TAGS, ..Scenery::default() };
+        let mapped = World::with_map(route.clone(), Some(level_ground(&route, 100.0)), 0.0, Some(&scenery), &[]);
+        let found = boundary_points(&mapped, 1000.0, 1300.0);
+        assert!(found.iter().filter(|p| !p.3 && (p.0 - 60.0).abs() < 1.0).count() > 60, "no wall");
+        assert!(found.iter().all(|p| !(p.3 && (p.0 - 60.0).abs() < 15.0)), "a made-up hedge beside the mapped wall");
+    }
+
+    #[test]
+    fn devon_lanes_run_between_hedge_banks() {
+        // A 5 m lane through Devon fields, with a lane joining from the east at 1500 m.
+        let points: Vec<RawPoint> = (0..=300).map(|i| RawPoint { lat: 50.7 + i as f64 * 10.0 / M_PER_DEG, lon: -3.5, ele: None }).collect();
+        let route = Arc::new(build_route("devon", &points).unwrap());
+        let lane = MappedWay { highway: "unclassified".into(), surface: None, width: None, mtb: None, hiking: None, line: geo(&route, &[(0.0, 0.0), (0.0, 3000.0)]) };
+        let joining = Road { kind: RoadKind::Minor, oneway: false, line: geo(&route, &[(2.5, 1500.0), (300.0, 1500.0)]) };
+        let scenery = Scenery { roads: vec![joining], ways: vec![lane], way_tags: WAY_TAGS, ..Scenery::default() };
+        let world = World::with_map(route.clone(), Some(level_ground(&route, 100.0)), 0.0, Some(&scenery), &[]);
+        assert!((world.half_width(route.n / 2) - 2.5).abs() < 0.01);
+        let found = boundary_points(&world, 1000.0, 2000.0);
+        // High banks just beyond the barriers both sides: earth and hedge, about 3 m high.
+        let bank = |p: &&(f64, f64, f64, bool)| (3.5..6.5).contains(&p.0.abs());
+        for side in [-1.0, 1.0] {
+            let tops: Vec<f64> = found.iter().filter(|p| bank(p) && p.0 * side > 0.0).map(|p| p.2).collect();
+            let rise = tops.iter().cloned().fold(f64::MIN, f64::max) - tops.iter().cloned().fold(f64::MAX, f64::min);
+            assert!(tops.len() > 300 && rise > 2.9, "no bank on side {side}: {} points, {rise:.2} m from foot to top", tops.len());
+        }
+        // Open where the side lane comes in, and banks along that lane instead.
+        assert!(!found.iter().any(|p| bank(&p) && p.0 > 0.0 && (p.1 - 1500.0).abs() < 3.0), "the junction is walled off");
+        // (The banks' earthen feet aren't green enough to be a hedge on its own.)
+        assert!(found.iter().filter(|p| p.0 > 20.0 && (2.5..6.0).contains(&(p.1 - 1500.0).abs()) && !p.3).count() > 100, "no banks along the side lane");
+    }
 }
 
 mod waymarked {
@@ -1830,5 +2012,79 @@ mod waymarked {
         assert_eq!(raw[100].ele, Some(200.0));
         let flat: Vec<([f64; 2], Option<f64>)> = points.iter().map(|(p, _)| (*p, None)).collect();
         assert!(parse_gpx(&to_gpx("No heights", &flat)).unwrap().1.iter().all(|p| p.ele.is_none()));
+    }
+}
+
+/// Terrain tiles for a hillside rising `rise` metres a metre to the east, 1000 m high under a
+/// road along longitude 7°.
+fn hillside(route: &Route, rise: f64) -> Dem {
+    let (zoom, keys) = Dem::plan(route).unwrap();
+    let mut dem = Dem::new(zoom);
+    let world_px = TILE as f64 * 2f64.powi(zoom as i32);
+    let metres_per_px = 2.0 * std::f64::consts::PI * 6_378_137.0 * route.lat0.to_radians().cos() / world_px;
+    let road_px = (7.0 + 180.0) / 360.0 * world_px;
+    for key in &keys {
+        let mut px = vec![0u8; TILE * TILE * 3];
+        for x in 0..TILE {
+            let east = ((key.0 * TILE as i64 + x as i64) as f64 + 0.5 - road_px) * metres_per_px;
+            let v = (1000.0 + rise * east + 32768.0) * 256.0;
+            for y in 0..TILE {
+                let o = (y * TILE + x) * 3;
+                px[o..o + 3].copy_from_slice(&[(v / 65536.0) as u8, ((v / 256.0) as u32 % 256) as u8, (v as u32 % 256) as u8]);
+            }
+        }
+        assert!(dem.insert_rgb(*key, &px, 3));
+    }
+    dem
+}
+
+/// The terrain mesh's heights along the grid row nearest `z`, from the chunks around `x`, as (x, height).
+fn across(world: &World, x: f64, z: f64) -> (f64, Vec<(f64, f64)>) {
+    let row = (z / (CHUNK / CELLS as f64)).round() * (CHUNK / CELLS as f64);
+    let (cx, cz) = ((x / CHUNK).floor() as i32, (row / CHUNK).floor() as i32);
+    let mut points: Vec<(f64, f64)> = [cx - 1, cx, cx + 1]
+        .iter()
+        .flat_map(|&c| world.chunk(c, cz).positions.chunks(3).map(|p| (p[0] as f64, p[1] as f64, p[2] as f64)).collect::<Vec<_>>())
+        .filter(|p| (p.2 - row).abs() < 0.5)
+        .map(|p| (p.0, p.1))
+        .collect();
+    points.sort_by(|a, b| a.0.total_cmp(&b.0));
+    points.dedup_by(|a, b| a.0 == b.0);
+    (row, points)
+}
+
+#[test]
+fn hillside_roads_sit_in_cuttings_and_on_embankments() {
+    // A road heading north across a hillside that rises 0.6 m a metre to the east (31°).
+    let mut route = build_route("hillside", &straight(3000.0, |_| None)).unwrap();
+    let first = hillside(&route, 0.6);
+    let offset = align_dem(&mut route, &first);
+    let (natural, dem) = (hillside(&route, 0.6), hillside(&route, 0.6));
+    let route = Arc::new(route);
+    let world = World::new(route.clone(), Some(dem), offset);
+    let mid = route.n / 2;
+    let (xr, zr, level) = (route.x[mid], route.z[mid], route.ele[mid] as f64 - 0.35);
+    // The ground across the road, from the chunks either side of it, on the grid row nearest the middle.
+    let (row, points) = across(&world, xr, zr);
+    let across: Vec<(f64, f64)> = points.into_iter().map(|(x, g)| (x - xr, g)).collect();
+    let hill = |d: f64| natural.height_at(&route, xr + d, row) + offset;
+    // The shelf the road stands on is level, out to the edge of the cutting.
+    for &(d, g) in across.iter().filter(|p| p.0 >= -5.0 && p.0 <= 10.0) {
+        assert!((g - level).abs() < 1.0, "shelf at {d:.0} m: {g:.1} for a road at {level:.1}");
+    }
+    let between = |lo: f64, hi: f64, test: &dyn Fn(f64, f64) -> bool| across.iter().any(|&(d, g)| d > lo && d < hi && test(d, g));
+    // Uphill, a cutting face: well above where a gentle blend would be, but still below the hillside.
+    assert!(between(16.0, 40.0, &|d, g| g > level + 5.0 && g < hill(d) - 1.0), "no cutting: {across:?}");
+    // Downhill, an embankment: well below the road, but above the slope below it.
+    assert!(between(-20.0, -8.0, &|d, g| g < level - 1.5 && g > hill(d) + 1.0), "no embankment: {across:?}");
+    // Nowhere does the ground dip below both, or rise above both.
+    for &(d, g) in &across {
+        assert!(g > level.min(hill(d)) - 1.5 && g < level.max(hill(d)) + 1.5, "at {d:.0} m: {g:.1} (road {level:.1}, hillside {:.1})", hill(d));
+    }
+    // Faces are at most a few metres high (more is blended away), and the ground is the hillside
+    // again by the edge of the road's reach.
+    assert!(across.iter().all(|&(d, g)| d.abs() > 30.0 || (g - level).abs() < 10.0), "too tall a face: {across:?}");
+    for &(d, g) in across.iter().filter(|p| p.0.abs() >= 90.0 && p.0.abs() <= 120.0) {
+        assert!((g - hill(d)).abs() < 1.5, "at {d:.0} m: {g:.1}, hillside {:.1}", hill(d));
     }
 }

@@ -2,12 +2,10 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you — please send one.
 
-## What's new in 0.3.6
+## What's new in 0.3.8
 
-- **Barriers lean with the road.** On a hill each barrier section now stands on its feet at both ends and tilts with the slope, instead of standing level and floating or sinking.
-- **Denser woods, and six kinds of tree.** Mapped forests are planted much more thickly, with spruce, pine, broadleaf, birch, tall columnar trees and bushes, mixed by latitude, altitude (conifers take over towards the tree line) and stands that change across a wood.
-- **Distant trees as sprites.** Beyond about 200 m a tree is drawn as a flat picture of itself and becomes a 3D model as you get closer, so the denser woods cost only a little more to draw than the old sparse ones.
-- The README and guides have fresh screenshots from this version.
+- **Netting round hairpins.** On a tight bend the steel barriers used to fan apart on the outside and pile into each other on the inside. Now an orange netting fence on posts runs smoothly round the outside of the bend, and the inside is left open, as on a real climb. The straights keep their barriers and banners.
+- The hairpins picture in the README is fresh from this version.
 
 ## Download
 

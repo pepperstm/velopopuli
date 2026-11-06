@@ -15,7 +15,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use velopopuli_core::gpx::Route;
 use velopopuli_core::world::{
-    corridor_tiles, map_query, overpass_query, parse_overpass, parse_sights, parse_tile, parse_ways, route_corridor, Footprint, MapTile, MappedWay, RoadKind, Scenery, Sight, MAP_ZOOM, WAY_TAGS,
+    corridor_tiles, map_query, overpass_query, parse_boundaries, parse_overpass, parse_sights, parse_tile, parse_ways, route_corridor, Footprint, MapTile, MappedBoundary, MappedWay, RoadKind,
+    Scenery, Sight, MAP_ZOOM, WAY_TAGS,
 };
 
 use crate::now_ms;
@@ -104,28 +105,30 @@ async fn overpass_request(http: &reqwest::Client, endpoint: &'static str, query:
     Ok((parse_overpass(&text)?, endpoint))
 }
 
-/// Roads with their tags, and the landmarks around them.
-type WaysAndSights = (Vec<MappedWay>, Vec<Sight>);
+/// Roads with their tags, the hedges, walls and fences near them, and the landmarks around them.
+type MapFeatures = (Vec<MappedWay>, Vec<MappedBoundary>, Vec<Sight>);
 
-async fn way_request(http: &reqwest::Client, endpoint: &'static str, query: &str) -> Result<(WaysAndSights, &'static str), String> {
+async fn way_request(http: &reqwest::Client, endpoint: &'static str, query: &str) -> Result<(MapFeatures, &'static str), String> {
     let (text, endpoint) = overpass_text(http, endpoint, query).await?;
-    Ok(((parse_ways(&text)?, parse_sights(&text)?), endpoint))
+    Ok(((parse_ways(&text)?, parse_boundaries(&text)?, parse_sights(&text)?), endpoint))
 }
 
 /// The roads the route follows with their surface and width tags, from the Overpass API (the
-/// tiles don't carry them), and the landmarks within a few kilometres, asked for together.
-async fn ways_from_overpass(http: &reqwest::Client, route: &Route) -> Result<WaysAndSights, String> {
+/// tiles don't carry them), the field boundaries near it, and the landmarks within a few
+/// kilometres, asked for together.
+async fn ways_from_overpass(http: &reqwest::Client, route: &Route) -> Result<MapFeatures, String> {
     if std::env::var_os("VP_SKIP_OVERPASS").is_some() {
         return Err("skipped by VP_SKIP_OVERPASS".into());
     }
     let per_stretch = ((STRETCH_M / route.step) as usize).max(1);
     let stretches: Vec<String> = (0..route.n).step_by(per_stretch).map(|from| map_query(route, from, (from + per_stretch).min(route.n), SURFACE_RADIUS_M, SURFACE_SPACING_M)).collect();
     let race = select_ok(OVERPASS.map(|endpoint| Box::pin(way_request(http, endpoint, &stretches[0]))));
-    let (((mut ways, mut sights), server), _) = tokio::time::timeout(OVERPASS_FIRST_ANSWER, race).await.map_err(|_| "no Overpass server answered in time".to_string())??;
+    let (((mut ways, mut boundaries, mut sights), server), _) = tokio::time::timeout(OVERPASS_FIRST_ANSWER, race).await.map_err(|_| "no Overpass server answered in time".to_string())??;
     let rest = async {
         for query in &stretches[1..] {
-            let ((w, more), _) = way_request(http, server, query).await?;
+            let ((w, b, more), _) = way_request(http, server, query).await?;
             ways.extend(w);
+            boundaries.extend(b);
             // Neighbouring stretches see the same landmarks.
             for s in more {
                 if !sights.iter().any(|t| t.kind == s.kind && t.at == s.at) {
@@ -133,7 +136,7 @@ async fn ways_from_overpass(http: &reqwest::Client, route: &Route) -> Result<Way
                 }
             }
         }
-        Ok::<_, String>((ways, sights))
+        Ok::<_, String>((ways, boundaries, sights))
     };
     tokio::time::timeout(OVERPASS_BUDGET, rest).await.map_err(|_| "Overpass took too long".to_string())?
 }
@@ -282,9 +285,10 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
         }
     };
     match (surfaces, scenery.as_mut()) {
-        (Some(Ok((ways, sights))), Some(s)) => {
-            crate::diag::event("map", format!("road tags: {} mapped ways along the route; {} landmarks around it", ways.len(), sights.len()));
+        (Some(Ok((ways, boundaries, sights))), Some(s)) => {
+            crate::diag::event("map", format!("road tags: {} mapped ways along the route, {} hedges, walls and fences near it; {} landmarks around it", ways.len(), boundaries.len(), sights.len()));
             s.ways = ways;
+            s.boundaries = boundaries;
             s.sights = sights;
             s.way_tags = WAY_TAGS;
             save(s);
