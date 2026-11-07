@@ -288,7 +288,7 @@ impl Session {
         };
         let ghosts = library::load_ghosts(store, route_id, &req.ghost_ids);
         let imported_ghosts = ghosts.iter().map(|g| g.id.clone()).collect();
-        let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default() };
+        let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default(), laps: None };
         let mut engine = RideEngine::with_options(route.clone(), &settings, pb.clone(), options);
         engine.set_surfaces(world.scene.surfaces.clone());
         engine.set_trails(world.scene.trails.clone());
