@@ -115,7 +115,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           started.covered,
           (i) => `${i} ${imperial ? 'mi' : 'km'}`,
           imperial ? 1609.344 : 1000,
-          started.landmarks
+          started.landmarks,
+          started.laps !== null
         )
         worldRef.current = world
         const native = settingsRef.current.nativeRenderer && (await api.native.available())
@@ -192,7 +193,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           const ahead = s.moving ? Math.min(0.25, (now - latest.at) / 1000) : 0
           try {
             world.frame(dt, {
-              distance: lapRide ? wrapDist(loaded.total, s.distance + s.speed * ahead) : Math.min(loaded.total, s.distance + s.speed * ahead),
+              distance: lapRide && !s.finished ? wrapDist(loaded.total, s.distance + s.speed * ahead) : Math.min(loaded.total, s.distance + s.speed * ahead),
               speed: s.speed,
               cadence: s.cadence ?? (s.moving && s.power > 20 ? 80 : 0),
               rivals: s.rivals.map((r) => ({
