@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorText } from '../bridge'
 import { distUnit, distValue, fmtDist, fmtEle, fmtTime, gradeColor, speedUnit, speedValue, zoneColor } from '../core/fmt'
-import type { Route } from '../core/gpx'
+import { wrapDist, wrapGap, type Route } from '../core/gpx'
 import { api, smokeHooks, useSettings } from '../state'
 import type { RideInit, RideRequest, RideState, RideSummary } from '../types'
 import { WorkoutShape } from './Workouts'
@@ -181,6 +181,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         let frames = 0
         const recent: number[] = []
         let frameFailed = false
+        const lapRide = started.laps !== null
         const loop = (now: number): void => {
           raf = requestAnimationFrame(loop)
           const dt = Math.min(0.1, (now - last) / 1000)
@@ -191,7 +192,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           const ahead = s.moving ? Math.min(0.25, (now - latest.at) / 1000) : 0
           try {
             world.frame(dt, {
-              distance: Math.min(loaded.total, s.distance + s.speed * ahead),
+              distance: lapRide ? wrapDist(loaded.total, s.distance + s.speed * ahead) : Math.min(loaded.total, s.distance + s.speed * ahead),
               speed: s.speed,
               cadence: s.cadence ?? (s.moving && s.power > 20 ? 80 : 0),
               rivals: s.rivals.map((r) => ({
@@ -199,7 +200,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                 name: r.name,
                 color: r.color,
                 ghost: r.kind === 'ghost',
-                distance: Math.min(loaded.total, r.distance + r.speed * ahead),
+                distance: lapRide ? wrapDist(loaded.total, r.distance + r.speed * ahead) : Math.min(loaded.total, r.distance + r.speed * ahead),
                 speed: r.speed
               }))
             })
@@ -319,10 +320,24 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const climb = ready && hud.climbIndex !== null ? route.climbs[hud.climbIndex] : null
   const climbBest = ready && hud.climbIndex !== null ? init.pbClimbs[hud.climbIndex] : undefined
   const mode = settings.trainer.mode
+  const lapRide = init?.laps != null
+  const landmarksAhead = ready
+    ? init.landmarks
+        .map((m) => ({ m, ahead: lapRide ? wrapDist(init.total, m.distance - hud.distance) : m.distance - hud.distance }))
+        .filter((l) => l.ahead > 0 && l.ahead < 5000)
+        // Round a loop the next landmark may sit before the first in the list.
+        .sort((a, b) => a.ahead - b.ahead)
+    : []
   const standings = ready
     ? [
         { id: 'me', name: settings.rider.name || 'You', color: '#e9ff60', delta: 0, me: true },
-        ...hud.rivals.map((r) => ({ id: r.id, name: r.name, color: hex(r.color), delta: r.distance - hud.distance, me: false }))
+        ...hud.rivals.map((r) => ({
+          id: r.id,
+          name: r.name,
+          color: hex(r.color),
+          delta: lapRide ? wrapGap(init.total, hud.distance, r.distance) : r.distance - hud.distance,
+          me: false
+        }))
       ].sort((a, b) => b.delta - a.delta)
     : []
 
@@ -343,7 +358,9 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             <div className="hud-title">
               <b>{route.name}</b>
               <span>
-                {fmtDist(hud.distance, units, 2)} / {fmtDist(route.total, units)} · {fmtDist(route.total - hud.distance, units)} to go
+                {lapRide
+                  ? `Lap ${hud.lap}${init.laps ? ` of ${init.laps}` : ''} · ${fmtDist(hud.ridden, units, 2)}`
+                  : `${fmtDist(hud.distance, units, 2)} / ${fmtDist(route.total, units)} · ${fmtDist(route.total - hud.distance, units)} to go`}
               </span>
             </div>
             <div className="hud-clock">{fmtTime(hud.elapsed)}</div>
@@ -395,16 +412,13 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               </div>
             )}
             {/* Coming up: below the tiles, where it can't run into them. */}
-            {init.landmarks.some((m) => m.distance > hud.distance && m.distance < hud.distance + 5000) && (
+            {landmarksAhead.length > 0 && (
               <div className="coming-up-list">
-                {init.landmarks
-                  .filter((m) => m.distance > hud.distance && m.distance < hud.distance + 5000)
-                  .slice(0, 3)
-                  .map((m, i) => (
-                    <span key={i} className="coming-up">
-                      <b>{fmtDist(m.distance - hud.distance, units, 1)}</b> {m.kind === 'summit' ? `⛰ ${m.name} ${m.detail}` : m.name}
-                    </span>
-                  ))}
+                {landmarksAhead.slice(0, 3).map(({ m, ahead }, i) => (
+                  <span key={i} className="coming-up">
+                    <b>{fmtDist(ahead, units, 1)}</b> {m.kind === 'summit' ? `⛰ ${m.name} ${m.detail}` : m.name}
+                  </span>
+                ))}
               </div>
             )}
           </div>
@@ -657,14 +671,17 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             </div>
             <div className="profiles">
               <div className="profile-next">
-                <ProfileChart route={route} distance={hud.distance} from={hud.distance - 150} to={hud.distance + 1350} />
+                <ProfileChart route={route} distance={hud.distance} from={hud.distance - 150} to={hud.distance + 1350} wrap={lapRide} />
                 <label>Next {fmtDist(1350, units, 1)}</label>
               </div>
               <div className="profile-all">
                 <ProfileChart
                   route={route}
                   distance={hud.distance}
-                  markers={standings.filter((r) => !r.me).map((r) => ({ distance: hud.distance + r.delta, color: r.color }))}
+                  wrap={lapRide}
+                  markers={standings
+                    .filter((r) => !r.me)
+                    .map((r) => ({ distance: lapRide ? wrapDist(route.total, hud.distance + r.delta) : hud.distance + r.delta, color: r.color }))}
                 />
               </div>
             </div>
