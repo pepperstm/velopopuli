@@ -103,7 +103,8 @@ pub struct GridMesh {
 
 pub struct RoadMesh {
     /// `ROAD_SECTION` vertices per route sample, left to right: wall base, embankment
-    /// foot, tarmac edge, tarmac edge, embankment foot, wall base.
+    /// foot, tarmac edge, tarmac edge, embankment foot, wall base. A closed loop has one
+    /// more section after the last sample: the first again, so the road joins up at the line.
     pub positions: Vec<f32>,
     pub uvs: Vec<f32>,
     /// How the road is drawn per route sample: `Surface as u8`, or `UNMARKED` for tarmac
@@ -696,9 +697,13 @@ impl World {
                 Some(s) => *s as u8,
                 None => 0,
             })
-            .collect();
-        let mut mesh = RoadMesh { positions: Vec::with_capacity(n * ROAD_SECTION * 3), uvs: Vec::with_capacity(n * ROAD_SECTION * 2), looks };
-        for i in 0..n {
+            .collect::<Vec<_>>();
+        // A closed loop gets one more section, a copy of the first, so the road runs on across the line.
+        let sections = n + usize::from(r.closed);
+        let looks = (0..sections).map(|j| looks[j % n]).collect();
+        let mut mesh = RoadMesh { positions: Vec::with_capacity(sections * ROAD_SECTION * 3), uvs: Vec::with_capacity(sections * ROAD_SECTION * 2), looks };
+        for j in 0..sections {
+            let i = j % n;
             let (a, b) = (i.saturating_sub(1), (i + 1).min(n - 1));
             let (mut tx, mut tz) = (r.x[b] - r.x[a], r.z[b] - r.z[a]);
             let len = tx.hypot(tz).max(1e-9);
@@ -733,7 +738,7 @@ impl World {
                         }) as f32,
                     (r.z[i] - tx * offset) as f32,
                 ]);
-                mesh.uvs.extend_from_slice(&[us[k], (i as f64 * r.step / 12.0) as f32]);
+                mesh.uvs.extend_from_slice(&[us[k], (j as f64 * r.step / 12.0) as f32]);
             }
         }
         mesh

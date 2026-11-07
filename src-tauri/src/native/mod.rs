@@ -1412,7 +1412,8 @@ impl SceneMeshes {
         let route = &world.route;
         let road = world.road();
         let section = LAYOUT.road_section;
-        let n = route.n;
+        // Road sections: one per sample, and on a closed loop one more that joins the road up at the line.
+        let n = road.looks.len();
         // Daylight doesn't follow the road into a tunnel.
         let covered = &world.scene.covered;
         let dim = |i: usize| {

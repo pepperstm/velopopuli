@@ -588,8 +588,14 @@ mod world {
         let far = world.far(route.x[0], route.z[0]);
         assert_eq!(far.positions.len(), (FAR_CELLS + 1).pow(2) * 3);
         let road = world.road();
-        assert_eq!(road.positions.len(), route.n * 18);
-        assert_eq!(road.uvs.len(), route.n * 12);
+        // The demo loop is closed: one more section, the first again, joins the road up at the line.
+        assert!(route.closed);
+        assert_eq!(road.positions.len(), (route.n + 1) * 18);
+        assert_eq!(road.uvs.len(), (route.n + 1) * 12);
+        assert_eq!(road.looks.len(), route.n + 1);
+        assert_eq!(road.positions[route.n * 18..], road.positions[..18]);
+        // The texture carries on along the closing stretch rather than jumping back.
+        assert!(road.uvs[route.n * 12 + 1] > road.uvs[(route.n - 1) * 12 + 1]);
     }
 
     #[test]

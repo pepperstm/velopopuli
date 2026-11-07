@@ -250,7 +250,9 @@ export class World {
     this.scene.add(this.barriers.group)
     for (let k = 0; k < SURFACES.length; k++) surfaceTexture(k).anisotropy = this.renderer.capabilities.getMaxAnisotropy()
     const dim = (sample: number): number => 1 - 0.62 * this.cover(sample * this.route.step, 12)
-    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...buildStructures(structures))
+    // Per section: positions and uvs (5 floats a vertex) and its look; a closed loop has one section more than samples.
+    const sections = road.byteLength / ((this.layout.roadSection * 5 + 1) * 4)
+    this.scene.add(buildRoad(road, sections, this.layout.roadSection, dim), ...buildStructures(structures))
   }
 
   /** Everything the native renderer needs from this scene (see `native.ts`). */
