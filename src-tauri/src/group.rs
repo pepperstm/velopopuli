@@ -57,6 +57,7 @@ impl GroupLink {
         link
     }
 
+    /// `distance` is the position on the route (on a lap ride, on the loop), not the total ridden.
     pub fn send(&self, distance: f64, speed: f64, power: f64) {
         let _ = self.out.send(json!({ "t": "pos", "name": self.name, "key": self.key, "d": (distance * 10.0).round() / 10.0, "v": (speed * 100.0).round() / 100.0, "p": power.round() }).to_string());
     }

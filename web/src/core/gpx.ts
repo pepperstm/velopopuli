@@ -33,6 +33,17 @@ export interface Route {
   climbs: Climb[]
 }
 
+/** `d` folded into `[0, total)`: where on a loop a distance of any size (or sign) lies. */
+export function wrapDist(total: number, d: number): number {
+  return ((d % total) + total) % total
+}
+
+/** Signed shortest difference `to - from` round a loop, in `(-total/2, total/2]`. */
+export function wrapGap(total: number, from: number, to: number): number {
+  const g = wrapDist(total, to - from)
+  return g > total / 2 ? g - total : g
+}
+
 /** Half the road's width at `dist` metres along the route. */
 export function halfWidthAt(route: Route, dist: number): number {
   const i = Math.max(0, Math.min(route.n - 1, Math.round(dist / route.step)))

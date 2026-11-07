@@ -1,6 +1,6 @@
 //! The simulation and recorder for one ride.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -90,6 +90,9 @@ pub struct RideOptions {
     pub ghosts: Vec<GhostTrace>,
     pub segments: Vec<Segment>,
     pub segment_bests: BTreeMap<String, SegmentBest>,
+    /// Laps on a closed route: `None` rides it once, `Some(0)` goes round until stopped,
+    /// `Some(n)` finishes after `n` laps. Ignored on a route that is not a loop.
+    pub laps: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -114,7 +117,14 @@ const BOT_COLORS: [u32; 5] = [0x4aa3ff, 0xffb347, 0xc56bff, 0x4ddb8a, 0xff6b9a];
 pub struct RideEngine {
     pub route: Arc<Route>,
     pub pb: Option<PersonalBest>,
+    /// Position on the route, in `[0, route.total]`; on a lap ride it starts again at each lap.
     pub distance: f64,
+    /// The lap being ridden, from 1.
+    pub lap: u32,
+    /// Total metres ridden. Equal to `distance` on a ride without laps.
+    pub ridden: f64,
+    /// Laps to ride (`Some(0)` until stopped), or `None` when the route is ridden once.
+    pub laps: Option<u32>,
     pub speed: f64,
     /// Moving time in seconds; the clock stops when the rider does.
     pub elapsed: f64,
@@ -149,6 +159,8 @@ pub struct RideEngine {
     /// Set on a shift, so the new resistance is sent straight away.
     pub gear_shifted: bool,
     seg_state: Vec<SegState>,
+    /// Climbs already timed on this lap.
+    climbs_done: BTreeSet<usize>,
 
     params: PhysicsParams,
     /// The road surface at each route sample; empty means tarmac all the way.
@@ -186,12 +198,14 @@ impl RideEngine {
 
     pub fn with_options(route: Arc<Route>, settings: &Settings, pb: Option<PersonalBest>, options: RideOptions) -> Self {
         let params = PhysicsParams { mass: settings.rider.weight_kg + settings.rider.bike_kg, crr: settings.physics.crr, cda: settings.physics.cda, max_speed: settings.physics.max_speed_kph / 3.6 };
+        let laps = options.laps.filter(|_| route.closed);
         let mut rivals = Vec::new();
-        if pb.as_ref().is_some_and(|p| p.trace.len() > 1) {
+        // A recorded trace covers one trip along the route, so there are no ghosts on a lap ride.
+        if laps.is_none() && pb.as_ref().is_some_and(|p| p.trace.len() > 1) {
             let trace = Arc::new(pb.as_ref().unwrap().trace.clone());
             rivals.push(Rival { id: "ghost".into(), name: "Your best".into(), kind: RivalKind::Ghost, color: 0xffffff, distance: 0.0, speed: 0.0, power: 0.0, mass: 0.0, trace: Some(trace) });
         }
-        for g in &options.ghosts {
+        for g in options.ghosts.iter().filter(|_| laps.is_none()) {
             rivals.push(Rival { id: g.id.clone(), name: g.name.clone(), kind: RivalKind::Ghost, color: g.color, distance: 0.0, speed: 0.0, power: 0.0, mass: 0.0, trace: Some(g.trace.clone()) });
         }
         if settings.bots.enabled {
@@ -214,6 +228,9 @@ impl RideEngine {
             route,
             pb,
             distance: 0.0,
+            lap: 1,
+            ridden: 0.0,
+            laps,
             speed: 0.0,
             elapsed: 0.0,
             moving: false,
@@ -232,6 +249,7 @@ impl RideEngine {
             climb_index: None,
             last_climb_result: None,
             seg_state: vec![SegState::Waiting; options.segments.len()],
+            climbs_done: BTreeSet::new(),
             segments: options.segments,
             segment_bests: options.segment_bests,
             new_segment_bests: BTreeMap::new(),
@@ -291,13 +309,28 @@ impl RideEngine {
         let params = self.params_at(self.distance, self.params.mass);
         self.speed = step_speed(self.speed, input.power, self.pos.grade, self.pos.ele, &params, dt);
         self.distance += self.speed * dt;
+        self.ridden += self.speed * dt;
         self.elapsed += dt;
         if self.workout.is_some() {
             self.workout_time += dt;
         }
         if self.distance >= self.route.total {
+            let overshoot = self.distance - self.route.total;
             self.distance = self.route.total;
-            self.finished = true;
+            if self.lap_ride() && self.laps != Some(self.lap) {
+                // Finish anything that ends at the line before the position wraps.
+                self.pos = self.route.sample_at(self.distance);
+                self.track_climbs();
+                self.track_segments();
+                self.distance = overshoot;
+                self.lap += 1;
+                self.climbs_done.clear();
+                self.climb_index = None;
+                self.seg_state.fill(SegState::Waiting);
+            } else {
+                self.ridden -= overshoot;
+                self.finished = true;
+            }
         }
         self.pos = self.route.sample_at(self.distance);
         let d_ele = self.pos.ele - prev_ele;
@@ -324,6 +357,7 @@ impl RideEngine {
     }
 
     fn step_rivals(&mut self, dt: f64) {
+        let lap_ride = self.lap_ride();
         let params: Vec<PhysicsParams> = self.rivals.iter().map(|r| self.params_at(r.distance, r.mass)).collect();
         for (r, params) in self.rivals.iter_mut().zip(params) {
             match r.kind {
@@ -333,6 +367,11 @@ impl RideEngine {
                     r.distance = d;
                 }
                 RivalKind::Remote => {}
+                RivalKind::Bot if lap_ride => {
+                    let p = self.route.sample_at(r.distance);
+                    r.speed = step_speed(r.speed, r.power, p.grade, p.ele, &params, dt);
+                    r.distance = (r.distance + r.speed * dt).rem_euclid(self.route.total);
+                }
                 RivalKind::Bot if r.distance < self.route.total => {
                     let p = self.route.sample_at(r.distance);
                     r.speed = step_speed(r.speed, r.power, p.grade, p.ele, &params, dt);
@@ -349,14 +388,16 @@ impl RideEngine {
             let c = &climbs[i];
             if self.distance >= c.end {
                 let time_s = self.elapsed - self.climb_entered_at;
-                self.climb_times.insert(i, time_s);
+                let fastest = self.climb_times.get(&i).map_or(time_s, |t| t.min(time_s));
+                self.climb_times.insert(i, fastest);
+                self.climbs_done.insert(i);
                 self.last_climb_result = Some(ClimbResult { index: i, climb: c.clone(), time_s, previous_best: self.pb.as_ref().and_then(|p| p.climbs.get(&i).copied()) });
                 self.climb_index = None;
             }
             return;
         }
         for (i, c) in climbs.iter().enumerate() {
-            if !self.climb_times.contains_key(&i) && self.distance >= c.start && self.distance < c.end {
+            if !self.climbs_done.contains(&i) && self.distance >= c.start && self.distance < c.end {
                 self.climb_index = Some(i);
                 self.climb_entered_at = self.elapsed;
                 return;
@@ -369,8 +410,8 @@ impl RideEngine {
         let time = (self.last_sample_time + 1000).max(wall_ms / 1000 * 1000);
         self.last_sample_time = time;
         let power = self.power.round();
-        self.samples.push(FitSample { time, lat: self.pos.lat, lon: self.pos.lon, ele: self.pos.ele, dist: self.distance, speed: self.speed, power, hr: self.hr, cadence: self.cadence });
-        self.trace.push(self.distance);
+        self.samples.push(FitSample { time, lat: self.pos.lat, lon: self.pos.lon, ele: self.pos.ele, dist: self.ridden, speed: self.speed, power, hr: self.hr, cadence: self.cadence });
+        self.trace.push(self.ridden);
         self.n += 1;
         self.sum_power += power;
         self.joules += power;
@@ -417,7 +458,9 @@ impl RideEngine {
                         let time_s = self.elapsed - *entered;
                         splits.push(time_s);
                         let previous_best = self.segment_bests.get(&seg.id).map(|b| b.time_s).filter(|t| *t > 0.0);
-                        if previous_best.is_none_or(|b| time_s < b) {
+                        // Within a lap ride the bar to beat includes this ride's earlier laps.
+                        let bar = [previous_best, self.new_segment_bests.get(&seg.id).map(|b| b.time_s)].into_iter().flatten().reduce(f64::min);
+                        if bar.is_none_or(|b| time_s < b) {
                             self.new_segment_bests.insert(seg.id.clone(), SegmentBest { time_s, splits: std::mem::take(splits) });
                         }
                         self.last_segment_result = Some(SegmentResult { id: seg.id.clone(), name: seg.name.clone(), source: seg.source, time_s, previous_best });
@@ -498,8 +541,21 @@ impl RideEngine {
         }
     }
 
+    /// Whether this ride goes round a loop for laps.
+    pub fn lap_ride(&self) -> bool {
+        self.laps.is_some()
+    }
+
+    /// Whether finishing this ride can set the route's best time: only a single complete trip does.
+    pub fn counts_for_route_best(&self) -> bool {
+        self.finished && !self.lap_ride()
+    }
+
     /// Seconds behind (+) or ahead (−) of the personal-best ghost at the current position.
     pub fn ghost_gap(&self) -> Option<f64> {
+        if self.lap_ride() {
+            return None;
+        }
         let trace = &self.pb.as_ref()?.trace;
         if trace.len() < 2 {
             return None;
@@ -635,7 +691,7 @@ impl RideEngine {
             start_time: self.samples.first().map_or(now_ms, |s| s.time),
             end_time: self.samples.last().map_or(now_ms, |s| s.time),
             timer_s: self.elapsed,
-            distance_m: self.distance,
+            distance_m: self.ridden,
             ascent_m: self.ascent,
             descent_m: self.descent,
             avg_power: self.avg_power(),

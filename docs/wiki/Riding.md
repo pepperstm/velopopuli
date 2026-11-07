@@ -20,6 +20,16 @@ Power (with W/kg and zone), speed, heart rate and cadence on the left, with what
 
 ![Overhead camera](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-hairpins.jpg)
 
+## Laps
+
+On a closed route (a loop), the setup screen offers **Laps**: once round (the default), 2, 3, 5, 10 or 20 laps, or until you stop. Open routes don't show it.
+
+- The HUD shows the lap and the distance ridden, such as **Lap 3 of 10 · 24.10 km** (or **Lap 3** until you stop). The profile, the landmarks and the riders around you carry on across the line.
+- Climbs and segments are timed again on every lap, and keep your fastest.
+- Ghosts are off on lap rides, and a lap ride never sets the route's best time. The FIT file, ride summary, season goal and badges count the total distance ridden.
+
+Not yet: laps in the FIT file, ending the ride on the workout instead of the laps, and showing who is a lap up in group standings.
+
 ## Racing
 
 - **Pace riders** hold a steady W/kg to chase or drop (set them in Settings).

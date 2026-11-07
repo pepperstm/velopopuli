@@ -4,7 +4,8 @@ use velopopuli_core::fit::{encode_fit, fit_crc, FitSample, FitSession};
 use velopopuli_core::gamify::{apply_ride, level_for, RideFacts};
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, M_PER_DEG};
 use velopopuli_core::physics::{step_speed, PhysicsParams};
-use velopopuli_core::ride::{RideEngine, RideInput, RivalKind};
+use velopopuli_core::ride::{GhostTrace, RideEngine, RideInput, RideOptions, RivalKind};
+use velopopuli_core::segments::{Segment, SegmentSource};
 use velopopuli_core::types::{BotSettings, PersonalBest, Profile, Settings};
 use velopopuli_core::world::{align_dem, Dem, Surface, Trail, World, CELLS, CHUNK, FAR_CELLS, TILE, TREE_FLOATS};
 
@@ -231,6 +232,162 @@ mod ride {
 
     fn flat() -> Arc<Route> {
         Arc::new(build_route("flat", &straight(3000.0, |_| Some(100.0))).unwrap())
+    }
+
+    /// A closed loop of about `length_m`, a circle of points every ~10 m, with a height by distance round it.
+    fn ring_with(length_m: f64, ele_at: impl Fn(f64) -> f64) -> Arc<Route> {
+        let r = length_m / std::f64::consts::TAU;
+        let n = (length_m / 10.0) as usize;
+        let pts: Vec<RawPoint> = (0..=n)
+            .map(|i| {
+                let a = i as f64 / n as f64 * std::f64::consts::TAU;
+                RawPoint { lat: 45.0 + r * a.sin() / M_PER_DEG, lon: 7.0 + r * a.cos() / (M_PER_DEG * 45f64.to_radians().cos()), ele: Some(ele_at(a / std::f64::consts::TAU * length_m)) }
+            })
+            .collect();
+        Arc::new(build_route("ring", &pts).unwrap())
+    }
+
+    fn ring(length_m: f64) -> Arc<Route> {
+        ring_with(length_m, |_| 100.0)
+    }
+
+    fn lap_engine(route: Arc<Route>, laps: Option<u32>, pb: Option<PersonalBest>) -> RideEngine {
+        RideEngine::with_options(route, &settings(), pb, RideOptions { laps, ..Default::default() })
+    }
+
+    /// Rides at `power` until the engine is on lap `lap` (or stops), so one lap can be ridden harder than the next.
+    fn ride_until_lap(engine: &mut RideEngine, lap: u32, power: f64, clock: &mut u64) {
+        for _ in 0..200_000 {
+            if engine.finished || engine.lap >= lap {
+                return;
+            }
+            *clock += 100;
+            engine.tick(0.1, RideInput { power, cadence: Some(90.0), hr: Some(150.0) }, *clock);
+        }
+        panic!("never reached lap {lap}");
+    }
+
+    #[test]
+    fn laps_wrap_at_the_line_and_count_up() {
+        let route = ring(1000.0);
+        assert!(route.closed);
+        let mut clock = 1_700_000_000_000;
+        let mut engine = lap_engine(route.clone(), Some(0), None);
+        run(&mut engine, 300, 250.0, &mut clock);
+        assert!(!engine.finished);
+        assert!(engine.lap >= 2);
+        assert!(engine.distance < route.total);
+        assert!(close(engine.ridden, (engine.lap - 1) as f64 * route.total + engine.distance, 1e-6));
+        assert!(engine.samples.windows(2).all(|w| w[1].dist > w[0].dist));
+        assert!(close(engine.samples.last().unwrap().dist, engine.ridden, 1e-6));
+        assert_eq!(engine.session(clock, 0).distance_m, engine.ridden);
+    }
+
+    #[test]
+    fn finishes_after_the_chosen_laps() {
+        let route = ring(1000.0);
+        let mut clock = 0;
+        let mut engine = lap_engine(route.clone(), Some(2), None);
+        run(&mut engine, 3600, 250.0, &mut clock);
+        assert!(engine.finished);
+        assert_eq!(engine.lap, 2);
+        assert_eq!(engine.distance, route.total);
+        assert!(close(engine.ridden, 2.0 * route.total, 1e-6));
+        assert!(!engine.counts_for_route_best());
+    }
+
+    #[test]
+    fn without_laps_a_loop_finishes_once_as_before() {
+        let route = ring(1000.0);
+        let mut clock = 0;
+        let mut engine = lap_engine(route.clone(), None, None);
+        run(&mut engine, 3600, 250.0, &mut clock);
+        assert!(engine.finished);
+        assert_eq!(engine.lap, 1);
+        assert_eq!(engine.ridden, engine.distance);
+        assert_eq!(engine.distance, route.total);
+        assert!(engine.counts_for_route_best());
+    }
+
+    #[test]
+    fn an_open_route_ignores_laps() {
+        let route = flat();
+        let mut clock = 0;
+        let mut engine = lap_engine(route.clone(), Some(3), None);
+        assert!(engine.laps.is_none());
+        run(&mut engine, 3600, 250.0, &mut clock);
+        assert!(engine.finished);
+        assert_eq!(engine.ridden, route.total);
+    }
+
+    #[test]
+    fn bots_go_round_on_a_lap_ride() {
+        let route = ring(1000.0);
+        let mut clock = 0;
+        let mut engine = lap_engine(route.clone(), Some(0), None);
+        run(&mut engine, 600, 250.0, &mut clock);
+        let bot = engine.rivals.iter().find(|r| r.kind == RivalKind::Bot).unwrap();
+        assert!(bot.distance < route.total);
+        assert!(bot.speed > 1.0);
+    }
+
+    #[test]
+    fn no_ghosts_on_a_lap_ride() {
+        let route = ring(1000.0);
+        let pb = PersonalBest { time_s: 100.0, trace: vec![0.0, 10.0], ..Default::default() };
+        let mut clock = 0;
+        let mut engine = lap_engine(route.clone(), Some(0), Some(pb));
+        run(&mut engine, 30, 250.0, &mut clock);
+        assert!(engine.rivals.iter().all(|r| r.kind != RivalKind::Ghost));
+        assert!(engine.ghost_gap().is_none());
+
+        let ghost = GhostTrace { id: "g".into(), name: "Friend".into(), color: 1, trace: Arc::new(vec![0.0, 10.0]) };
+        let engine = RideEngine::with_options(route, &settings(), None, RideOptions { laps: Some(0), ghosts: vec![ghost], ..Default::default() });
+        assert!(engine.rivals.iter().all(|r| r.kind != RivalKind::Ghost));
+    }
+
+    #[test]
+    fn segments_are_timed_each_lap_and_keep_the_fastest() {
+        let route = ring(1000.0);
+        let segment = Segment { id: "whole".into(), name: "Whole lap".into(), source: SegmentSource::Strava, start: 0.0, end: route.total, avg_grade: 0.0, record: None };
+        let mut engine = RideEngine::with_options(route, &settings(), None, RideOptions { laps: Some(0), segments: vec![segment], ..Default::default() });
+        let mut clock = 0;
+        ride_until_lap(&mut engine, 2, 300.0, &mut clock);
+        let first = engine.last_segment_result.as_ref().expect("timed on the first crossing").time_s;
+        ride_until_lap(&mut engine, 3, 150.0, &mut clock);
+        let second = engine.last_segment_result.as_ref().unwrap().time_s;
+        assert!(second > first);
+        assert_eq!(engine.new_segment_bests["whole"].time_s, first);
+    }
+
+    #[test]
+    fn climbs_are_timed_again_each_lap() {
+        let route = ring_with(3000.0, |d| 100.0 + (d.clamp(500.0, 1500.0) - 500.0) * 0.06 - (d.clamp(1500.0, 2500.0) - 1500.0) * 0.06);
+        assert!(route.closed);
+        assert_eq!(route.climbs.len(), 1);
+        let mut engine = lap_engine(route, Some(0), None);
+        let mut clock = 0;
+        ride_until_lap(&mut engine, 2, 300.0, &mut clock);
+        let first = engine.last_climb_result.as_ref().expect("climb timed on lap 1").time_s;
+        let seen = engine.last_climb_result.as_ref().unwrap().time_s;
+        assert_eq!(seen, first);
+        // Keep riding into lap 2 and past its climb.
+        let mut second = None;
+        for _ in 0..200_000 {
+            clock += 100;
+            engine.tick(0.1, RideInput { power: 180.0, cadence: Some(90.0), hr: Some(150.0) }, clock);
+            if engine.lap >= 3 {
+                break;
+            }
+            let t = engine.last_climb_result.as_ref().unwrap().time_s;
+            if t != first {
+                second = Some(t);
+                break;
+            }
+        }
+        let second = second.expect("climb timed again on lap 2");
+        assert!(second > first);
+        assert_eq!(engine.climb_times[&0], first);
     }
 
     #[test]
