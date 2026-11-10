@@ -2,28 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 import { errorText } from '../bridge'
 import { fmtDist, fmtEle, fmtTime, speedUnit, speedValue } from '../core/fmt'
 import { api, useBadges, useSettings } from '../state'
-import type { RideSummary, StravaStatus } from '../types'
+import { uploadOf, type ConnectorEntry, type RideSummary, type UploadRecord } from '../types'
 import { ReportButton } from './Diagnostics'
 
-/** Upload button shared by the summary and history screens. */
-export function StravaUpload({ ride, auto }: { ride: RideSummary; auto?: boolean }): React.JSX.Element | null {
-  const [status, setStatus] = useState<StravaStatus | null>(null)
+/** One upload button per connector, with its outcome once sent. */
+function UploadButton({ ride, entry, auto }: { ride: RideSummary; entry: ConnectorEntry; auto: boolean }): React.JSX.Element | null {
+  const { info, status } = entry
   const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle')
-  const [activityId, setActivityId] = useState(ride.stravaActivityId)
+  const [record, setRecord] = useState<UploadRecord | undefined>(uploadOf(ride, info.id))
   const [error, setError] = useState('')
   const started = useRef(false)
 
   const upload = async (): Promise<void> => {
     setState('busy')
     try {
-      // The backend also records the activity link against the ride, so it isn't uploaded twice.
-      const id = await api.strava.upload(
+      // The backend also records the upload against the ride, so it isn't sent twice.
+      const result = await api.connectors.upload(
+        info.id,
         ride.id,
         ride.filePath,
         `${ride.routeName} — VeloPopuli`,
         `Virtual ride of ${ride.routeName}${ride.completed ? '' : ' (partial)'} on VeloPopuli.`
       )
-      setActivityId(id)
+      setRecord(result)
       setState('idle')
     } catch (err) {
       setError(errorText(err))
@@ -32,27 +33,55 @@ export function StravaUpload({ ride, auto }: { ride: RideSummary; auto?: boolean
   }
 
   useEffect(() => {
-    void api.strava.status().then((s) => {
-      setStatus(s)
-      if (auto && s.connected && !ride.stravaActivityId && !started.current) {
-        started.current = true
-        void upload()
-      }
-    })
+    if (auto && status.connected && !record && !started.current) {
+      started.current = true
+      void upload()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (!status) return null
-  if (activityId) {
-    return <button onClick={() => void api.openExternal(`https://www.strava.com/activities/${activityId}`)}>View on Strava ↗</button>
+  if (record) {
+    if (record.url) {
+      const url = record.url
+      return <button onClick={() => void api.openExternal(url)}>View on {info.name} ↗</button>
+    }
+    return (
+      <span className="muted small">
+        Sent to {info.name}
+        {record.message ? ` — ${record.message}` : ''}
+      </span>
+    )
   }
-  if (!status.connected) return <span className="muted small">Connect Strava in Settings to upload rides.</span>
+  if (!status.connected) return null
   return (
     <>
-      <button className="strava" disabled={state === 'busy'} onClick={() => void upload()}>
-        {state === 'busy' ? 'Uploading to Strava…' : state === 'error' ? 'Retry Strava upload' : 'Upload to Strava'}
+      <button className={`upload ${info.id}`} disabled={state === 'busy'} onClick={() => void upload()}>
+        {state === 'busy' ? `Uploading to ${info.name}…` : state === 'error' ? `Retry ${info.name} upload` : `Upload to ${info.name}`}
       </button>
       {state === 'error' && <span className="error inline">{error}</span>}
+    </>
+  )
+}
+
+/** Upload buttons shared by the summary and history screens. `auto` sends the ride to the
+ *  connectors chosen in Settings as soon as it is shown. */
+export function UploadButtons({ ride, auto }: { ride: RideSummary; auto?: boolean }): React.JSX.Element | null {
+  const { settings } = useSettings()
+  const [entries, setEntries] = useState<ConnectorEntry[] | null>(null)
+
+  useEffect(() => {
+    void api.connectors.list().then(setEntries)
+  }, [])
+
+  if (!entries) return null
+  if (!entries.some((e) => e.status.connected) && !entries.some((e) => uploadOf(ride, e.info.id))) {
+    return <span className="muted small">Connect {entries.map((e) => e.info.name).join(' or ')} in Settings to upload rides.</span>
+  }
+  return (
+    <>
+      {entries.map((entry) => (
+        <UploadButton key={entry.info.id} ride={ride} entry={entry} auto={Boolean(auto) && settings.autoUpload.includes(entry.info.id)} />
+      ))}
     </>
   )
 }
@@ -125,7 +154,7 @@ export function Summary({ ride, onDone }: { ride: RideSummary; onDone: () => voi
         <button className="primary" onClick={onDone}>
           Done
         </button>
-        <StravaUpload ride={ride} auto={settings.stravaAutoUpload} />
+        <UploadButtons ride={ride} auto />
         <button className="ghost" onClick={() => void api.revealFile(ride.filePath)}>
           Show .FIT file
         </button>

@@ -243,7 +243,9 @@ pub struct Settings {
     pub buildings: bool,
     /// Show forests, water, bridges and tunnels from OpenStreetMap.
     pub scenery: bool,
-    pub strava_auto_upload: bool,
+    /// Connectors (by id, see the app's `connectors` module) every finished ride is sent to without asking.
+    #[serde(default)]
+    pub auto_upload: Vec<String>,
     pub export_dir: String,
     pub goal: Goal,
     pub look: WorldLook,
@@ -268,7 +270,7 @@ impl Default for Settings {
             real_terrain: true,
             buildings: true,
             scenery: true,
-            strava_auto_upload: false,
+            auto_upload: Vec::new(),
             export_dir: String::new(),
             goal: Default::default(),
             look: Default::default(),
@@ -342,6 +344,10 @@ pub struct RideSummary {
     pub xp: u64,
     pub new_badges: Vec<String>,
     pub file_path: String,
+    /// Where the ride has been sent, by connector id ("strava", "dreeve", …).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub uploads: BTreeMap<String, UploadRecord>,
+    /// Older profiles recorded a Strava upload here; read through `upload("strava")`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strava_activity_id: Option<u64>,
     /// Best average power for each of `fitness::CURVE_DURATIONS`.
@@ -357,4 +363,47 @@ pub struct RideSummary {
     pub segment_prs: Vec<String>,
     #[serde(default)]
     pub group: bool,
+}
+
+/// One upload of a ride to a connector.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadRecord {
+    pub uploaded_at: u64,
+    /// The service's own id for the activity (or the upload), when it gives one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+    /// Where to see the ride on the service, when it has a page for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// What the service said, e.g. "queued for import".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+impl RideSummary {
+    /// The upload to `connector`, including a Strava upload recorded by an older version.
+    pub fn upload(&self, connector: &str) -> Option<UploadRecord> {
+        if let Some(record) = self.uploads.get(connector) {
+            return Some(record.clone());
+        }
+        if connector == "strava" {
+            if let Some(id) = self.strava_activity_id {
+                return Some(UploadRecord { uploaded_at: self.started_at, reference: Some(id.to_string()), url: Some(format!("https://www.strava.com/activities/{id}")), message: None });
+            }
+        }
+        None
+    }
+
+    /// Moves a legacy Strava upload into `uploads`, so the old field can be dropped later.
+    pub fn migrate_uploads(&mut self) {
+        if let Some(record) = self.strava_activity_id.take().map(|id| UploadRecord {
+            uploaded_at: self.started_at,
+            reference: Some(id.to_string()),
+            url: Some(format!("https://www.strava.com/activities/{id}")),
+            message: None,
+        }) {
+            self.uploads.entry("strava".into()).or_insert(record);
+        }
+    }
 }

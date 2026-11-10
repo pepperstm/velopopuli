@@ -11,8 +11,12 @@ pub const SPLIT_M: f64 = 10.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SegmentSource {
+    /// One of the route's own detected climbs.
     Climb,
-    Strava,
+    /// Found on a connected service (Strava, Dreeve, …); `Segment::connector` says which.
+    /// Stored as "strava" by versions that only knew Strava.
+    #[serde(alias = "strava")]
+    Remote,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,14 +25,27 @@ pub struct Segment {
     pub id: String,
     pub name: String,
     pub source: SegmentSource,
+    /// The connector a remote segment came from. Missing in data from before connectors: Strava.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connector: Option<String>,
     /// Start and end, in metres along the route.
     pub start: f64,
     pub end: f64,
     #[serde(default)]
     pub avg_grade: f64,
-    /// Fastest time on Strava ("KOM"/"QOM"), as Strava formats it, when known.
+    /// Fastest time on the service ("KOM"/"QOM"), as it formats it, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record: Option<String>,
+}
+
+impl Segment {
+    /// The connector a remote segment came from, naming Strava for data written before connectors.
+    pub fn connector_id(&self) -> Option<&str> {
+        match self.source {
+            SegmentSource::Climb => None,
+            SegmentSource::Remote => Some(self.connector.as_deref().unwrap_or("strava")),
+        }
+    }
 }
 
 /// Best time on a segment, with the elapsed time at every [`SPLIT_M`] metres so it can be raced live.

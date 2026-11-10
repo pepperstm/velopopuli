@@ -63,7 +63,11 @@ src-tauri/          The app (Tauri 2)
   mapdata.rs        Downloading + caching vector tiles and Overpass data per route
   native/           Native renderer (mod.rs, host.rs NSView, shader.wgsl)
   diag.rs           Diagnostics log + reports; issues.rs: GitHub new-issue links; snapshot.rs: window PNGs (macOS)
-  strava, geo, photos, smart, group, library, terrain, secrets, store
+  connectors/       Services a ride is uploaded to, and whose past rides can be raced as ghosts:
+                    mod.rs (Connector trait, registry, descriptor types the settings card is built from),
+                    strava.rs (OAuth, upload, recent rides, segments).
+                    docs/ADDING_A_CONNECTOR.md explains adding one.
+  geo, photos, smart, group, library, terrain, secrets, store
 web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, trees.ts (tree models, sprite atlas), rider.ts,
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source
@@ -80,7 +84,8 @@ How a ride flows end to end is in the wiki's [Architecture](https://github.com/p
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
 - `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
 - **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (3, since trails added `mtb:scale`) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
-- **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space — kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux.
+- **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space — kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux. Each connector's credentials are one entry named after its id (`strava`, …); the Home Assistant token is `homeassistant`.
+- **Uploads:** a ride records where it went in `RideSummary.uploads` by connector id. Rides from before v0.4 carry `stravaActivityId` instead; `RideSummary::upload()` (Rust) and `uploadOf()` (page) read both, and `connector_upload` migrates the list when it next writes it. The old `stravaAutoUpload` setting becomes `autoUpload: ["strava"]` in `mergeSettings`.
 - **Logs:** `logs/diagnostics-<time>.log`, last 12 runs kept.
 
 ## 5. Building
@@ -153,6 +158,8 @@ CI also builds every push to `main`; installers can be downloaded from the run's
 - **Apple Health removed** for now (no desktop HealthKit; export import was clunky).
 - **Laps are `distance` on the loop plus `ridden` for totals.** `RideEngine` keeps `distance` as the position on the loop, in `[0, route.total]`, and adds `lap` (from 1) and `ridden` (metres across all laps). Everything meaning "where on the road" uses `distance`; everything meaning "how far ridden" (FIT, summary, progress, goal) uses `ridden`. Without laps `ridden == distance`, so ordinary rides are unchanged by construction. The choice is only accepted when the route is a loop (`Route.closed`, offered to the page by `route_is_loop`) and is kept on the ride as `laps`. Agreed with the maintainer (#67): ghosts off on lap rides, climbs and segments timed on each lap and kept fastest, and a lap ride never sets the route's best time.
 - **Commits are under the maintainer's name only.**
+
+- **Connectors are a trait plus a registry** (`src-tauri/src/connectors/`), not a Strava module with ifs, because Dreeve (self-hosted, API key, no activity page) is the next target and differs from Strava in how it links, what an upload returns and what else it offers. The page draws each service's settings card from the connector's own description, so a new service is one Rust file. Listing past rides (for ghosts) and finding segments along a route are optional parts of the trait whose defaults say the service can't, because services offer different subsets: Strava has both, Dreeve's public API has rides but no segments. `SegmentSource::Strava` became `Remote` plus a `connector` field on the segment; stored segments that still say "strava" are read as Remote from Strava.
 
 ## 10. Known traps
 

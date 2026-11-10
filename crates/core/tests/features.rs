@@ -233,7 +233,7 @@ fn ghosts_from_recorded_rides() {
 #[test]
 fn segment_bests_and_live_gap() {
     let route = l_route(1.0);
-    let seg = Segment { id: "s".into(), name: "Sprint".into(), source: SegmentSource::Strava, start: 100.0, end: 600.0, avg_grade: 0.0, record: None };
+    let seg = Segment { id: "s".into(), name: "Sprint".into(), source: SegmentSource::Remote, connector: Some("strava".into()), start: 100.0, end: 600.0, avg_grade: 0.0, record: None };
     let ride = |power: f64, bests| {
         let mut e = RideEngine::with_options(route.clone(), &Settings::default(), None, RideOptions { segments: vec![seg.clone()], segment_bests: bests, ..Default::default() });
         let mut live_gap = None;

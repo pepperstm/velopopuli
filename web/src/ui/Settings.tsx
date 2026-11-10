@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { api, useSettings } from '../state'
-import type { GearPreview, GearSettings, Settings, StravaStatus } from '../types'
+import type { ConnectorEntry, ConnectorInfo, ConnectorStatus, GearPreview, GearSettings, Settings } from '../types'
 import { ReportButton } from './Diagnostics'
 
 function Num(props: {
@@ -265,26 +265,25 @@ function GearsCard(): React.JSX.Element {
   )
 }
 
-function StravaCard(): React.JSX.Element {
+/** Settings card for one connector, drawn from the backend's description of it. */
+function ConnectorCard({ info, status: initial }: { info: ConnectorInfo; status: ConnectorStatus }): React.JSX.Element {
   const { settings, update } = useSettings()
-  const [status, setStatus] = useState<StravaStatus | null>(null)
-  const [clientId, setClientId] = useState('')
-  const [secret, setSecret] = useState('')
+  const [status, setStatus] = useState(initial)
+  const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial.fields }))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const oauth = info.auth === 'oauth'
+  const auto = settings.autoUpload.includes(info.id)
+  const setAuto = (on: boolean): void =>
+    update((s) => ({ ...s, autoUpload: on ? [...new Set([...s.autoUpload, info.id])] : s.autoUpload.filter((id) => id !== info.id) }))
 
-  useEffect(() => {
-    void api.strava.status().then((s) => {
-      setStatus(s)
-      setClientId(s.clientId)
-    })
-  }, [])
-
-  const run = async (fn: () => Promise<StravaStatus>): Promise<void> => {
+  const run = async (fn: () => Promise<ConnectorStatus>): Promise<void> => {
     setBusy(true)
     setError('')
     try {
-      setStatus(await fn())
+      const next = await fn()
+      setStatus(next)
+      setValues((v) => ({ ...v, ...next.fields, ...Object.fromEntries(info.fields.filter((f) => f.kind === 'secret').map((f) => [f.key, ''])) }))
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -292,69 +291,85 @@ function StravaCard(): React.JSX.Element {
     }
   }
 
+  // A secret may stay blank once one is saved; everything else must be filled in.
+  const complete = info.fields.every((f) => (values[f.key] ?? '').trim() || (f.kind === 'secret' && status.configured))
+
   return (
     <section className="card">
-      <h2>Strava</h2>
-      {status?.connected ? (
+      <h2>{info.name}</h2>
+      {status.connected ? (
         <>
           <p>
-            Connected{status.athlete ? ` as ${status.athlete}` : ''}. Rides upload as <b>Virtual Rides</b> with power, heart rate and the route map.
+            Connected{status.account ? ` to ${status.account}` : ''}. {info.description}
           </p>
-          <Toggle label="Upload every ride automatically" value={settings.stravaAutoUpload} onChange={(v) => update((s) => ({ ...s, stravaAutoUpload: v }))} />
-          <button disabled={busy} onClick={() => void run(api.strava.disconnect)}>
+          <Toggle label="Upload every ride automatically" value={auto} onChange={setAuto} />
+          <button disabled={busy} onClick={() => void run(() => api.connectors.disconnect(info.id))}>
             Disconnect
           </button>
         </>
       ) : (
         <>
-          <p className="muted">
-            Strava gives every app its own key, and an open-source app can't ship one — so you create a free personal key once (about a minute):
-          </p>
-          <ol className="muted steps">
-            <li>
-              Open{' '}
-              <a href="#" onClick={() => void api.openExternal('https://www.strava.com/settings/api')}>
-                strava.com/settings/api
-              </a>{' '}
-              and create an application (any name and website).
-            </li>
-            <li>
-              Set <b>Authorization Callback Domain</b> to <code>localhost</code>.
-            </li>
-            <li>Paste the Client ID and Client Secret below, then connect.</li>
-          </ol>
+          <p className="muted">{info.description}</p>
+          {info.setup.length > 0 && (
+            <ol className="muted steps">
+              {info.setup.map((step, i) => (
+                <li key={i}>
+                  {step.text}{' '}
+                  {step.link && (
+                    <a href="#" onClick={() => void api.openExternal(step.link!)}>
+                      Open ↗
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
           <div className="fields">
-            <label className="field">
-              <span>Client ID</span>
-              <input value={clientId} onChange={(e) => setClientId(e.target.value)} inputMode="numeric" />
-            </label>
-            <label className="field">
-              <span>Client secret</span>
-              <input
-                type="password"
-                value={secret}
-                placeholder={status?.configured ? 'saved — leave blank to keep' : ''}
-                onChange={(e) => setSecret(e.target.value)}
-              />
-            </label>
+            {info.fields.map((f) => (
+              <label className="field" key={f.key}>
+                <span>{f.label}</span>
+                <input
+                  type={f.kind === 'secret' ? 'password' : 'text'}
+                  inputMode={f.kind === 'url' ? 'url' : undefined}
+                  value={values[f.key] ?? ''}
+                  placeholder={f.kind === 'secret' && status.configured ? 'saved — leave blank to keep' : f.hint}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                />
+              </label>
+            ))}
           </div>
           <button
             className="primary"
-            disabled={busy || !clientId.trim() || (!secret.trim() && !status?.configured)}
+            disabled={busy || !complete}
             onClick={() =>
               void run(async () => {
-                await api.strava.setApp(clientId, secret)
-                setSecret('')
-                return api.strava.connect()
+                await api.connectors.configure(info.id, values)
+                return api.connectors.connect(info.id)
               })
             }
           >
-            {busy ? 'Waiting for Strava in your browser…' : 'Connect to Strava'}
+            {busy ? (oauth ? `Waiting for ${info.name} in your browser…` : `Checking ${info.name}…`) : oauth ? `Connect to ${info.name}` : `Save and test`}
           </button>
         </>
       )}
       {error && <div className="error">{error}</div>}
     </section>
+  )
+}
+
+/** One card per connector the backend knows about. */
+function ConnectorCards(): React.JSX.Element | null {
+  const [entries, setEntries] = useState<ConnectorEntry[] | null>(null)
+  useEffect(() => {
+    void api.connectors.list().then(setEntries)
+  }, [])
+  if (!entries) return null
+  return (
+    <>
+      {entries.map((e) => (
+        <ConnectorCard key={e.info.id} info={e.info} status={e.status} />
+      ))}
+    </>
   )
 }
 
@@ -714,7 +729,7 @@ export function SettingsScreen(): React.JSX.Element {
         </label>
       </section>
 
-      <StravaCard />
+      <ConnectorCards />
 
       <section className="card">
         <h2>Diagnostics</h2>
