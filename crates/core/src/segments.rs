@@ -101,15 +101,21 @@ fn nearest(route: &Route, x: f64, z: f64, from: usize, to: usize) -> Option<(f64
 /// corresponds to, or `None` where the track is more than `tolerance` metres off it.
 /// Distances never go backwards, so a route that passes the same place twice is followed in order.
 pub fn follow_track(route: &Route, points: &[(f64, f64)], tolerance: f64) -> Vec<Option<f64>> {
+    let ahead = (400.0 / route.step) as usize + 2;
     let mut at = 0usize;
     let mut found_once = false;
     points
         .iter()
         .map(|&(lat, lon)| {
             let (x, z) = route.to_local(lat, lon);
-            // Before the track first meets the route, look along all of it; after, only a little way ahead.
-            let (from, to) = if found_once { (at, at + (400.0 / route.step) as usize + 2) } else { (0, route.n) };
-            let hit = nearest(route, x, z, from, to).filter(|h| h.1 <= tolerance)?;
+            let hit = if found_once {
+                // Once on the route, only look a little way ahead.
+                nearest(route, x, z, at, at + ahead).filter(|h| h.1 <= tolerance)?
+            } else {
+                // Where the track first meets the route, take the earliest pass along it: on a loop
+                // a ride starting near the start/finish is at the start, not already at the finish.
+                (0..route.n).step_by(ahead).find_map(|from| nearest(route, x, z, from, from + ahead + 1).filter(|h| h.1 <= tolerance))?
+            };
             found_once = true;
             at = ((hit.0 / route.step) as usize).saturating_sub(1);
             Some(hit.0)

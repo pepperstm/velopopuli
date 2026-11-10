@@ -431,3 +431,37 @@ mod gearing {
         assert_eq!(cadence(5.0, 0.0, 2105.0), 0.0);
     }
 }
+
+/// A square loop of `side` metres per side, starting and finishing at the same corner.
+fn loop_route(side: f64) -> velopopuli_core::gpx::Route {
+    let n = (side / 10.0) as usize;
+    let cos = 45.0f64.to_radians().cos();
+    let (dlat, dlon) = (10.0 / M_PER_DEG, 10.0 / (M_PER_DEG * cos));
+    let mut pts = Vec::new();
+    for (sx, sy) in [(0.0, 1.0), (1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
+        let (lat0, lon0) = pts.last().map(|p: &RawPoint| (p.lat, p.lon)).unwrap_or((45.0, 6.0));
+        for i in (if pts.is_empty() { 0 } else { 1 })..=n {
+            pts.push(RawPoint { lat: lat0 + sy * i as f64 * dlat, lon: lon0 + sx * i as f64 * dlon, ele: Some(100.0) });
+        }
+    }
+    build_route("Loop", &pts).unwrap()
+}
+
+#[test]
+fn loop_routes_are_followed_from_their_start() {
+    // Start/finish in the south-west corner; the loop goes north, east, south and back west.
+    let route = loop_route(1000.0);
+    assert!(close(route.total, 4000.0, 30.0), "{}", route.total);
+    // Leaves home 30 m east of the corner, on the stretch the loop finishes on, rides to the
+    // corner and then the first 1.2 km of the loop: the first points lie nearer the route's end.
+    let home = route.sample_at(route.total - 30.0);
+    let mut track: Vec<(f64, f64, f64)> = (0..4).map(|k| (1000.0 + k as f64 * 2.0, home.lat, home.lon + k as f64 * (route.sample_at(0.0).lon - home.lon) / 4.0)).collect();
+    for k in 0..150 {
+        let p = route.sample_at(k as f64 * 8.0);
+        track.push((1008.0 + k as f64, p.lat, p.lon));
+    }
+    let followed = follow_track(&route, &track.iter().map(|p| (p.1, p.2)).collect::<Vec<_>>(), 40.0);
+    assert!(followed[0].is_some_and(|d| d < 100.0), "first point placed at {:?}, not the start", followed[0]);
+    let trace = ghost_trace(&route, &track).expect("a ride from just before the start/finish is a ghost of this loop");
+    assert!(close(*trace.last().unwrap(), 1192.0, 30.0), "{}", trace.last().unwrap());
+}
