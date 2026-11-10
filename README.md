@@ -26,7 +26,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 - **Group rides.** Ride a route together with friends: share a room code, everyone's rider appears in everyone's world. Goes through a tiny relay server anyone can run (`crates/relay`).
 - **Living world.** Village and town signs, summit boards named after the place at the top, and roadside cafés, fountains, bike shops and viewpoints from OpenStreetMap. Dawn, day, evening, dusk or night (with a lamp on the bike), and clear, cloudy, rain, fog or snow — or the weather at the real place right now. Optional street-level photos of the road from Mapillary (bring your own free token).
 - **Fan and lights.** A fan that speeds up with your speed, power or heart rate, and a light coloured by power zone, through Home Assistant, a Shelly or Tasmota plug, or any webhook.
-- **Recording and sharing.** Every ride is saved as a standard `.FIT` file (GPS, power, heart rate, cadence, laps, normalised power) and can be uploaded to Strava as a Virtual Ride in one click or automatically. Set a second folder under **Settings → Ride files** (iCloud Drive or Dropbox, say) and each ride is copied there too.
+- **Recording and sharing.** Every ride is saved as a standard `.FIT` file (GPS, power, heart rate, cadence, laps, normalised power) and can be uploaded in one click or automatically: to Strava as a Virtual Ride, or to your own [Dreeve](https://github.com/dreeveapp/dreeve) server. Set a second folder under **Settings → Ride files** (iCloud Drive or Dropbox, say) and each ride is copied there too.
 - **Demo rider.** A simulated rider and trainer so you can try everything with no hardware.
 
 ### On the road

@@ -20,6 +20,7 @@ VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open
 - [[Virtual gears]] — shift with keys or a remote instead of your bike's gears (optional)
 - [[Progress and goals]] — power curve, FTP, training load, streaks, badges and the season goal
 - [[Strava]] — connect, upload, segments and friends' rides as ghosts
+- [[Dreeve]] — upload rides to your own Dreeve server
 - [[Group rides and self-hosting]] — ride together; run your own relay
 - [[Fan and lights]] — Home Assistant, Shelly, Tasmota and webhooks
 

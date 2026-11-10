@@ -1,7 +1,7 @@
 # Adding a connector
 
-A *connector* is a service a finished ride can be sent to. Strava is one; Dreeve
-is next. Each is one Rust file in `src-tauri/src/connectors/`, registered in one
+A *connector* is a service a finished ride can be sent to. Strava (OAuth) and
+Dreeve (API key) are the two there are. Each is one Rust file in `src-tauri/src/connectors/`, registered in one
 place. The page (settings card, upload buttons, auto-upload toggle, the record of
 where a ride went) is generic and needs no change for a new service.
 
@@ -100,6 +100,7 @@ where a ride went) is generic and needs no change for a new service.
    }
    ```
 
+   `dreeve.rs` is this shape, with tests against a fake HTTP server to copy.
    `AuthKind::OAuth` connectors (see `strava.rs`) get `open_browser` to show the
    consent page and listen on a loopback port for the redirect. The page shows
    "Connect to X" / "Waiting for X in your browser…" for OAuth and "Save and
@@ -115,7 +116,9 @@ where a ride went) is generic and needs no change for a new service.
    That is the only place the app enumerates connectors.
 
 3. **Optional CSS.** Upload buttons get the classes `upload <id>`; add a
-   `button.<id>` rule in `web/src/styles.css` for a branded colour (Strava has one).
+   `button.<id>` rule in `web/src/styles.css` for a branded colour: define
+   `--<id>` next to `--strava` and `--dreeve` in `:root` and use it for the
+   background and border (Strava and Dreeve have one each).
 
 ## Rules of the road
 

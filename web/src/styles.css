@@ -27,6 +27,7 @@
   --ok: #4ddb8a;
   --warn: #ffd24a;
   --strava: #fc4c02;
+  --dreeve: #428f7e;
   color-scheme: dark;
 }
 
@@ -132,6 +133,12 @@ button.danger {
 button.strava {
   background: var(--strava);
   border-color: var(--strava);
+  color: #fff;
+  font-weight: 600;
+}
+button.dreeve {
+  background: var(--dreeve);
+  border-color: var(--dreeve);
   color: #fff;
   font-weight: 600;
 }

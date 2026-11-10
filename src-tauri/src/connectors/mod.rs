@@ -10,6 +10,7 @@
 //! Linux) under its id — see `secrets.rs` — and never in the settings document,
 //! which goes into diagnostics reports.
 
+pub mod dreeve;
 pub mod strava;
 
 use std::collections::BTreeMap;
@@ -25,7 +26,7 @@ use velopopuli_core::types::UploadRecord;
 use crate::secrets;
 
 /// Every connector there is. Adding a service means adding it here.
-pub static ALL: &[&(dyn Connector + Sync)] = &[&strava::Strava];
+pub static ALL: &[&(dyn Connector + Sync)] = &[&strava::Strava, &dreeve::Dreeve];
 
 pub fn get(id: &str) -> Result<&'static (dyn Connector + Sync), String> {
     ALL.iter().copied().find(|c| c.info().id == id).ok_or_else(|| format!("Unknown connector: {id}"))
@@ -57,7 +58,6 @@ impl Ctx {
 /// pasting a key that is checked with a test request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-#[allow(dead_code)] // `Token` is for key-based services such as Dreeve.
 pub enum AuthKind {
     OAuth,
     Token,
@@ -66,7 +66,6 @@ pub enum AuthKind {
 /// What kind of input a configuration field wants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-#[allow(dead_code)] // `Url` is for self-hosted services such as Dreeve.
 pub enum FieldKind {
     Text,
     Url,
@@ -326,7 +325,6 @@ pub fn field(fields: &BTreeMap<String, String>, key: &str) -> String {
 /// Checks a server URL typed by the user before an API key is sent to it: https only, so the key
 /// isn't sent unencrypted. Plain http is allowed for this machine (`localhost`, `127.0.0.1`, `::1`),
 /// which is where a service under development runs. Returns the URL without a trailing slash.
-#[allow(dead_code)] // For key-based services such as Dreeve.
 pub fn secure_server_url(raw: &str) -> Result<String, String> {
     let url = reqwest::Url::parse(raw.trim()).map_err(|_| "That server address isn't a valid URL. Use the form https://example.org.".to_string())?;
     let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
