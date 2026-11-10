@@ -13,5 +13,6 @@ Then:
 - Rides upload with one click on the summary or history screen, or automatically (toggle on the Dreeve card).
 - Dreeve queues the file and imports it within a few minutes; the button shows what the server said. There is no page to open, so look in Dreeve's activity list.
 - Dreeve reads everything from the FIT file (power, heart rate, cadence, the route), so nothing else is sent.
+- **Your Dreeve rides** with a GPS track can be raced as ghosts: *From Dreeve…* when setting up a ride.
 
 The key is kept in the system keychain (macOS, Windows) or a file only you can read (Linux).

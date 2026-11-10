@@ -26,7 +26,7 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 | **Herne Hill Velodrome** | Built-in track. The route is in `crates/core/src/velodrome.rs`; the banked track, its paint and the buildings are in `world/venue.rs`. Tested in code, and I've checked a live preview in demo mode on both renderers, each way round (`VP_SMOKE_ROUTE=herne-hill` or `herne-hill-clockwise`). Nobody has ridden it with a trainer yet. |
 | **Laps on loop routes** | Lap engine, bests, segments and renderers unit-tested in `crates/core`; smoke-run across the line on Linux with three.js, not yet with the native renderer (macOS). Group standings don't show who is a lap up. |
 | **Strava** (OAuth, upload, segments, activities as ghosts) | Never run against the live API. Users must create their own API key (open source can't ship a secret). Scope is `read,activity:read_all,activity:write`. |
-| **Dreeve** (API key, upload) | Request shapes and error mapping are tested against an in-process fake server (`connectors/dreeve.rs` tests). Uploading was tested by hand against a real instance. |
+| **Dreeve** (API key, upload, rides as ghosts) | Request shapes and error mapping are tested against an in-process fake server (`connectors/dreeve.rs` tests). Connecting, listing rides, fetching a track and finding the rides that fit a route were run against a real Dreeve v5.8.2 with about 190 rides on 2026-11-10 (`live_dreeve_lists_rides_and_tracks`, ignored by default, takes `DREEVE_URL`, `DREEVE_API_KEY` and optionally `DREEVE_ROUTE_RIDE`). The upload was tested by hand against a real instance. |
 | **Windows and Linux** | Built and packaged by CI on every push (and Arch's package is installed in a container and its libraries checked), but **never run by a person**. |
 | **Native renderer** (macOS, opt-in) | wgpu/Metal in an NSView under a transparent webview. Matches three.js in screenshots; HUD-over-native never checked in a real window; no clean release-build performance comparison. |
 | **Dense woods and tree sprites** | Checked in both renderers with the smoke harness, and their cost measured only on Apple silicon (about 0.6 M triangles a frame on a wooded climb). Not tried on weaker graphics (Windows/Linux integrated GPUs). |
@@ -67,7 +67,7 @@ src-tauri/          The app (Tauri 2)
   connectors/       Services a ride is uploaded to, and whose past rides can be raced as ghosts:
                     mod.rs (Connector trait, registry, descriptor types the settings card is built from),
                     strava.rs (OAuth, upload, recent rides, segments),
-                    dreeve.rs (API key + upload to a self-hosted Dreeve).
+                    dreeve.rs (API key, upload, recent rides from a self-hosted Dreeve).
                     docs/ADDING_A_CONNECTOR.md explains adding one.
   geo, photos, smart, group, library, terrain, secrets, store
 web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, trees.ts (tree models, sprite atlas), rider.ts,
