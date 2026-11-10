@@ -16,7 +16,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use velopopuli_core::types::UploadRecord;
 
-use super::{field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteSegment, RideTrack, SetupStep, UploadRequest};
+use super::{field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteSegment, RidePage, RideTrack, SetupStep, UploadRequest};
 use crate::now_ms;
 use velopopuli_core::segments::decode_polyline;
 
@@ -111,8 +111,8 @@ impl Connector for Strava {
         true
     }
 
-    async fn recent_rides(&self, ctx: &Ctx) -> Result<Vec<RemoteRide>, String> {
-        recent_rides(ctx).await
+    async fn recent_rides(&self, ctx: &Ctx, page: u32) -> Result<RidePage, String> {
+        recent_rides(ctx, page).await
     }
 
     async fn ride_track(&self, ctx: &Ctx, id: &str) -> Result<RideTrack, String> {
@@ -317,15 +317,17 @@ async fn segments_near(ctx: &Ctx, boxes: &[[f64; 4]]) -> Result<Vec<RemoteSegmen
     Ok(found)
 }
 
-/// The rider's recent rides with GPS, for picking one to race as a ghost.
-async fn recent_rides(ctx: &Ctx) -> Result<Vec<RemoteRide>, String> {
+/// Activities per page; Strava allows up to 200.
+const PAGE_SIZE: usize = 100;
+
+/// One page of the rider's rides with GPS, for picking one to race as a ghost.
+async fn recent_rides(ctx: &Ctx, page: u32) -> Result<RidePage, String> {
     let http = &ctx.http;
     let token = access_token(ctx).await?;
-    let json = get_json(http, &token, "https://www.strava.com/api/v3/athlete/activities?per_page=60").await?;
-    Ok(json
-        .as_array()
-        .into_iter()
-        .flatten()
+    let json = get_json(http, &token, &format!("https://www.strava.com/api/v3/athlete/activities?per_page={PAGE_SIZE}&page={page}")).await?;
+    let all = json.as_array().cloned().unwrap_or_default();
+    let rides = all
+        .iter()
         .filter(|a| a["type"].as_str().is_some_and(|t| t.contains("Ride")) && a["start_latlng"].as_array().is_some_and(|l| !l.is_empty()))
         .filter_map(|a| {
             Some(RemoteRide {
@@ -334,9 +336,13 @@ async fn recent_rides(ctx: &Ctx) -> Result<Vec<RemoteRide>, String> {
                 start: a["start_date_local"].as_str().unwrap_or("").to_string(),
                 distance: a["distance"].as_f64().unwrap_or(0.0),
                 moving_time: a["moving_time"].as_f64().unwrap_or(0.0),
+                outline: decode_polyline(a["map"]["summary_polyline"].as_str().unwrap_or("")),
+                ..Default::default()
             })
         })
-        .collect())
+        .collect();
+    // A full page of activities (rides or not) means there may be older ones.
+    Ok(RidePage { rides, more: all.len() == PAGE_SIZE })
 }
 
 /// An activity's timed GPS track as `(unix seconds, lat, lon)`.

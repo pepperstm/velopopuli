@@ -225,6 +225,17 @@ export interface RemoteRide {
   start: string
   distance: number
   movingTime: number
+  /** Its outline rides the route from its start for most of it. */
+  followsRoute: boolean
+  /** How far along the route it follows it, in metres. */
+  followedM: number
+}
+
+/** A connector's rides, newest first, as far back as the search went. */
+export interface RideSearch {
+  rides: RemoteRide[]
+  /** The service has older rides that weren't looked at. */
+  more: boolean
 }
 
 export interface LoadDay {

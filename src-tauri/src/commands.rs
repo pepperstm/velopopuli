@@ -14,7 +14,7 @@ use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Route};
 use velopopuli_core::types::{RideSummary, RouteMeta, Settings, UploadRecord};
 use velopopuli_core::world::GridMesh;
 
-use crate::connectors::{self, ConnectorInfo, ConnectorStatus, Ctx, RemoteRide, UploadRequest};
+use crate::connectors::{self, ConnectorInfo, ConnectorStatus, Ctx, RideSearch, UploadRequest};
 use crate::devices::DevicesSnapshot;
 use crate::library::{self, GhostMeta, WorkoutMeta};
 use crate::session::{load_route, local_day, RideInit, RideRequest, Session, DEMO_ROUTE_ID};
@@ -504,11 +504,13 @@ pub fn connectors_list(state: State<AppState>) -> Vec<ConnectorEntry> {
     connectors::ALL.iter().map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments() }).collect()
 }
 
-/// The rider's recent rides on a connector, for racing one as a ghost.
+/// The rider's rides on a connector, each marked whether it follows the route, for racing one
+/// as a ghost. Pages back through older rides until a few follow the route.
 #[tauri::command]
-pub async fn connector_rides(state: State<'_, AppState>, id: String) -> Res<Vec<RemoteRide>> {
+pub async fn connector_rides(state: State<'_, AppState>, id: String, route_id: String) -> Res<RideSearch> {
+    let route = load_route(&state.store, &route_id)?;
     let ctx = state.connector_ctx();
-    connectors::get(&id)?.recent_rides(&ctx).await
+    connectors::find_rides(connectors::get(&id)?, &ctx, &route).await
 }
 
 #[tauri::command]

@@ -18,6 +18,8 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use velopopuli_core::gpx::Route;
+use velopopuli_core::segments::{outline_follow_distance, outline_follows_route};
 use velopopuli_core::types::UploadRecord;
 
 use crate::secrets;
@@ -122,7 +124,7 @@ pub struct ConnectorStatus {
 }
 
 /// One of the rider's past rides on a service, for picking one to race as a ghost.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteRide {
     /// The service's own id, handed back to `ride_track`.
@@ -132,6 +134,30 @@ pub struct RemoteRide {
     pub start: String,
     pub distance: f64,
     pub moving_time: f64,
+    /// The service's simplified outline of the ride as `(lat, lon)`, empty if it gives none.
+    #[serde(skip)]
+    pub outline: Vec<(f64, f64)>,
+    /// Set by `find_rides`: the outline rides this route from its start for most of it.
+    pub follows_route: bool,
+    /// Set by `find_rides`: how far along the route the outline follows it, in metres.
+    pub followed_m: f64,
+}
+
+/// One page of `recent_rides`.
+#[derive(Clone, Debug, Default)]
+pub struct RidePage {
+    pub rides: Vec<RemoteRide>,
+    /// The service has older rides on the next page.
+    pub more: bool,
+}
+
+/// What `find_rides` found: rides newest first, each marked whether it follows the route.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RideSearch {
+    pub rides: Vec<RemoteRide>,
+    /// The service has older rides that were not looked at.
+    pub more: bool,
 }
 
 /// A ride's timed GPS track: `(unix seconds, lat, lon)` per point.
@@ -196,8 +222,9 @@ pub trait Connector: Send + Sync {
         false
     }
 
-    /// The rider's recent rides with a GPS track, newest first.
-    async fn recent_rides(&self, _ctx: &Ctx) -> Result<Vec<RemoteRide>, String> {
+    /// The rider's rides with a GPS track, newest first, one page at a time (`page` from 1).
+    /// Fill in `outline` when the listing carries one, so rides can be matched to a route.
+    async fn recent_rides(&self, _ctx: &Ctx, _page: u32) -> Result<RidePage, String> {
         Err(format!("{} can't list your rides.", self.info().name))
     }
 
@@ -218,6 +245,32 @@ pub trait Connector: Send + Sync {
     async fn segments_near(&self, _ctx: &Ctx, _boxes: &[[f64; 4]]) -> Result<Vec<RemoteSegment>, String> {
         Err(format!("{} can't find segments.", self.info().name))
     }
+}
+
+/// Enough matching rides to choose from; stop paging once there are this many.
+const RIDES_WANTED: usize = 5;
+/// Pages to look through at most: a few hundred rides on most services.
+const MAX_PAGES: u32 = 5;
+
+/// Pages through a connector's rides, marks each one whose outline follows `route`, and stops
+/// when enough follow it, the service has no more, or `MAX_PAGES` were read.
+pub async fn find_rides(connector: &(dyn Connector + Sync), ctx: &Ctx, route: &Route) -> Result<RideSearch, String> {
+    let mut found = RideSearch::default();
+    let mut matching = 0;
+    for page in 1..=MAX_PAGES {
+        let mut got = connector.recent_rides(ctx, page).await?;
+        for ride in &mut got.rides {
+            ride.followed_m = outline_follow_distance(route, &ride.outline);
+            ride.follows_route = outline_follows_route(route, &ride.outline);
+            matching += usize::from(ride.follows_route);
+        }
+        found.rides.append(&mut got.rides);
+        found.more = got.more;
+        if !got.more || matching >= RIDES_WANTED {
+            break;
+        }
+    }
+    Ok(found)
 }
 
 /// Reads a field, trimmed; missing is the empty string.
@@ -246,7 +299,7 @@ mod tests {
     async fn connectors_without_an_optional_feature_say_so() {
         let ctx = Ctx::new(Path::new("/nonexistent"), &reqwest::Client::new());
         for c in ALL.iter().filter(|c| !c.lists_rides()) {
-            let err = c.recent_rides(&ctx).await.unwrap_err();
+            let err = c.recent_rides(&ctx, 1).await.unwrap_err();
             assert!(err.contains(c.info().name), "{err}");
             assert!(c.ride_track(&ctx, "1").await.is_err());
         }
@@ -254,6 +307,82 @@ mod tests {
             let err = c.segments_near(&ctx, &[[0.0, 0.0, 1.0, 1.0]]).await.unwrap_err();
             assert!(err.contains(c.info().name), "{err}");
         }
+    }
+
+    /// Serves `pages` of rides; each ride's outline either follows the test route or lies elsewhere.
+    struct FakeRides {
+        pages: Vec<Vec<bool>>,
+        route: Route,
+        asked: std::sync::Mutex<Vec<u32>>,
+    }
+
+    #[async_trait]
+    impl Connector for FakeRides {
+        fn info(&self) -> ConnectorInfo {
+            ConnectorInfo { id: "fake", name: "Fake", description: "Test.", auth: AuthKind::Token, fields: vec![], setup: vec![] }
+        }
+        fn status(&self, _ctx: &Ctx) -> ConnectorStatus {
+            ConnectorStatus::default()
+        }
+        fn configure(&self, _ctx: &Ctx, _fields: &BTreeMap<String, String>) -> Result<ConnectorStatus, String> {
+            unimplemented!()
+        }
+        async fn connect(&self, _ctx: &Ctx, _open_browser: OpenBrowser) -> Result<ConnectorStatus, String> {
+            unimplemented!()
+        }
+        async fn disconnect(&self, _ctx: &Ctx) -> Result<ConnectorStatus, String> {
+            unimplemented!()
+        }
+        async fn upload(&self, _ctx: &Ctx, _req: &UploadRequest) -> Result<UploadRecord, String> {
+            unimplemented!()
+        }
+        fn lists_rides(&self) -> bool {
+            true
+        }
+        async fn recent_rides(&self, _ctx: &Ctx, page: u32) -> Result<RidePage, String> {
+            self.asked.lock().unwrap().push(page);
+            let on_route: Vec<(f64, f64)> = [0.0, 500.0, 1200.0, 1900.0].iter().map(|&d| self.route.sample_at(d)).map(|p| (p.lat, p.lon)).collect();
+            let elsewhere = vec![(48.0, 11.0), (48.01, 11.01)];
+            let rides = self.pages[page as usize - 1]
+                .iter()
+                .enumerate()
+                .map(|(i, &follows)| RemoteRide { id: format!("{page}-{i}"), outline: if follows { on_route.clone() } else { elsewhere.clone() }, ..Default::default() })
+                .collect();
+            Ok(RidePage { rides, more: (page as usize) < self.pages.len() })
+        }
+    }
+
+    fn straight_route() -> Route {
+        use velopopuli_core::gpx::{build_route, RawPoint, M_PER_DEG};
+        let pts: Vec<RawPoint> = (0..=200).map(|i| RawPoint { lat: 45.0 + i as f64 * 10.0 / M_PER_DEG, lon: 6.0, ele: Some(100.0) }).collect();
+        build_route("S", &pts).unwrap()
+    }
+
+    #[tokio::test]
+    async fn find_rides_pages_until_enough_follow_the_route() {
+        let ctx = Ctx::new(Path::new("/nonexistent"), &reqwest::Client::new());
+        let route = straight_route();
+        // Two matches on page 1, three on page 3: enough after page 3, page 4 is never read.
+        let pages = vec![vec![true, false, true], vec![false, false], vec![true, true, false, true], vec![true]];
+        let fake = FakeRides { pages, route: route.clone(), asked: Default::default() };
+        let found = find_rides(&fake, &ctx, &route).await.unwrap();
+        assert_eq!(*fake.asked.lock().unwrap(), [1, 2, 3]);
+        assert_eq!(found.rides.len(), 9);
+        assert_eq!(found.rides.iter().filter(|r| r.follows_route).count(), 5);
+        assert!(found.rides[0].follows_route && !found.rides[1].follows_route);
+        assert!(found.more);
+
+        // A service with fewer rides than that: every page, then stop.
+        let fake = FakeRides { pages: vec![vec![false], vec![true]], route: route.clone(), asked: Default::default() };
+        let found = find_rides(&fake, &ctx, &route).await.unwrap();
+        assert_eq!(*fake.asked.lock().unwrap(), [1, 2]);
+        assert!(!found.more);
+
+        // Never more than MAX_PAGES.
+        let fake = FakeRides { pages: vec![vec![false]; 9], route: route.clone(), asked: Default::default() };
+        let found = find_rides(&fake, &ctx, &route).await.unwrap();
+        assert_eq!(fake.asked.lock().unwrap().len(), MAX_PAGES as usize);
+        assert!(found.more);
     }
 
     #[test]

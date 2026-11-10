@@ -137,10 +137,13 @@ where a ride went) is generic and needs no change for a new service.
 - Only files under the app's `activities` folder can be uploaded; `commands.rs`
   checks that before calling the connector.
 - **Listing the rider's rides is optional.** Override `lists_rides` to return
-  `true` and implement `recent_rides` (newest first, only rides with a GPS
-  track, ids as strings) and `ride_track` (the timed track for one id). The
-  ride setup then shows "From <name>…" next to "From a file…" so a past ride can
-  be raced as a ghost. The defaults say the service can't list rides.
+  `true` and implement `recent_rides(ctx, page)` (one page, newest first, only
+  rides with a GPS track, ids as strings, `more` when an older page exists) and
+  `ride_track` (the timed track for one id). Fill in each ride's `outline` from
+  the listing's summary polyline: `connectors::find_rides` uses it to mark the
+  rides that ride the chosen route from its start, and pages back until a few
+  do (at most five pages). The ride setup then shows "From <name>…" with the
+  fitting rides first. The defaults say the service can't list rides.
 - **Finding segments is optional too.** Override `finds_segments` to return
   `true` and implement `segments_near`, which gets `[south, west, north, east]`
   boxes along the route and returns each segment's shape as `(lat, lon)` points

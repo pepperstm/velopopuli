@@ -7,7 +7,7 @@ import type {
   GhostMeta,
   RideRequest,
   Segment,
-  RemoteRide,
+  RideSearch,
   UploadRecord,
   WorkoutMeta,
   Badge,
@@ -90,7 +90,7 @@ export const api = {
     disconnect: (id: string) => invoke<ConnectorStatus>('connector_disconnect', { id }),
     upload: (id: string, rideId: string, filePath: string, name: string, description: string) =>
       invoke<UploadRecord>('connector_upload', { id, rideId, filePath, name, description }),
-    rides: (id: string) => invoke<RemoteRide[]>('connector_rides', { id })
+    rides: (id: string, routeId: string) => invoke<RideSearch>('connector_rides', { id, routeId })
   },
   workouts: {
     list: () => invoke<WorkoutMeta[]>('workouts_list'),
