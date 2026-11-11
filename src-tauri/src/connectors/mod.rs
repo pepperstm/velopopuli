@@ -133,6 +133,8 @@ pub struct RemoteRide {
     pub start: String,
     pub distance: f64,
     pub moving_time: f64,
+    /// The service's sport type, in Strava's vocabulary ("Ride", "GravelRide", …); empty if unknown.
+    pub sport: String,
     /// The service's simplified outline of the ride as `(lat, lon)`, empty if it gives none.
     #[serde(skip)]
     pub outline: Vec<(f64, f64)>,
@@ -140,6 +142,9 @@ pub struct RemoteRide {
     pub follows_route: bool,
     /// Set by `find_rides`: how far along the route the outline follows it, in metres.
     pub followed_m: f64,
+    /// Set by `list_rides`: a few points of the outline as `(lat, lon)`, for drawing it small.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub preview: Vec<(f64, f64)>,
 }
 
 /// One page of `recent_rides`.
@@ -260,6 +265,19 @@ pub trait Connector: Send + Sync {
         Err(format!("{} can't fetch a ride.", self.info().name))
     }
 
+    // ── Optional: turning one of those rides into a route ────────────────────
+
+    /// True when `ride_gpx` works; the routes page then offers "Import from <name>…".
+    /// Needs `lists_rides` too, which is where the rider picks the ride.
+    fn imports_routes(&self) -> bool {
+        false
+    }
+
+    /// One ride as a GPX file with elevation, by the id `recent_rides` gave.
+    async fn ride_gpx(&self, _ctx: &Ctx, _id: &str) -> Result<String, String> {
+        Err(format!("{} can't export a ride as a route.", self.info().name))
+    }
+
     // ── Optional: segments the service knows along a route ───────────────────
 
     /// True when `segments_near` works; the ride setup then offers "Find <name> segments".
@@ -315,6 +333,36 @@ pub async fn find_rides(connector: &(dyn Connector + Sync), ctx: &Ctx, route: &R
         }
     }
     Ok(found)
+}
+
+/// Pages to read at most when listing every ride to import one as a route.
+const MAX_LIST_PAGES: u32 = 20;
+/// Points kept of an outline for the small preview drawing.
+const PREVIEW_POINTS: usize = 60;
+
+/// Every ride the connector lists, newest first, up to `MAX_LIST_PAGES` pages, each with a preview.
+pub async fn list_rides(connector: &(dyn Connector + Sync), ctx: &Ctx) -> Result<RideSearch, String> {
+    let mut found = RideSearch::default();
+    for page in 1..=MAX_LIST_PAGES {
+        let mut got = connector.recent_rides(ctx, page).await?;
+        for ride in &mut got.rides {
+            ride.preview = thin(&ride.outline, PREVIEW_POINTS);
+        }
+        found.rides.append(&mut got.rides);
+        found.more = got.more;
+        if !got.more {
+            break;
+        }
+    }
+    Ok(found)
+}
+
+/// At most `n` points of `points`, evenly spaced, keeping the first and the last.
+fn thin(points: &[(f64, f64)], n: usize) -> Vec<(f64, f64)> {
+    if points.len() <= n || n < 2 {
+        return points.to_vec();
+    }
+    (0..n).map(|i| points[i * (points.len() - 1) / (n - 1)]).collect()
 }
 
 /// Reads a field, trimmed; missing is the empty string.
@@ -378,6 +426,13 @@ mod tests {
             let err = c.recent_rides(&ctx, 1).await.unwrap_err();
             assert!(err.contains(c.info().name), "{err}");
             assert!(c.ride_track(&ctx, "1").await.is_err());
+        }
+        for c in ALL.iter().filter(|c| !c.imports_routes()) {
+            let err = c.ride_gpx(&ctx, "1").await.unwrap_err();
+            assert!(err.contains(c.info().name), "{err}");
+        }
+        for c in ALL.iter().filter(|c| c.imports_routes()) {
+            assert!(c.lists_rides(), "{}: importing a route needs the ride list", c.info().id);
         }
         for c in ALL.iter().filter(|c| !c.finds_segments()) {
             let err = c.segments_near(&ctx, &[[0.0, 0.0, 1.0, 1.0]]).await.unwrap_err();
@@ -459,6 +514,23 @@ mod tests {
         let found = find_rides(&fake, &ctx, &route).await.unwrap();
         assert_eq!(fake.asked.lock().unwrap().len(), MAX_PAGES as usize);
         assert!(found.more);
+    }
+
+    #[tokio::test]
+    async fn list_rides_reads_every_page_and_thins_the_outline() {
+        let ctx = Ctx::new(Path::new("/nonexistent"), &reqwest::Client::new());
+        let route = straight_route();
+        let fake = FakeRides { pages: vec![vec![true, false], vec![true], vec![false]], route, asked: Default::default() };
+        let found = list_rides(&fake, &ctx).await.unwrap();
+        assert_eq!(*fake.asked.lock().unwrap(), [1, 2, 3]);
+        assert_eq!(found.rides.len(), 4);
+        assert!(!found.more);
+        assert_eq!(found.rides[0].preview.len(), 4, "short outlines are kept whole");
+
+        let long: Vec<(f64, f64)> = (0..1000).map(|i| (i as f64, 0.0)).collect();
+        let thinned = thin(&long, PREVIEW_POINTS);
+        assert_eq!(thinned.len(), PREVIEW_POINTS);
+        assert_eq!((thinned[0], thinned[PREVIEW_POINTS - 1]), (long[0], long[999]));
     }
 
     #[test]

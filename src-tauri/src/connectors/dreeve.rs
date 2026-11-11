@@ -101,6 +101,14 @@ async fn get_json(ctx: &Ctx, creds: &Creds, path_and_query: &str) -> Result<serd
     Ok(json)
 }
 
+/// Activity ids go into the URL path; only letters, digits, `-` and `_` are let through.
+fn check_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+        return Err("Not a Dreeve activity id.".into());
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl Connector for Dreeve {
     fn info(&self) -> ConnectorInfo {
@@ -218,6 +226,7 @@ impl Connector for Dreeve {
                     start: a["startDateLocal"].as_str().unwrap_or("").to_string(),
                     distance: a["distanceInMeter"].as_f64().unwrap_or(0.0),
                     moving_time: a["movingTimeInSeconds"].as_f64().unwrap_or(0.0),
+                    sport: a["sportType"].as_str().unwrap_or("").to_string(),
                     outline: decode_polyline(a["encodedPolyline"].as_str().unwrap_or("")),
                     ..Default::default()
                 })
@@ -228,11 +237,29 @@ impl Connector for Dreeve {
         Ok(RidePage { rides, more })
     }
 
+    fn imports_routes(&self) -> bool {
+        true
+    }
+
+    /// Dreeve's own GPX export of the ride (Dreeve 5.4 and later), with elevation where it has it.
+    async fn ride_gpx(&self, ctx: &Ctx, id: &str) -> Result<String, String> {
+        check_id(id)?;
+        let creds = load(ctx);
+        if !creds.verified {
+            return Err("Not connected to Dreeve.".into());
+        }
+        let res = ctx.http.get(format!("{}{ACTIVITIES_PATH}/{id}/gpx", creds.url)).bearer_auth(&creds.api_key).timeout(Duration::from_secs(30)).send().await.map_err(reach_error)?;
+        let status = res.status().as_u16();
+        let text = res.text().await.map_err(|e| format!("Could not read the GPX from Dreeve: {e}"))?;
+        if status != 200 {
+            return Err(error_message(status, &serde_json::from_str(&text).unwrap_or_default()));
+        }
+        Ok(text)
+    }
+
     /// The ride's `latLng` and `timeInSeconds` streams, lined up by index; points without a fix are skipped.
     async fn ride_track(&self, ctx: &Ctx, id: &str) -> Result<RideTrack, String> {
-        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
-            return Err("Not a Dreeve activity id.".into());
-        }
+        check_id(id)?;
         let creds = load(ctx);
         let info = get_json(ctx, &creds, &format!("{ACTIVITIES_PATH}/{id}")).await?;
         // Local time without a zone; ghosts only use the differences between timestamps.
@@ -404,7 +431,15 @@ mod tests {
         );
         let detail = "{\"id\":\"activity-1\",\"name\":\"Evening Ride\",\"startDateLocal\":\"2026-11-09T18:05:38\",\"hasGpx\":true}";
         let streams = "{\"timeInSeconds\":[0,1,2,3],\"latLng\":[[51.2,3.18],null,[51.2001,3.1802],[51.2002,3.1804]]}";
-        let (url, server) = fake_server(&[("200 OK", page), ("200 OK", detail), ("200 OK", streams)]).await;
+        let gpx = "<?xml version=\"1.0\"?><gpx><trk><name>Evening Ride</name><trkseg><trkpt lat=\"51.2\" lon=\"3.18\"><ele>12</ele></trkpt></trkseg></trk></gpx>";
+        let (url, server) = fake_server(&[
+            ("200 OK", page),
+            ("200 OK", detail),
+            ("200 OK", streams),
+            ("200 OK", gpx),
+            ("404 Not Found", "{\"error\":\"FILE_NOT_AVAILABLE\",\"message\":\"Activity \\\"activity-3\\\" has no GPS data to export as GPX.\"}"),
+        ])
+        .await;
         ctx.save_creds(ID, &Creds { url, api_key: KEY.into(), verified: true, server: "Dreeve 2.1.0".into() }).unwrap();
 
         let page = Dreeve.recent_rides(&ctx, 1).await.unwrap();
@@ -416,6 +451,7 @@ mod tests {
         assert_eq!(rides[0].name, "Evening Ride");
         assert_eq!(rides[0].start, "2026-11-09T18:05:38");
         assert_eq!((rides[0].distance, rides[0].moving_time), (42000.0, 5400.0));
+        assert_eq!(rides[0].sport, "GravelRide");
 
         let track = Dreeve.ride_track(&ctx, "activity-1").await.unwrap();
         assert_eq!(track.name, "Evening Ride");
@@ -424,19 +460,25 @@ mod tests {
         assert_eq!((track.points[2].1, track.points[2].2), (51.2002, 3.1804));
         assert!(track.points[0].0 > 1.7e9, "absolute start from startDateLocal");
 
+        assert_eq!(Dreeve.ride_gpx(&ctx, "activity-1").await.unwrap(), gpx);
+        assert!(Dreeve.ride_gpx(&ctx, "activity-3").await.unwrap_err().contains("no GPS data"));
+
         let requests = server.await.unwrap();
         assert!(requests[0].starts_with("GET /api/v1/activities?filters[sportType]=Ride,MountainBikeRide,GravelRide,EBikeRide,EMountainBikeRide,VirtualRide,Velomobile,Handcycle&filters[hasGpx]=true&pagination[size]=100&pagination[page]=1 HTTP/1.1"), "{}", requests[0]);
         assert!(requests[0].to_lowercase().contains(&format!("authorization: bearer {KEY}")));
         assert!(requests[1].starts_with("GET /api/v1/activities/activity-1 HTTP/1.1"), "{}", requests[1]);
         assert!(requests[2].starts_with("GET /api/v1/activities/activity-1/streams HTTP/1.1"), "{}", requests[2]);
+        assert!(requests[3].starts_with("GET /api/v1/activities/activity-1/gpx HTTP/1.1"), "{}", requests[3]);
+        assert!(requests[3].to_lowercase().contains(&format!("authorization: bearer {KEY}")));
 
         assert!(Dreeve.ride_track(&ctx, "../etc").await.unwrap_err().contains("activity id"));
+        assert!(Dreeve.ride_gpx(&ctx, "../etc").await.unwrap_err().contains("activity id"));
         std::fs::remove_dir_all(dir).ok();
     }
 
     /// Needs a real instance: `DREEVE_URL=https://… DREEVE_API_KEY=drv_… cargo test -p velopopuli live_dreeve -- --ignored --nocapture`,
     /// optionally `DREEVE_ROUTE_RIDE=<activity id>` for the ride the test route is made of.
-    /// Read-only: links, lists rides and fetches one track; uploads nothing.
+    /// Read-only: links, lists rides, fetches one track and its GPX; uploads nothing.
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     #[tokio::test]
     #[ignore]
@@ -493,7 +535,21 @@ mod tests {
                 eprintln!("  fits: {f}");
             }
             assert!(found.rides.iter().any(|r| r.id == outdoor.id && r.follows_route), "the ride the route was made from fits it");
+
+            // The same ride as a route: Dreeve's GPX export must build one with elevation.
+            let gpx = Dreeve.ride_gpx(&ctx, &outdoor.id).await.unwrap();
+            let (name, pts) = velopopuli_core::gpx::parse_gpx(&gpx).unwrap();
+            let route = velopopuli_core::gpx::build_route(&name, &pts).unwrap();
+            eprintln!("GPX of {name:?}: {} points, {:.0} km, {:.0} m up", pts.len(), route.total / 1000.0, route.ascent);
+            assert!(pts.iter().any(|p| p.ele.is_some()), "the export carries elevation");
         }
+
+        let all = super::super::list_rides(&Dreeve, &ctx).await.unwrap();
+        let mut sports: Vec<&str> = all.rides.iter().map(|r| r.sport.as_str()).collect();
+        sports.sort_unstable();
+        sports.dedup();
+        eprintln!("listed {} rides (more: {}), sports {sports:?}, with preview: {}", all.rides.len(), all.more, all.rides.iter().filter(|r| !r.preview.is_empty()).count());
+        assert!(all.rides.len() >= rides.len());
         std::fs::remove_dir_all(dir).ok();
     }
 }

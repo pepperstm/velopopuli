@@ -369,6 +369,7 @@ async fn recent_rides(ctx: &Ctx, page: u32) -> Result<RidePage, String> {
                 start: a["start_date_local"].as_str().unwrap_or("").to_string(),
                 distance: a["distance"].as_f64().unwrap_or(0.0),
                 moving_time: a["moving_time"].as_f64().unwrap_or(0.0),
+                sport: a["sport_type"].as_str().or(a["type"].as_str()).unwrap_or("").to_string(),
                 outline: decode_polyline(a["map"]["summary_polyline"].as_str().unwrap_or("")),
                 ..Default::default()
             })

@@ -41,6 +41,7 @@ export const api = {
   routes: {
     importDialog: () => invoke<{ added: RouteMeta[]; problems: string[] }>('routes_import_dialog'),
     importText: (name: string, text: string) => invoke<RouteMeta>('routes_import_text', { name, text }),
+    importRemote: (id: string, rideId: string, name: string) => invoke<RouteMeta>('route_import_connector', { id, rideId, name }),
     demoMeta: () => invoke<RouteMeta>('demo_meta'),
     /** The built-in velodromes, each as ridden anticlockwise (its ID with `-clockwise` the other way). */
     tracksMeta: () => invoke<RouteMeta[]>('tracks_meta'),
@@ -106,7 +107,9 @@ export const api = {
         name: string | null
         gaps: number
         clipped: boolean
-      }>('connector_route', { id, routeId })
+      }>('connector_route', { id, routeId }),
+    /** Every ride the rider has on the service, newest first, with a preview of each. */
+    rideList: (id: string) => invoke<RideSearch>('connector_ride_list', { id })
   },
   workouts: {
     list: () => invoke<WorkoutMeta[]>('workouts_list'),

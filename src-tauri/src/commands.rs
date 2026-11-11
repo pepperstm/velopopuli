@@ -497,6 +497,8 @@ pub struct ConnectorEntry {
     finds_segments: bool,
     /// Find a route can list the rider's saved routes on this service.
     lists_routes: bool,
+    /// The routes page can import one of the rider's rides on this service as a route.
+    imports_routes: bool,
 }
 
 /// Every connector with its description and current state, for the settings and upload UI.
@@ -505,8 +507,30 @@ pub fn connectors_list(state: State<AppState>) -> Vec<ConnectorEntry> {
     let ctx = state.connector_ctx();
     connectors::ALL
         .iter()
-        .map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments(), lists_routes: c.lists_routes() })
+        .map(|c| ConnectorEntry {
+            info: c.info(),
+            status: c.status(&ctx),
+            lists_rides: c.lists_rides(),
+            finds_segments: c.finds_segments(),
+            lists_routes: c.lists_routes(),
+            imports_routes: c.imports_routes(),
+        })
         .collect()
+}
+
+/// Every ride the rider has on a connector, for picking one to import as a route.
+#[tauri::command]
+pub async fn connector_ride_list(state: State<'_, AppState>, id: String) -> Res<RideSearch> {
+    let ctx = state.connector_ctx();
+    connectors::list_rides(connectors::get(&id)?, &ctx).await
+}
+
+/// Imports one of the rider's rides on a connector as a route; `name` is used when the GPX has none.
+#[tauri::command]
+pub async fn route_import_connector(state: State<'_, AppState>, id: String, ride_id: String, name: String) -> Res<RouteMeta> {
+    let ctx = state.connector_ctx();
+    let gpx = connectors::get(&id)?.ride_gpx(&ctx, &ride_id).await?;
+    import_gpx(&state, &name, &gpx)
 }
 
 /// The rider's rides on a connector, each marked whether it follows the route, for racing one

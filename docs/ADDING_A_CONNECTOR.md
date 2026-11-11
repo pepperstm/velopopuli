@@ -11,10 +11,12 @@ where a ride went) is generic and needs no change for a new service.
 |---|---|
 | `src-tauri/src/connectors/mod.rs` | The `Connector` trait, the descriptor types the page draws from, the `ALL` registry, `Ctx` (credential storage + HTTP client) |
 | `src-tauri/src/connectors/<id>.rs` | One file per service: a unit struct implementing `Connector` |
-| `src-tauri/src/commands.rs`, *Connectors* section | Generic commands routed by connector id: `connectors_list`, `connector_status`, `connector_configure`, `connector_connect`, `connector_disconnect`, `connector_upload`, `connector_rides`, `ghost_import_connector`, `segments_fetch` |
+| `src-tauri/src/commands.rs`, *Connectors* section | Generic commands routed by connector id: `connectors_list`, `connector_status`, `connector_configure`, `connector_connect`, `connector_disconnect`, `connector_upload`, `connector_rides`, `ghost_import_connector`, `segments_fetch`; for the optional route features `connector_routes`, `connector_route` (saved routes) and `connector_ride_list`, `route_import_connector` (ride as route) |
 | `crates/core/src/types.rs` | `UploadRecord` (what a connector returns, kept per ride under `RideSummary.uploads[id]`), `Settings.auto_upload` (ids to send every ride to) |
 | `web/src/ui/Settings.tsx` `ConnectorCard` | Builds the card from `ConnectorInfo`: setup steps, one input per field, connect/disconnect, the auto-upload toggle |
 | `web/src/ui/Summary.tsx` `UploadButtons` | One button per connected connector on the summary and history screens |
+| `web/src/ui/Explore.tsx` | "Your <name> routes" in Find a route, for connectors with `lists_routes` |
+| `web/src/ui/Home.tsx`, `web/src/ui/RemoteImport.tsx` | "Import from <name>…" on the routes page and its dialog, for connectors with `imports_routes` |
 | `web/src/ui/RideSetup.tsx` | "From <name>…" ghost import and "Find <name> segments" for every connected connector that offers them |
 
 ## Steps
@@ -146,7 +148,23 @@ where a ride went) is generic and needs no change for a new service.
   the listing's summary polyline: `connectors::find_rides` uses it to mark the
   rides that ride the chosen route from its start, and pages back until a few
   do (at most five pages). The ride setup then shows "From <name>…" with the
-  fitting rides first. The defaults say the service can't list rides.
+  fitting rides first. The defaults say the service can't list rides. Set each
+  ride's `sport` to the service's sport type in Strava's vocabulary ("Ride",
+  "GravelRide", …) so the rider can filter by bike.
+- **Saved routes are optional.** Override `lists_routes` to return `true` and
+  implement `saved_routes` (the routes the rider planned or starred, starred
+  first) and `route_gpx` (one of them as GPX, by the id `saved_routes` gave;
+  keep ids as text). Find a route then shows "Your <name> routes". Strava does
+  this; a service that only holds finished rides does not.
+- **Importing a ride as a route is optional** and builds on listing rides.
+  Override `imports_routes` to return `true` and implement `ride_gpx`, which
+  returns one ride as GPX text with elevation. The routes page then shows
+  "Import from <name>…": a dialog listing every ride (`connectors::list_rides`,
+  up to twenty pages) with search, a bike filter and a distance range.
+  Don't confuse the two: `lists_routes` offers routes the rider *planned*
+  (Find a route); `imports_routes` turns a ride the rider *has ridden* into a
+  route (the routes page). Both end in a GPX file in the library. Dreeve sets
+  only `imports_routes`, Strava only `lists_routes`.
 - **Finding segments is optional too.** Override `finds_segments` to return
   `true` and implement `segments_near`, which gets `[south, west, north, east]`
   boxes along the route and returns each segment's shape as `(lat, lon)` points
