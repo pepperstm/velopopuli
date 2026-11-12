@@ -3,10 +3,11 @@ import * as THREE from 'three'
 /**
  * Textures for the route's road, one per look (`Surface as u8` in Rust: asphalt, concrete,
  * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road;
- * then 6, the planks of a log bridge on a trail; 7, singletrack, a narrow earth trail; 8, the stones of a ford's bed). Across: the gravel shoulder on the outer 20/256ths
+ * then 6, the planks of a log bridge on a trail; 7, singletrack, a narrow earth trail; 8, the stones of a ford's bed; 9, a velodrome's
+ * track, its inside at the right). Across: the gravel shoulder on the outer 20/256ths
  * each side (stretched down the embankment), the surface between. Along: 12 m per repeat.
  */
-export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber', 'singletrack', 'ford'] as const
+export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber', 'singletrack', 'ford', 'track'] as const
 
 /** Deterministic noise, so both renderers get the same picture. */
 function random(seed: number): () => number {
@@ -53,6 +54,32 @@ function draw(surface: number): HTMLCanvasElement {
   // The same grain on tarmac with and without a centre line, so the change shows only in the paint.
   const rnd = random(17 + (SURFACES[surface] === 'lane' ? 0 : surface) * 101)
   switch (SURFACES[surface] ?? 'asphalt') {
+    case 'track': {
+      // A velodrome's track, 7.4 m across 216 px, its inside edge at the right: the light blue
+      // côte d'azur, then the black measuring line (20 cm onto the track), the red sprinters'
+      // line (85 cm) and the blue stayers' line (2.45 m). Grass either side.
+      const [c, ctx] = canvas(256, 256)
+      const px = 216 / 7.4
+      shoulders(ctx, 256, 256, '#4f7a35')
+      ctx.fillStyle = '#5b5d62'
+      ctx.fillRect(20, 0, 216, 256)
+      speckle(ctx, 256, 256, rnd, 2200, [92, 94, 99], 30, 0.45, 2)
+      const inside = 236
+      const cote = 0.9 * px
+      ctx.fillStyle = '#74b8e2'
+      ctx.fillRect(inside - cote, 0, cote, 256)
+      const line = (fromInside: number, colour: string): void => {
+        ctx.fillStyle = colour
+        ctx.fillRect(inside - (0.9 + fromInside) * px - 1.5, 0, 3, 256)
+      }
+      line(0.2, '#141416')
+      line(0.85, '#c8262c')
+      line(2.45, '#2f5fb0')
+      // A pale concrete lip along the outside.
+      ctx.fillStyle = '#8d8c88'
+      ctx.fillRect(20, 0, 3, 256)
+      return c
+    }
     case 'concrete': {
       // Pale slabs with a joint across every 4 m and one down the middle.
       const [c, ctx] = canvas(256, 256)

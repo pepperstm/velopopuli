@@ -120,6 +120,8 @@ pub struct HeightField {
     /// For open samples, 1 at a tunnel mouth falling to 0 away from it; for bridge
     /// samples, how far the ground must stay below the deck.
     shape: Vec<f32>,
+    /// Grounds laid level, such as a velodrome's: the ground there is at their height.
+    grounds: Option<super::venue::Grounds>,
 }
 
 impl HeightField {
@@ -165,7 +167,7 @@ impl HeightField {
                 _ => 0.0,
             })
             .collect();
-        Self { route, dem, dem_offset, grid, coarse, lattice: Mutex::new(HashMap::new()), mean_ele, kinds, shape }
+        Self { route, dem, dem_offset, grid, coarse, lattice: Mutex::new(HashMap::new()), mean_ele, kinds, shape, grounds: None }
     }
 
     pub fn kinds(&self) -> &[u8] {
@@ -253,7 +255,24 @@ impl HeightField {
         (p.surface, p.road)
     }
 
+    /// Lays the ground level over `grounds`, blending back into the land round them.
+    pub(super) fn set_grounds(&mut self, grounds: super::venue::Grounds) {
+        self.grounds = Some(grounds);
+    }
+
     pub fn probe(&self, x: f64, z: f64, roughness: f64) -> Probe {
+        let mut p = self.probe_land(x, z, roughness);
+        if let Some(g) = &self.grounds {
+            let level = g.levelled(x, z);
+            if level > 0.0 && !p.trench {
+                p.ground = mix(p.ground, g.height, level);
+                p.surface = p.ground;
+            }
+        }
+        p
+    }
+
+    fn probe_land(&self, x: f64, z: f64, roughness: f64) -> Probe {
         let route = &self.route;
         let (cx, cz) = (cell(x, HASH_CELL), cell(z, HASH_CELL));
         // Per kind of road: inverse-distance weights, weighted elevation, and the nearest sample.

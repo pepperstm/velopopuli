@@ -344,6 +344,8 @@ export interface RideInit {
   landmarks: Landmark[]
   /** Laps the ride was started with, as the engine understood them; null on a ride without laps. */
   laps: number | null
+  /** The route is a velodrome's track, which has its own finish line rather than arches. */
+  venue: boolean
 }
 
 export interface Landmark {

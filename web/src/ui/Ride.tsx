@@ -116,7 +116,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           (i) => `${i} ${imperial ? 'mi' : 'km'}`,
           imperial ? 1609.344 : 1000,
           started.landmarks,
-          started.laps !== null
+          started.laps !== null,
+          started.venue
         )
         worldRef.current = world
         const native = settingsRef.current.nativeRenderer && (await api.native.available())

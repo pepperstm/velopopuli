@@ -66,6 +66,9 @@ pub fn load_route(store: &Store, id: &str) -> Result<Route, String> {
     if id == DEMO_ROUTE_ID {
         return Ok(demo_route());
     }
+    if let Some((track, clockwise)) = velopopuli_core::velodrome::track_for(id) {
+        return Ok(track.route(clockwise));
+    }
     let stored: StoredRoute = store.get(&format!("route-{id}")).ok_or("This route is no longer in your library.")?;
     build_route(&stored.name, &parse_gpx(&stored.gpx)?.1)
 }
@@ -98,6 +101,8 @@ pub struct RideInit {
     landmarks: Vec<Landmark>,
     /// Laps as the engine understands them (none on an open route).
     laps: Option<u32>,
+    /// The route is a velodrome's track: no start and finish arches, it has its own line.
+    venue: bool,
 }
 
 #[derive(Serialize)]
@@ -212,7 +217,27 @@ impl Session {
         let pb: Option<PersonalBest> = store.get(&format!("pb-{route_id}"));
         let route = Arc::new(route);
         let real_terrain = dem.is_some();
-        let mut world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints);
+        // A built-in track: the velodrome round it takes the place of what the map has there.
+        let track = velopopuli_core::velodrome::track_for(route_id);
+        let mut world = match track {
+            Some((track, clockwise)) => {
+                let world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &[]).with_venue(track, clockwise);
+                let grounds = &world.venue.as_ref().expect("just added").grounds;
+                let footprints: Vec<_> = map
+                    .footprints
+                    .iter()
+                    .filter(|f| {
+                        let n = f.ring.len().max(1) as f64;
+                        let (lat, lon) = (f.ring.iter().map(|p| p[0]).sum::<f64>() / n, f.ring.iter().map(|p| p[1]).sum::<f64>() / n);
+                        let (x, z) = route.to_local(lat, lon);
+                        grounds.outside(x, z) > 0.0
+                    })
+                    .cloned()
+                    .collect();
+                world.with_buildings(&footprints)
+            }
+            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints),
+        };
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
         if let Some(s) = std::env::var("VP_SMOKE_SURFACE")
             .ok()
@@ -332,8 +357,10 @@ impl Session {
                 let t = Local::now();
                 t.hour() as f64 + t.minute() as f64 / 60.0
             },
-            landmarks: if settings.look.landmarks { landmarks(&route, map.scenery.as_ref()) } else { Vec::new() },
+            // No village signs on a velodrome's track.
+            landmarks: if settings.look.landmarks && track.is_none() { landmarks(&route, map.scenery.as_ref()) } else { Vec::new() },
             laps: engine.laps,
+            venue: track.is_some(),
         };
         if std::env::var_os("VP_SMOKE").is_some() {
             for m in &init.landmarks {

@@ -26,19 +26,23 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   const [laps, setLaps] = useState('')
   const [stravaConnected, setStravaConnected] = useState(false)
   const isDemo = route.id === 'demo'
+  // A built-in velodrome (its card is the anticlockwise route): which way round to ride it.
+  const isTrack = route.id === 'herne-hill'
+  const [clockwise, setClockwise] = useState(false)
+  const rideId = isTrack && clockwise ? `${route.id}-clockwise` : route.id
 
   useEffect(() => {
     void api.workouts.list().then(setWorkouts)
-    void api.routes.isLoop(route.id).then(setIsLoop, () => setIsLoop(false))
+    void api.routes.isLoop(rideId).then(setIsLoop, () => setIsLoop(false))
     void api.strava.status().then((s) => setStravaConnected(s.connected))
     if (!isDemo) {
-      void api.ghosts.list(route.id).then((g) => {
+      void api.ghosts.list(rideId).then((g) => {
         setGhosts(g)
         setGhostIds(g.map((x) => x.id))
       })
-      void api.segments.list(route.id).then(setSegments)
+      void api.segments.list(rideId).then(setSegments)
     }
-  }, [route.id, isDemo])
+  }, [rideId, isDemo])
 
   const task = async (label: string, fn: () => Promise<void>): Promise<void> => {
     setBusy(label)
@@ -68,6 +72,16 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
         <p className="muted">
           {fmtDist(route.distance, u)} · {route.climbs} climb{route.climbs === 1 ? '' : 's'}
         </p>
+
+        {isTrack && (
+          <>
+            <h3>Direction</h3>
+            <select value={clockwise ? 'clockwise' : 'anticlockwise'} onChange={(e) => setClockwise(e.target.value === 'clockwise')}>
+              <option value="anticlockwise">Anticlockwise, as raced</option>
+              <option value="clockwise">Clockwise</option>
+            </select>
+          </>
+        )}
 
         {isLoop && (
           <>
@@ -128,7 +142,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                       className="ghost small"
                       onClick={(e) => {
                         e.preventDefault()
-                        void api.ghosts.remove(route.id, g.id).then(() => setGhosts((all) => all.filter((x) => x.id !== g.id)))
+                        void api.ghosts.remove(rideId, g.id).then(() => setGhosts((all) => all.filter((x) => x.id !== g.id)))
                       }}
                     >
                       ✕
@@ -136,7 +150,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                   </label>
                 ))}
                 <div className="row">
-                  <button disabled={!!busy} onClick={() => void task('Reading the ride…', async () => addGhost(await api.ghosts.importFile(route.id)))}>
+                  <button disabled={!!busy} onClick={() => void task('Reading the ride…', async () => addGhost(await api.ghosts.importFile(rideId)))}>
                     From a file…
                   </button>
                   {stravaConnected && (
@@ -155,7 +169,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                         disabled={!!busy}
                         onClick={() =>
                           void task('Fetching the ride from Strava…', async () => {
-                            addGhost(await api.ghosts.importStrava(route.id, a.id))
+                            addGhost(await api.ghosts.importStrava(rideId, a.id))
                             setActivities(null)
                           })
                         }
@@ -179,7 +193,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                 : 'Strava segments along the route can be timed too.'}
             </p>
             {stravaConnected ? (
-              <button disabled={!!busy} onClick={() => void task('Looking for Strava segments…', async () => setSegments(await api.segments.fetch(route.id)))}>
+              <button disabled={!!busy} onClick={() => void task('Looking for Strava segments…', async () => setSegments(await api.segments.fetch(rideId)))}>
                 {segments.length ? 'Refresh Strava segments' : 'Find Strava segments'}
               </button>
             ) : (
@@ -219,7 +233,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
             disabled={!!busy || (group && !room)}
             onClick={() =>
               props.onStart({
-                routeId: route.id,
+                routeId: rideId,
                 workoutId: workoutId || null,
                 ghostIds: lapRide ? [] : ghostIds,
                 groupRoom: group ? room : null,

@@ -219,7 +219,9 @@ export class World {
     markerSpacing: number,
     private landmarks: Landmark[] = [],
     /** A lap ride goes round a closed route: distances wrap at the line, and there is no finish arch. */
-    private lapRide = false
+    private lapRide = false,
+    /** A velodrome's track, with its own finish line painted on it: no arches. */
+    private venue = false
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -353,6 +355,7 @@ export class World {
     })
 
     this.addLandmarks()
+    if (this.venue) return
     this.addArch(Math.min(12, route.total), 0x2f7fd8, 'START')
     if (!this.lapRide) this.addArch(route.total - 4, 0xd8382f, 'FINISH')
   }
