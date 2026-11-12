@@ -820,10 +820,12 @@ pub struct Planned {
     name: Option<String>,
     /// Places where a waymarked route's mapped ways don't meet.
     gaps: usize,
+    /// Only the part of a waymarked route in the area searched.
+    clipped: bool,
 }
 
 impl Planned {
-    fn new(gpx: String, route: &Route, name: Option<String>, gaps: usize) -> Self {
+    fn new(gpx: String, route: &Route, name: Option<String>, gaps: usize, clipped: bool) -> Self {
         let stride = (route.n / 600).max(1);
         Planned {
             distance: route.total,
@@ -834,6 +836,7 @@ impl Planned {
             gpx,
             name,
             gaps,
+            clipped,
         }
     }
 }
@@ -842,19 +845,20 @@ impl Planned {
 pub async fn geo_plan(state: State<'_, AppState>, points: Vec<[f64; 2]>, profile: String) -> Res<Planned> {
     let gpx = geo::plan(&state.http, &points, &profile).await?;
     let route = build_route("Planned", &parse_gpx(&gpx)?.1)?;
-    Ok(Planned::new(gpx, &route, None, 0))
+    Ok(Planned::new(gpx, &route, None, 0, false))
 }
 
-/// The waymarked mountain-bike routes within `[south, west, north, east]`.
+/// The waymarked routes of a kind (mountain-bike or road) within `[south, west, north, east]`.
 #[tauri::command]
-pub async fn geo_mtb_routes(state: State<'_, AppState>, bounds: [f64; 4]) -> Res<Vec<velopopuli_core::waymarked::WaymarkedSummary>> {
-    geo::mtb_routes(&state.http, bounds).await
+pub async fn geo_waymarked_routes(state: State<'_, AppState>, kind: velopopuli_core::waymarked::Kind, bounds: [f64; 4]) -> Res<Vec<velopopuli_core::waymarked::WaymarkedSummary>> {
+    geo::waymarked_routes(&state.http, kind, bounds).await
 }
 
-/// One waymarked mountain-bike route, ready to preview and save, with elevation from the terrain.
+/// One waymarked route, ready to preview and save, with elevation from the terrain. `bounds`
+/// is the area it was found in: a road route is cut down to its part in there.
 #[tauri::command]
-pub async fn geo_mtb_route(state: State<'_, AppState>, id: u64) -> Res<Planned> {
-    let way = geo::mtb_route(&state.http, id).await?;
+pub async fn geo_waymarked_route(state: State<'_, AppState>, kind: velopopuli_core::waymarked::Kind, id: u64, bounds: [f64; 4]) -> Res<Planned> {
+    let way = geo::waymarked_route(&state.http, kind, id, bounds).await?;
     let raw: Vec<velopopuli_core::gpx::RawPoint> = way.line.iter().map(|p| velopopuli_core::gpx::RawPoint { lat: p[0], lon: p[1], ele: None }).collect();
     let mut route = build_route(&way.name, &raw)?;
     // The relation has no heights; the terrain tiles do.
@@ -866,7 +870,7 @@ pub async fn geo_mtb_route(state: State<'_, AppState>, id: u64) -> Res<Planned> 
     let stride = ((20.0 / route.step).round() as usize).max(1);
     let points: Vec<([f64; 2], Option<f64>)> = (0..route.n).step_by(stride).chain([route.n - 1]).map(|i| ([route.lat[i], route.lon[i]], dem.as_ref().map(|_| route.ele[i] as f64))).collect();
     let gpx = velopopuli_core::waymarked::to_gpx(&way.name, &points);
-    Ok(Planned::new(gpx, &route, Some(way.name), way.gaps))
+    Ok(Planned::new(gpx, &route, Some(way.name), way.gaps, way.clipped))
 }
 
 /// Street-level photos along the route being ridden.

@@ -3,6 +3,7 @@
 //! waymarked mountain-bike routes through the Overpass API.
 
 use serde::Serialize;
+use velopopuli_core::waymarked::Kind;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,21 +62,23 @@ pub async fn plan(http: &reqwest::Client, points: &[[f64; 2]], profile: &str) ->
     Ok(text)
 }
 
-/// The waymarked mountain-bike routes within `[south, west, north, east]`.
-pub async fn mtb_routes(http: &reqwest::Client, bounds: [f64; 4]) -> Result<Vec<velopopuli_core::waymarked::WaymarkedSummary>, String> {
+/// The waymarked routes of a kind within `[south, west, north, east]`.
+pub async fn waymarked_routes(http: &reqwest::Client, kind: Kind, bounds: [f64; 4]) -> Result<Vec<velopopuli_core::waymarked::WaymarkedSummary>, String> {
     let [s, w, n, e] = bounds;
     // About 60 km across at most: wider areas hold too many routes for a public server.
     if (n - s).abs() > 0.6 || (e - w).abs() > 0.9 {
         return Err("Zoom in a little to search this area.".into());
     }
-    let text = crate::mapdata::overpass_first(http, &velopopuli_core::waymarked::area_query(bounds), std::time::Duration::from_secs(30)).await?;
-    velopopuli_core::waymarked::parse_area(&text)
+    let text = crate::mapdata::overpass_first(http, &velopopuli_core::waymarked::area_query(kind, bounds), std::time::Duration::from_secs(30)).await?;
+    velopopuli_core::waymarked::parse_area(kind, &text)
 }
 
-/// One waymarked route's ways, joined into one line.
-pub async fn mtb_route(http: &reqwest::Client, id: u64) -> Result<velopopuli_core::waymarked::WaymarkedLine, String> {
-    let text = crate::mapdata::overpass_first(http, &velopopuli_core::waymarked::route_query(id), std::time::Duration::from_secs(45)).await?;
-    velopopuli_core::waymarked::parse_route(&text)
+/// One waymarked route's ways, joined into one line. Road routes can run across a country, so
+/// only the part within `bounds` (the area searched) is fetched for those.
+pub async fn waymarked_route(http: &reqwest::Client, kind: Kind, id: u64, bounds: [f64; 4]) -> Result<velopopuli_core::waymarked::WaymarkedLine, String> {
+    let clip = (kind == Kind::Road).then_some(bounds);
+    let text = crate::mapdata::overpass_first(http, &velopopuli_core::waymarked::route_query(id, clip), std::time::Duration::from_secs(45)).await?;
+    velopopuli_core::waymarked::parse_route(kind, &text)
 }
 
 /// Famous climbs, each as waypoints from the foot to the summit.
@@ -101,6 +104,7 @@ pub const CLASSICS: &[Classic] = &[
 #[cfg(test)]
 mod tests {
     use velopopuli_core::gpx::{build_route, parse_gpx};
+    use velopopuli_core::waymarked::Kind;
 
     /// Needs the network: `cargo test -p velopopuli -- --ignored`.
     #[tokio::test]
@@ -123,16 +127,38 @@ mod tests {
     async fn finds_and_joins_waymarked_mtb_routes() {
         let http = reqwest::Client::builder().user_agent("VeloPopuli/0.3 (open-source indoor cycling app)").build().unwrap();
         // Finale Ligure: one of Europe's best-mapped mountain-bike areas.
-        let found = super::mtb_routes(&http, [44.12, 8.22, 44.28, 8.42]).await.unwrap();
+        let area = [44.12, 8.22, 44.28, 8.42];
+        let found = super::waymarked_routes(&http, Kind::Mtb, area).await.unwrap();
         println!("{} routes", found.len());
         assert!(!found.is_empty());
         for r in found.iter().take(5) {
-            let line = super::mtb_route(&http, r.id).await.unwrap();
+            let line = super::waymarked_route(&http, Kind::Mtb, r.id, area).await.unwrap();
             let raw: Vec<_> = line.line.iter().map(|p| velopopuli_core::gpx::RawPoint { lat: p[0], lon: p[1], ele: None }).collect();
             let route = build_route(&line.name, &raw).unwrap();
             println!("{} ({}): {:.1} km, {} gaps, mapped {:?} km", line.name, r.id, route.total / 1000.0, line.gaps, r.distance.map(|d| d / 1000.0));
             assert!(route.total > 500.0);
         }
-        assert!(super::mtb_routes(&http, [44.0, 8.0, 45.0, 9.0]).await.is_err(), "too wide an area is refused");
+        assert!(super::waymarked_routes(&http, Kind::Mtb, [44.0, 8.0, 45.0, 9.0]).await.is_err(), "too wide an area is refused");
+    }
+
+    /// Needs the network: `cargo test -p velopopuli -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn finds_road_routes_and_keeps_the_part_in_the_area() {
+        let http = reqwest::Client::builder().user_agent("VeloPopuli/0.3 (open-source indoor cycling app)").build().unwrap();
+        // Around Bath, where National Route 4 (London to Fishguard) runs through.
+        let area = [51.33, -2.45, 51.43, -2.28];
+        let found = super::waymarked_routes(&http, Kind::Road, area).await.unwrap();
+        println!("{} routes", found.len());
+        // One reaching well past the area: Route 4 runs on east to Reading and beyond.
+        let ncn = found.iter().find(|r| r.network == "ncn" && r.bounds.is_some_and(|b| b[3] - b[1] > 1.0)).expect("a long national route");
+        let line = super::waymarked_route(&http, Kind::Road, ncn.id, area).await.unwrap();
+        let raw: Vec<_> = line.line.iter().map(|p| velopopuli_core::gpx::RawPoint { lat: p[0], lon: p[1], ele: None }).collect();
+        let route = build_route(&line.name, &raw).unwrap();
+        println!("{}: {:.1} km of it here, {} gaps", line.name, route.total / 1000.0, line.gaps);
+        assert!(line.clipped);
+        assert!(route.total > 3000.0 && route.total < 60_000.0);
+        let margin = 0.01;
+        assert!(line.line.iter().all(|p| p[0] > area[0] - margin && p[0] < area[2] + margin && p[1] > area[1] - margin && p[1] < area[3] + margin));
     }
 }
