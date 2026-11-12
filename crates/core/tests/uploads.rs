@@ -27,14 +27,15 @@ fn legacy_strava_upload_is_still_found() {
 fn migration_moves_legacy_upload_into_the_map_once() {
     let mut ride = legacy_ride();
     ride.migrate_uploads();
-    assert!(ride.strava_activity_id.is_none());
+    // The old field stays, so 0.3.9 still sees the ride as uploaded.
+    assert_eq!(ride.strava_activity_id, Some(42));
     assert_eq!(ride.uploads["strava"].reference.as_deref(), Some("42"));
     // A record that is already there wins over the legacy field.
     ride.strava_activity_id = Some(7);
     ride.migrate_uploads();
     assert_eq!(ride.uploads["strava"].reference.as_deref(), Some("42"));
     let json = serde_json::to_string(&ride).unwrap();
-    assert!(!json.contains("stravaActivityId"), "{json}");
+    assert!(json.contains("\"stravaActivityId\":7"), "{json}");
     assert!(json.contains("\"uploads\":{\"strava\""), "{json}");
 }
 

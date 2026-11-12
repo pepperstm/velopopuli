@@ -47,6 +47,9 @@ pub struct AppState {
     /// The native renderer, while a ride uses it.
     pub native: Mutex<Option<native::Native>>,
     pub http: reqwest::Client,
+    /// Held while the ride list is read, changed and written back by an upload, so two connectors
+    /// finishing at once don't overwrite each other's record.
+    pub rides_lock: Mutex<()>,
 }
 
 impl AppState {
@@ -83,6 +86,7 @@ fn main() {
                 session: Mutex::new(None),
                 native: Mutex::new(None),
                 http,
+                rides_lock: Mutex::new(()),
             });
             Ok(())
         })

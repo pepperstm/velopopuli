@@ -553,6 +553,9 @@ pub async fn connector_upload(state: State<'_, AppState>, id: String, ride_id: S
     }
     let ctx = state.connector_ctx();
     let record = connectors::get(&id)?.upload(&ctx, &UploadRequest { file, name, description }).await?;
+    // The upload above can take a while and runs for several connectors at once; only the
+    // read-change-write of the ride list is serialised.
+    let _guard = state.rides_lock.lock().unwrap();
     let mut rides: Vec<RideSummary> = state.store.get("rides").unwrap_or_default();
     rides.iter_mut().for_each(RideSummary::migrate_uploads);
     if let Some(ride) = rides.iter_mut().find(|r| r.id == ride_id) {

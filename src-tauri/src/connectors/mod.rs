@@ -278,9 +278,42 @@ pub fn field(fields: &BTreeMap<String, String>, key: &str) -> String {
     fields.get(key).map(|v| v.trim().to_string()).unwrap_or_default()
 }
 
+/// Checks a server URL typed by the user before an API key is sent to it: https only, so the key
+/// isn't sent unencrypted. Plain http is allowed for this machine (`localhost`, `127.0.0.1`, `::1`),
+/// which is where a service under development runs. Returns the URL without a trailing slash.
+#[allow(dead_code)] // For key-based services such as Dreeve.
+pub fn secure_server_url(raw: &str) -> Result<String, String> {
+    let url = reqwest::Url::parse(raw.trim()).map_err(|_| "That server address isn't a valid URL. Use the form https://example.org.".to_string())?;
+    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    match url.scheme() {
+        "https" => {}
+        "http" if local => {}
+        "http" => return Err("The server address must start with https://, so your API key isn't sent unencrypted.".into()),
+        _ => return Err("The server address must start with https://.".into()),
+    }
+    if url.host_str().is_none() {
+        return Err("That server address has no host name.".into());
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn api_keys_only_go_over_https_or_to_this_machine() {
+        assert_eq!(secure_server_url(" https://dreeve.example.org/ ").unwrap(), "https://dreeve.example.org");
+        assert!(secure_server_url("http://dreeve.example.org").is_err());
+        assert!(secure_server_url("HTTP://192.168.1.5:8080").is_err());
+        assert!(secure_server_url("ftp://example.org").is_err());
+        assert!(secure_server_url("dreeve.example.org").is_err());
+        assert!(secure_server_url("http://localhost:3000").is_ok());
+        assert!(secure_server_url("http://127.0.0.1:3000/").is_ok());
+        assert!(secure_server_url("http://[::1]:3000").is_ok());
+        // A look-alike host name isn't local.
+        assert!(secure_server_url("http://localhost.evil.example").is_err());
+    }
 
     #[test]
     fn ids_are_unique_and_resolvable() {

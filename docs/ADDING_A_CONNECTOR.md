@@ -68,7 +68,7 @@ where a ride went) is generic and needs no change for a new service.
            let prev: Creds = ctx.load_creds(ID);
            let key = field(fields, "apiKey");
            let next = Creds {
-               url: field(fields, "url").trim_end_matches('/').to_string(),
+               url: connectors::secure_server_url(&field(fields, "url"))?, // https only: the key goes to this URL
                api_key: if key.is_empty() { prev.api_key } else { key }, // blank keeps the saved secret
                ..Default::default()                                        // new credentials: not verified yet
            };

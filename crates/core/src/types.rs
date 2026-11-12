@@ -347,7 +347,8 @@ pub struct RideSummary {
     /// Where the ride has been sent, by connector id ("strava", "dreeve", …).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub uploads: BTreeMap<String, UploadRecord>,
-    /// Older profiles recorded a Strava upload here; read through `upload("strava")`.
+    /// Older profiles recorded a Strava upload here; read through `upload("strava")`. Still written
+    /// alongside `uploads` so going back to 0.3.9 doesn't offer to upload the ride again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub strava_activity_id: Option<u64>,
     /// Best average power for each of `fitness::CURVE_DURATIONS`.
@@ -395,9 +396,10 @@ impl RideSummary {
         None
     }
 
-    /// Moves a legacy Strava upload into `uploads`, so the old field can be dropped later.
+    /// Copies a legacy Strava upload into `uploads`. The old field stays for a release or two, so
+    /// an older version still sees the ride as uploaded; drop it once 0.3.9 is far enough back.
     pub fn migrate_uploads(&mut self) {
-        if let Some(record) = self.strava_activity_id.take().map(|id| UploadRecord {
+        if let Some(record) = self.strava_activity_id.map(|id| UploadRecord {
             uploaded_at: self.started_at,
             reference: Some(id.to_string()),
             url: Some(format!("https://www.strava.com/activities/{id}")),
