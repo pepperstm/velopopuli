@@ -11,8 +11,12 @@ pub const SPLIT_M: f64 = 10.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SegmentSource {
+    /// One of the route's own detected climbs.
     Climb,
-    Strava,
+    /// Found on a connected service (Strava, Dreeve, …); `Segment::connector` says which.
+    /// Stored as "strava" by versions that only knew Strava.
+    #[serde(alias = "strava")]
+    Remote,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,14 +25,27 @@ pub struct Segment {
     pub id: String,
     pub name: String,
     pub source: SegmentSource,
+    /// The connector a remote segment came from. Missing in data from before connectors: Strava.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connector: Option<String>,
     /// Start and end, in metres along the route.
     pub start: f64,
     pub end: f64,
     #[serde(default)]
     pub avg_grade: f64,
-    /// Fastest time on Strava ("KOM"/"QOM"), as Strava formats it, when known.
+    /// Fastest time on the service ("KOM"/"QOM"), as it formats it, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record: Option<String>,
+}
+
+impl Segment {
+    /// The connector a remote segment came from, naming Strava for data written before connectors.
+    pub fn connector_id(&self) -> Option<&str> {
+        match self.source {
+            SegmentSource::Climb => None,
+            SegmentSource::Remote => Some(self.connector.as_deref().unwrap_or("strava")),
+        }
+    }
 }
 
 /// Best time on a segment, with the elapsed time at every [`SPLIT_M`] metres so it can be raced live.
@@ -121,6 +138,65 @@ pub fn follow_track(route: &Route, points: &[(f64, f64)], tolerance: f64) -> Vec
             Some(hit.0)
         })
         .collect()
+}
+
+/// How far along the route a ride's outline (a service's simplified summary polyline) follows
+/// it from its start, in metres; 0 if the ride never passes the route's start. Looser than
+/// `ghost_trace` because outlines drop most points: it sorts a list of rides, the ghost import
+/// still checks the full track.
+pub fn outline_follow_distance(route: &Route, outline: &[(f64, f64)]) -> f64 {
+    const NEAR_START: f64 = 150.0;
+    const TOLERANCE: f64 = 60.0;
+    if outline.len() < 2 || route.n < 2 {
+        return 0.0;
+    }
+    // Fill in long straight pieces so the outline meets the route every ~20 m.
+    let mut pts: Vec<(f64, f64)> = Vec::with_capacity(outline.len() * 4);
+    for w in outline.windows(2) {
+        let ((a_lat, a_lon), (b_lat, b_lon)) = (w[0], w[1]);
+        let dy = (b_lat - a_lat) * crate::gpx::M_PER_DEG;
+        let dx = (b_lon - a_lon) * crate::gpx::M_PER_DEG * a_lat.to_radians().cos();
+        let steps = (dx.hypot(dy) / 20.0).ceil().max(1.0) as usize;
+        for k in 0..steps {
+            let f = k as f64 / steps as f64;
+            pts.push((a_lat + (b_lat - a_lat) * f, a_lon + (b_lon - a_lon) * f));
+        }
+    }
+    pts.push(*outline.last().unwrap());
+    // Cheap rejection first: most rides never pass the route's start.
+    let (sx, sz) = (route.x[0], route.z[0]);
+    let Some(begin) = pts.iter().position(|&(lat, lon)| {
+        let (x, z) = route.to_local(lat, lon);
+        (x - sx).hypot(z - sz) < NEAR_START
+    }) else {
+        return 0.0;
+    };
+    let mut reached = 0f64;
+    let mut off = 0;
+    for d in follow_track(route, &pts[begin..], TOLERANCE) {
+        match d {
+            Some(d) => {
+                off = 0;
+                reached = reached.max(d);
+            }
+            None => {
+                off += 1;
+                // About 300 m away from the route: it has left for good.
+                if off > 15 {
+                    break;
+                }
+            }
+        }
+    }
+    reached
+}
+
+/// Whether an outline rides the route from its start for at least half of it (a kilometre on
+/// short routes): enough of the route for the ghost to be worth racing. Rides from home that
+/// only share the first streets with the route don't count.
+pub fn outline_follows_route(route: &Route, outline: &[(f64, f64)]) -> bool {
+    let need = (route.total * 0.5).max(1000.0).min(route.total * 0.8);
+    outline_follow_distance(route, outline) >= need
 }
 
 /// Places a Strava segment's shape on the route: `(start, end)` in metres, if the route rides all of it.

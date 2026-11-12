@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod connectors;
 mod devices;
 mod diag;
 mod geo;
@@ -16,7 +17,6 @@ mod session;
 mod smart;
 mod snapshot;
 mod store;
-mod strava;
 mod terrain;
 
 use std::path::PathBuf;
@@ -47,6 +47,9 @@ pub struct AppState {
     /// The native renderer, while a ride uses it.
     pub native: Mutex<Option<native::Native>>,
     pub http: reqwest::Client,
+    /// Held while the ride list is read, changed and written back by an upload, so two connectors
+    /// finishing at once don't overwrite each other's record.
+    pub rides_lock: Mutex<()>,
 }
 
 impl AppState {
@@ -83,6 +86,7 @@ fn main() {
                 session: Mutex::new(None),
                 native: Mutex::new(None),
                 http,
+                rides_lock: Mutex::new(()),
             });
             Ok(())
         })
@@ -124,7 +128,6 @@ fn main() {
             commands::ride_skip_step,
             commands::ride_shift,
             commands::gears_preview,
-            commands::strava_activities,
             commands::segments_fetch,
             commands::route_is_loop,
             commands::segments_list,
@@ -134,7 +137,7 @@ fn main() {
             commands::workout_delete,
             commands::ghosts_list,
             commands::ghost_import_file,
-            commands::ghost_import_strava,
+            commands::ghost_import_connector,
             commands::ghost_delete,
             commands::fitness_overview,
             commands::group_fetch_route,
@@ -157,11 +160,13 @@ fn main() {
             commands::native_available,
             commands::ride_finish,
             commands::ride_abort,
-            commands::strava_status,
-            commands::strava_set_app,
-            commands::strava_connect,
-            commands::strava_disconnect,
-            commands::strava_upload,
+            commands::connectors_list,
+            commands::connector_status,
+            commands::connector_configure,
+            commands::connector_connect,
+            commands::connector_disconnect,
+            commands::connector_upload,
+            commands::connector_rides,
             commands::smoke_config,
             commands::smoke_done,
             commands::smoke_frame,

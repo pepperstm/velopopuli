@@ -6,10 +6,12 @@ export { api }
 
 /** Stored settings layered over the defaults, so new options appear in old profiles. */
 export function mergeSettings(stored: Partial<Settings> | null): Settings {
-  const s = stored ?? {}
+  const { stravaAutoUpload, ...s } = (stored ?? {}) as Partial<Settings> & { stravaAutoUpload?: boolean }
   return {
     ...DEFAULT_SETTINGS,
     ...s,
+    // Before connectors, there was one toggle for Strava.
+    autoUpload: s.autoUpload ?? (stravaAutoUpload ? ['strava'] : []),
     rider: { ...DEFAULT_SETTINGS.rider, ...s.rider },
     physics: { ...DEFAULT_SETTINGS.physics, ...s.physics },
     trainer: { ...DEFAULT_SETTINGS.trainer, ...s.trainer },

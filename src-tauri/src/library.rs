@@ -1,4 +1,4 @@
-//! The rider's library beyond routes: workouts, imported ghosts, Strava segments
+//! The rider's library beyond routes: workouts, imported ghosts, connector segments
 //! found along each route, and the season goal.
 
 use chrono::{Datelike, Local, NaiveDate};
@@ -172,7 +172,12 @@ pub fn read_track(path: &std::path::Path) -> Result<Vec<(f64, f64, f64)>, String
 // ── Segments ───────────────────────────────────────────────────────────────
 
 pub fn route_segments(store: &Store, route_id: &str) -> Vec<Segment> {
-    store.get(&format!("segments-{route_id}")).unwrap_or_default()
+    let mut segments: Vec<Segment> = store.get(&format!("segments-{route_id}")).unwrap_or_default();
+    for s in &mut segments {
+        // Segments saved before connectors were all Strava's.
+        s.connector = s.connector_id().map(str::to_string);
+    }
+    segments
 }
 
 // ── Goal ───────────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ use velopopuli_core::fitness::{estimate_ftp, power_curve, power_zone, training_l
 use velopopuli_core::gamify::streaks;
 use velopopuli_core::gpx::{build_route, parse_gpx_track_times, parse_iso_time, RawPoint, M_PER_DEG};
 use velopopuli_core::ride::{GhostTrace, RideEngine, RideInput, RideOptions};
-use velopopuli_core::segments::{decode_polyline, follow_track, ghost_trace, place_segment, Segment, SegmentSource};
+use velopopuli_core::segments::{decode_polyline, follow_track, ghost_trace, outline_follow_distance, outline_follows_route, place_segment, Segment, SegmentSource};
 use velopopuli_core::types::{Settings, TrainerSettings};
 use velopopuli_core::workout::{builtin_workouts, parse_erg, parse_zwo, StepKind};
 
@@ -233,7 +233,7 @@ fn ghosts_from_recorded_rides() {
 #[test]
 fn segment_bests_and_live_gap() {
     let route = l_route(1.0);
-    let seg = Segment { id: "s".into(), name: "Sprint".into(), source: SegmentSource::Strava, start: 100.0, end: 600.0, avg_grade: 0.0, record: None };
+    let seg = Segment { id: "s".into(), name: "Sprint".into(), source: SegmentSource::Remote, connector: Some("strava".into()), start: 100.0, end: 600.0, avg_grade: 0.0, record: None };
     let ride = |power: f64, bests| {
         let mut e = RideEngine::with_options(route.clone(), &Settings::default(), None, RideOptions { segments: vec![seg.clone()], segment_bests: bests, ..Default::default() });
         let mut live_gap = None;
@@ -464,4 +464,28 @@ fn loop_routes_are_followed_from_their_start() {
     assert!(followed[0].is_some_and(|d| d < 100.0), "first point placed at {:?}, not the start", followed[0]);
     let trace = ghost_trace(&route, &track).expect("a ride from just before the start/finish is a ghost of this loop");
     assert!(close(*trace.last().unwrap(), 1192.0, 30.0), "{}", trace.last().unwrap());
+}
+
+#[test]
+fn ride_outlines_are_matched_to_a_route() {
+    let route = l_route(2.0);
+    // A sparse outline that rides the route: a few points, as a summary polyline has.
+    let along: Vec<(f64, f64)> = [0.0, 700.0, 1500.0, 2000.0, 2600.0, 3400.0].iter().map(|&d| route.sample_at(d)).map(|p| (p.lat, p.lon)).collect();
+    assert!(outline_follows_route(&route, &along));
+    // The same ride but started 1.5 km into the route: it never passes the start.
+    assert!(!outline_follows_route(&route, &along[2..]));
+    // Shares the first 1.5 km of the 4 km route, then turns off: not enough to race.
+    let shared: Vec<(f64, f64)> = [0.0, 700.0, 1500.0].iter().map(|&d| route.sample_at(d)).map(|p| (p.lat, p.lon)).chain([(45.02, 5.98)]).collect();
+    assert!(close(outline_follow_distance(&route, &shared), 1500.0, 40.0), "{}", outline_follow_distance(&route, &shared));
+    assert!(!outline_follows_route(&route, &shared));
+    assert!(close(outline_follow_distance(&route, &along), 3400.0, 40.0), "{}", outline_follow_distance(&route, &along));
+    // Passes the start but turns off after 300 m.
+    let start = route.sample_at(0.0);
+    let turn = route.sample_at(300.0);
+    let away = vec![(start.lat, start.lon), (turn.lat, turn.lon), (turn.lat, turn.lon - 0.02), (turn.lat - 0.01, turn.lon - 0.02)];
+    assert!(!outline_follows_route(&route, &away));
+    // Somewhere else entirely, and degenerate outlines.
+    assert!(!outline_follows_route(&route, &[(48.0, 11.0), (48.01, 11.01)]));
+    assert!(!outline_follows_route(&route, &along[..1]));
+    assert!(!outline_follows_route(&route, &[]));
 }

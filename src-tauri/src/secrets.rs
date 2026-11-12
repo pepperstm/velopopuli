@@ -1,20 +1,13 @@
-//! Where credentials live (Strava tokens, the Home Assistant token): the OS
+//! Where credentials live (connector tokens, the Home Assistant token): the OS
 //! keychain on macOS and Windows; on Linux, where no keyring service is
 //! guaranteed to exist, a file per secret readable only by the user.
+//! Each connector keeps its credentials under its id (`connectors::ALL`).
 
 use std::path::Path;
 
 /// The keychain entry's name. Kept as first released (the app is now written "VeloPopuli")
 /// so that saved Strava and Home Assistant tokens are still found.
 const SERVICE: &str = "Velo Populi";
-
-pub fn load(dir: &Path) -> Option<String> {
-    load_named(dir, "strava")
-}
-
-pub fn save(dir: &Path, secret: &str) -> Result<(), String> {
-    save_named(dir, "strava", secret)
-}
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn load_named(_dir: &Path, account: &str) -> Option<String> {
