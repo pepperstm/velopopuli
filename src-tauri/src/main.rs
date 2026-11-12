@@ -88,6 +88,19 @@ fn main() {
                 http,
                 rides_lock: Mutex::new(()),
             });
+            // Reconnect the sensors from last time: the ANT+ stick if it was on, and the
+            // Bluetooth sensors connected before, as they wake up.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let state = handle.state::<AppState>();
+                let remembered = state.devices.remembered();
+                if remembered.ant {
+                    state.ant.start(state.devices.clone());
+                }
+                if let Err(e) = state.ble.look_for_known(state.devices.clone()).await {
+                    diag::event("ble", format!("could not look for remembered sensors: {e}"));
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -106,6 +119,8 @@ fn main() {
             commands::reveal_file,
             commands::open_external,
             commands::devices_list,
+            commands::devices_look_for_known,
+            commands::device_forget,
             commands::ble_scan_start,
             commands::ble_scan_stop,
             commands::ble_connect,

@@ -31,8 +31,16 @@ pub struct Candidate {
 #[derive(Default)]
 pub struct Ble {
     adapter: OnceCell<Adapter>,
+    /// The rider is searching for a device to add.
     scanning: Arc<AtomicBool>,
+    /// The app is looking for remembered sensors to connect again.
+    looking: Arc<AtomicBool>,
 }
+
+/// How long to look for remembered sensors after launch: long enough to wake them.
+const LOOK_FOR: Duration = Duration::from_secs(180);
+/// How soon to try a remembered sensor again after a failed attempt.
+const RETRY_AFTER: Duration = Duration::from_secs(15);
 
 /// What a device must advertise to be listed: a cycling sensor, or an OpenBikeControl controller.
 fn sensor_services() -> [Uuid; 6] {
@@ -71,7 +79,7 @@ impl Ble {
         if self.scanning.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
-        let scanning = self.scanning.clone();
+        let (scanning, looking) = (self.scanning.clone(), self.looking.clone());
         tauri::async_runtime::spawn(async move {
             let wanted = sensor_services();
             let mut sent: Vec<Candidate> = Vec::new();
@@ -105,8 +113,67 @@ impl Ble {
                 }
                 tokio::time::sleep(Duration::from_millis(600)).await;
             }
-            let _ = adapter.stop_scan().await;
+            // Leave the radio on while remembered sensors are still being looked for.
+            if !looking.load(Ordering::SeqCst) {
+                let _ = adapter.stop_scan().await;
+            }
             diag::event("ble", "scan stopped");
+        });
+        Ok(())
+    }
+
+    /// Looks for the remembered sensors for a few minutes and connects each one as it is heard.
+    /// Does nothing when none are missing or a search is already running.
+    pub async fn look_for_known(&self, devices: Arc<Devices>) -> Result<(), String> {
+        let missing = |devices: &Devices| devices.remembered().ble.into_iter().filter(|k| !devices.contains(&format!("ble:{}", k.id))).collect::<Vec<_>>();
+        if missing(&devices).is_empty() || self.looking.swap(true, Ordering::SeqCst) {
+            return Ok(());
+        }
+        let adapter = match self.adapter().await {
+            Ok(a) => a.clone(),
+            Err(e) => {
+                self.looking.store(false, Ordering::SeqCst);
+                return Err(e);
+            }
+        };
+        if let Err(e) = adapter.start_scan(ScanFilter::default()).await {
+            self.looking.store(false, Ordering::SeqCst);
+            diag::event("ble", format!("scan for remembered sensors failed: {e}"));
+            return Err(format!("Could not start a Bluetooth scan: {e}"));
+        }
+        diag::event("ble", "looking for remembered sensors");
+        let (scanning, looking) = (self.scanning.clone(), self.looking.clone());
+        tauri::async_runtime::spawn(async move {
+            let until = tokio::time::Instant::now() + LOOK_FOR;
+            let mut tried: std::collections::HashMap<String, tokio::time::Instant> = std::collections::HashMap::new();
+            loop {
+                let pending = missing(&devices);
+                devices.set_looking_for(pending.clone());
+                if pending.is_empty() || tokio::time::Instant::now() > until {
+                    break;
+                }
+                for p in adapter.peripherals().await.unwrap_or_default() {
+                    let pid = p.id().to_string();
+                    if !pending.iter().any(|k| k.id == pid) || tried.get(&pid).is_some_and(|t| t.elapsed() < RETRY_AFTER) {
+                        continue;
+                    }
+                    tried.insert(pid.clone(), tokio::time::Instant::now());
+                    diag::event("ble", format!("heard remembered sensor id={pid}, connecting"));
+                    let devices = devices.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = open_link(devices, p, &pid).await {
+                            diag::event("ble", format!("remembered sensor id={pid}: {e}"));
+                        }
+                    });
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            devices.set_looking_for(Vec::new());
+            looking.store(false, Ordering::SeqCst);
+            if !scanning.load(Ordering::SeqCst) {
+                let _ = adapter.stop_scan().await;
+            }
+            diag::event("ble", "stopped looking for remembered sensors");
         });
         Ok(())
     }
@@ -119,44 +186,52 @@ impl Ble {
     pub async fn connect(&self, devices: Arc<Devices>, peripheral_id: &str) -> Result<(), String> {
         let adapter = self.adapter().await?;
         let peripheral = adapter.peripherals().await.map_err(err)?.into_iter().find(|p| p.id().to_string() == peripheral_id).ok_or("That sensor is no longer in range.")?;
-        let name = peripheral.properties().await.ok().flatten().and_then(|p| p.local_name).filter(|n| !n.is_empty()).unwrap_or_else(|| "Bluetooth sensor".into());
-        let id = format!("ble:{peripheral_id}");
-        diag::event("dev", format!("dev={id} name={name:?} connecting"));
-
-        let (control_tx, control_rx) = mpsc::unbounded_channel::<TrainerCommand>();
-        let (stop_tx, stop_rx) = watch::channel(false);
-        let info = DeviceInfo { id: id.clone(), name, transport: Transport::Ble, kind: DeviceKind::Hr, status: DeviceStatus::Connecting, controllable: false, readings: Readings::default() };
-        let handle = Handle {
-            control: Some(Box::new(move |cmd| {
-                let _ = control_tx.send(cmd);
-            })),
-            stop: Box::new(move || {
-                let _ = stop_tx.send(true);
-            }),
-        };
-        if !devices.add(info, handle) {
-            return Ok(());
-        }
-
-        let mut link = Link { peripheral, devices: devices.clone(), id: id.clone(), control_rx, stop_rx };
-        let first = match tokio::time::timeout(Duration::from_secs(25), link.open()).await {
-            Ok(Ok(session)) => session,
-            Ok(Err(e)) => {
-                diag::event("dev", format!("dev={id} first connection failed: {e}"));
-                devices.remove(&id);
-                let _ = link.peripheral.disconnect().await;
-                return Err(e);
-            }
-            Err(_) => {
-                diag::event("dev", format!("dev={id} first connection failed: timed out after 25 s"));
-                devices.remove(&id);
-                let _ = link.peripheral.disconnect().await;
-                return Err("Timed out connecting to the sensor.".into());
-            }
-        };
-        tauri::async_runtime::spawn(link.run(first));
-        Ok(())
+        open_link(devices, peripheral, peripheral_id).await
     }
+}
+
+/// Connects to a peripheral, remembers it once the first connection works, and keeps it
+/// connected until it is removed.
+async fn open_link(devices: Arc<Devices>, peripheral: Peripheral, peripheral_id: &str) -> Result<(), String> {
+    let name = peripheral.properties().await.ok().flatten().and_then(|p| p.local_name).filter(|n| !n.is_empty()).unwrap_or_else(|| "Bluetooth sensor".into());
+    let id = format!("ble:{peripheral_id}");
+    diag::event("dev", format!("dev={id} name={name:?} connecting"));
+
+    let (control_tx, control_rx) = mpsc::unbounded_channel::<TrainerCommand>();
+    let (stop_tx, stop_rx) = watch::channel(false);
+    let info = DeviceInfo { id: id.clone(), name, transport: Transport::Ble, kind: DeviceKind::Hr, status: DeviceStatus::Connecting, controllable: false, readings: Readings::default() };
+    let handle = Handle {
+        control: Some(Box::new(move |cmd| {
+            let _ = control_tx.send(cmd);
+        })),
+        stop: Box::new(move || {
+            let _ = stop_tx.send(true);
+        }),
+    };
+    if !devices.add(info, handle) {
+        return Ok(());
+    }
+
+    let mut link = Link { peripheral, devices: devices.clone(), id: id.clone(), control_rx, stop_rx };
+    let first = match tokio::time::timeout(Duration::from_secs(25), link.open()).await {
+        Ok(Ok(session)) => session,
+        Ok(Err(e)) => {
+            diag::event("dev", format!("dev={id} first connection failed: {e}"));
+            devices.remove(&id);
+            let _ = link.peripheral.disconnect().await;
+            return Err(e);
+        }
+        Err(_) => {
+            diag::event("dev", format!("dev={id} first connection failed: timed out after 25 s"));
+            devices.remove(&id);
+            let _ = link.peripheral.disconnect().await;
+            return Err("Timed out connecting to the sensor.".into());
+        }
+    };
+    let name = devices.snapshot().devices.into_iter().find(|d| d.id == id).map(|d| d.name).unwrap_or_default();
+    devices.change_remembered(|r| r.add_ble(peripheral_id, &name));
+    tauri::async_runtime::spawn(link.run(first));
+    Ok(())
 }
 
 /// What a connected peripheral offers, resolved once per connection.

@@ -377,6 +377,8 @@ export interface DeviceInfo {
 export interface DevicesSnapshot {
   devices: DeviceInfo[]
   ant: { state: 'off' | 'opening' | 'scanning' | 'error'; message: string }
+  /** Bluetooth sensors connected before and not connected yet, while the app looks for them. */
+  lookingFor: { id: string; name: string }[]
 }
 
 export interface WorldLayout {

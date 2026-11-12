@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { Barriers } from './barriers'
 import { SURFACES, surfaceRuns, surfaceTexture } from './surfaces'
 import { api } from '../bridge'
-import { bankAt, halfWidthAt, sampleAt, wrapDist, wrapGap, type Route, type RoutePos } from '../core/gpx'
+import { bankAt, halfWidthAt, leanAt, sampleAt, wrapDist, wrapGap, type Route, type RoutePos } from '../core/gpx'
 import type { Landmark, WorldLayout } from '../types'
 import { RiderModel } from './rider'
 import { Terrain } from './terrain'
@@ -422,15 +422,16 @@ export class World {
   }
 
   /** On a berm, a rider stands on the slope where they are across the trail and leans with it. */
-  private place(group: THREE.Object3D, p: RoutePos, dist: number, lane: number): void {
+  /** Riders also lean into bends, by what balances the turn at their speed. */
+  private place(group: THREE.Object3D, p: RoutePos, dist: number, lane: number, speed: number): void {
     const [bank, lift] = bankAt(this.route, dist, lane)
     group.position.set(p.x + Math.cos(p.heading) * lane, p.ele + this.layout.roadLift + lift, p.z - Math.sin(p.heading) * lane)
-    group.rotation.set(-Math.atan(p.grade), p.heading, Math.atan(bank), 'YXZ')
+    group.rotation.set(-Math.atan(p.grade), p.heading, Math.atan(bank) + leanAt(this.route, dist, speed), 'YXZ')
   }
 
   frame(dt: number, f: WorldFrame): void {
     const p = sampleAt(this.route, f.distance, this.pos)
-    this.place(this.rider.group, p, f.distance, 0)
+    this.place(this.rider.group, p, f.distance, 0, f.speed)
     this.rider.update(dt, f.speed, f.cadence)
 
     const seen = new Set<string>()
@@ -451,7 +452,7 @@ export class World {
       const op = sampleAt(this.route, r.distance, this.otherPos)
       // Kept on the road where it is narrow.
       const room = Math.max(0.4, halfWidthAt(this.route, r.distance) - 0.6)
-      this.place(other.model.group, op, r.distance, Math.sign(other.lane) * Math.min(Math.abs(other.lane), room))
+      this.place(other.model.group, op, r.distance, Math.sign(other.lane) * Math.min(Math.abs(other.lane), room), r.speed)
       other.model.update(dt, r.speed, r.speed > 0.5 ? 85 : 0)
       other.label.position.copy(other.model.group.position)
       other.label.position.y += 2.3
