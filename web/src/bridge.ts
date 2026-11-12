@@ -131,14 +131,14 @@ export const api = {
         profile
       }),
     classics: () => invoke<{ name: string; region: string; points: [number, number][] }[]>('geo_classics'),
-    /** Waymarked mountain-bike routes within `[south, west, north, east]`. */
-    mtbRoutes: (bounds: [number, number, number, number]) =>
+    /** Waymarked routes of a kind (mountain-bike or signposted road) within `[south, west, north, east]`. */
+    waymarkedRoutes: (kind: 'mtb' | 'road', bounds: [number, number, number, number]) =>
       invoke<{ id: number; name: string; reference: string; network: string; distance: number | null; bounds: [number, number, number, number] | null }[]>(
-        'geo_mtb_routes',
-        { bounds }
+        'geo_waymarked_routes',
+        { kind, bounds }
       ),
-    /** One waymarked route, joined into a line with elevation, ready to save. */
-    mtbRoute: (id: number) =>
+    /** One waymarked route, joined into a line with elevation, ready to save. A road route is cut down to its part within `bounds`. */
+    waymarkedRoute: (kind: 'mtb' | 'road', id: number, bounds: [number, number, number, number]) =>
       invoke<{
         gpx: string
         distance: number
@@ -148,7 +148,8 @@ export const api = {
         profile: [number, number][]
         name: string | null
         gaps: number
-      }>('geo_mtb_route', { id })
+        clipped: boolean
+      }>('geo_waymarked_route', { kind, id, bounds })
   },
   group: {
     fetchRoute: (room: string) => invoke<RouteMeta>('group_fetch_route', { room })
