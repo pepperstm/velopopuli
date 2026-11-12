@@ -1232,6 +1232,10 @@ button.small {
   overflow-y: auto;
   padding-right: 4px;
 }
+/* The column scrolls; its sections keep their height rather than being squeezed to fit. */
+.explore-side > * {
+  flex-shrink: 0;
+}
 .explore-side .row input {
   flex: 1;
   min-width: 0;
