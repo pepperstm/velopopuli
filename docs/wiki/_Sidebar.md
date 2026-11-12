@@ -22,7 +22,6 @@
 
 **For developers**
 - [[Contributing]]
-- [[Building from source]]
-- [[Architecture]]
+- [How it's built](https://github.com/pepperstm/velopopuli/blob/main/docs/developers/README.md)
 
 [velopopuli.com](https://velopopuli.com)

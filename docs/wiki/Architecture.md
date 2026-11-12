@@ -1,44 +1,7 @@
 # Architecture
 
-About three quarters of the code is Rust; everything that computes or talks to hardware is in it. The web layer (React + three.js) draws the screens and the 3D world from data the Rust side prepares.
+How VeloPopuli is built is described in the developer pages in the repository, next to the code:
 
-```
-crates/core/      Pure Rust library, no I/O — fully unit-tested
-  gpx, physics    GPX → resampled route, smoothing, gradients, climb detection; speed from power
-  ride, gamify    The ride simulation and recorder; XP, levels, badges, streaks
-  workout         Zwift .zwo and .erg/.mrc workouts; built-in sessions
-  fitness         Power curve, FTP estimate, zones, training load
-  segments        Strava segments and other rides matched onto the route; ghosts; photos
-  fit             FIT activity encoder
-  waymarked       Waymarked mountain-bike routes: listing an area, joining a route's ways into one line
-  devices/        Bluetooth GATT and ANT+ protocol encode/decode; OpenBikeControl buttons; the sensor hub
-  world/          Terrain (elevation tiles, height field, chunk/horizon/road meshes),
-                  OpenStreetMap buildings, scenery (forests, water, other roads, bridges and tunnels),
-                  structures (decks, bores, overbridges, log bridges), the route road's surface and width,
-                  trails (grades, berms, fords), barriers and landmarks, trees (six kinds, chosen by
-                  altitude and latitude; drawn as sprites in the distance)
-crates/relay/     The group-ride relay server (WebSocket, stateless)
-src-tauri/        The app (Tauri 2)
-  devices/        Bluetooth via the OS stack (btleplug); ANT+ USB stick via libusb; demo rider
-  session         50 Hz simulation loop, trainer control, saving rides
-  native/         The optional native renderer (wgpu → Metal) and its shaders
-  mapdata         Downloading and caching map data (vector tiles, Overpass)
-  diag            The diagnostics log and reports
-  group, smart    Group-ride client; fan and light control
-  connectors/     Services rides upload to (one file per service: Strava, Dreeve)
-  geo             place search and route planning
-web/              React screens and the three.js world
-```
+**[VeloPopuli for developers](https://github.com/pepperstm/velopopuli/blob/main/docs/developers/README.md)**
 
-## How a ride works
-
-1. **Start:** the route is built (resampled every few metres, smoothed, climbs found). Map data for the route is loaded from the cache or downloaded: vector tiles for scenery, Overpass for building detail and the route's road tags (surface, width, lanes, trail grades). The `World` combines it: a height field pinned to the road, the scene (forests, water, other roads), structures, the route road and barriers.
-2. **Loop (50 Hz, Rust):** sensor readings are merged (most direct source wins), the physics advances the rider, rivals and ghosts move, and once a second the trainer gets a command (gradient or ERG target) and the diagnostics log gets a line. State goes to the page 20 times a second.
-3. **Drawing:** the page asks for meshes in compact binary form (terrain chunks streamed around the rider with their trees, the road ribbon, structures, barriers, the tree models) and draws them with three.js; trees beyond about 200 m become camera-facing sprites rendered from the same models — or the native renderer draws the same meshes with Metal beneath a transparent page that shows only the HUD.
-4. **End:** the ride is saved as FIT, personal bests, XP and badges are updated, and it can be uploaded to any connected service (Strava, Dreeve).
-
-## Design choices
-
-- **Speed is simulated from power,** never read from the trainer, so every trainer gives the same speed for the same effort.
-- **Everything heavy is computed once per route** and cached; drawing only streams what's near the rider.
-- **No central service.** Map data comes from public OpenStreetMap services; group rides use a relay anyone can run.
+Start with **[Architecture](https://github.com/pepperstm/velopopuli/blob/main/docs/developers/architecture.md)**: the three layers, where everything is, and what happens from pressing *Ride* to the summary. Then there's a chapter for each part of the app: routes, physics and trainer control, the ride, the 3D world, drawing, devices, connectors and services, data and diagnostics, and releasing.

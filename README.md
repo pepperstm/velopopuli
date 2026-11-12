@@ -53,7 +53,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 
 ## How it is built
 
-About three quarters of the code is Rust, and everything that computes or talks to hardware is in it: route building, physics, the ride simulation, workouts, the Bluetooth and ANT+ protocols and the 3D world's meshes are a library with no I/O and its own tests (`crates/core`); the app around it is Tauri 2 (`src-tauri`); the group-ride relay is a small server of its own (`crates/relay`). The full map of the code, and how a ride flows through it, is on the wiki's [Architecture](https://github.com/pepperstm/velopopuli/wiki/Architecture) page.
+About three quarters of the code is Rust, and everything that computes or talks to hardware is in it: route building, physics, the ride simulation, workouts, the Bluetooth and ANT+ protocols and the 3D world's meshes are a library with no I/O and its own tests (`crates/core`); the app around it is Tauri 2 (`src-tauri`); the group-ride relay is a small server of its own (`crates/relay`). The full map of the code, how a ride flows through it, and how each part works are in the [developer pages](docs/developers/README.md).
 
 The web layer (`web/`, TypeScript, React, three.js) contains no ride logic: it receives state from Rust about 20 times a second, glides between updates, and draws. Terrain meshes are generated on Rust worker threads, so building landscape never stalls a frame. The window is the operating system's own webview (WebKit on macOS/Linux, WebView2 on Windows) rather than a bundled browser, which keeps the app to about 17 MB.
 
@@ -226,7 +226,8 @@ The logs themselves live in the app's data folder under `logs/` (**Settings → 
 
 ## Documentation
 
-Guides for riders and developers are in the [wiki](https://github.com/pepperstm/velopopuli/wiki) (also in [`docs/wiki/`](docs/wiki)).
+- **For riders:** the user's manual is the [wiki](https://github.com/pepperstm/velopopuli/wiki) (its source is in [`docs/wiki/`](docs/wiki)).
+- **For developers:** [how VeloPopuli is built](docs/developers/README.md), part by part: architecture, building and testing, routes, physics, the ride, the 3D world, drawing, devices, connectors, data and releasing.
 
 **Want to help or take something on?** Start with [HANDOFF.md](HANDOFF.md): where the project stands, how it's built and tested, how releases work, what's next and why things are the way they are.
 

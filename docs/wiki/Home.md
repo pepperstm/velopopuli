@@ -32,7 +32,6 @@ VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open
 ## For developers
 
 - [[Contributing]] — how to help
-- [[Building from source]] — developing, testing and the automated checks
-- [[Architecture]] — how the code is organised
+- **[VeloPopuli for developers](https://github.com/pepperstm/velopopuli/blob/main/docs/developers/README.md)** — how the app is built, part by part: architecture, building and testing, routes, physics, the ride, the 3D world, drawing, devices, connectors, data and releasing. These pages live in the repository, next to the code.
 
 > **VeloPopuli is young.** The 3D world, workouts and progress tracking are well tried, but only a few trainers and sensors have been used with it so far. If something doesn't work with yours, a [[diagnostics report|Reporting problems]] is the quickest way to get it fixed.

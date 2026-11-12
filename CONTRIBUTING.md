@@ -25,7 +25,7 @@ npm run dev      # the app with hot reload
 npm run check    # everything CI checks: formatting, types, lints, tests
 ```
 
-Build requirements and the automated smoke harness are described in the wiki's [Building from source](https://github.com/pepperstm/velopopuli/wiki/Building-from-source).
+Build requirements, the tests and the automated smoke harness are described in [Building and testing](docs/developers/building-and-testing.md). How each part of the app works is in the rest of the [developer pages](docs/developers/README.md).
 
 ## 3. Make the change
 
@@ -57,7 +57,8 @@ Build requirements and the automated smoke harness are described in the wiki's [
 **Documentation** — update in the same PR:
 
 - the README (features, and the *Project status* table — keep it honest about what was and wasn't verified),
-- the wiki source in `docs/wiki/` for anything a rider or developer would need to know (the maintainer publishes it to the wiki after merging),
+- the wiki source in `docs/wiki/` for anything a rider would need to know (the maintainer publishes it to the wiki after merging),
+- the developer pages in `docs/developers/` for anything about how it works inside,
 - `HANDOFF.md` if you change something it describes (structure, formats, decisions, traps),
 - cache format versions (`FORMAT`, `SCENERY_FORMAT`, `WAY_TAGS`) if you change what is cached.
 
