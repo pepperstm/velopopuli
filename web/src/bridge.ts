@@ -39,6 +39,8 @@ export const api = {
     importDialog: () => invoke<{ added: RouteMeta[]; problems: string[] }>('routes_import_dialog'),
     importText: (name: string, text: string) => invoke<RouteMeta>('routes_import_text', { name, text }),
     demoMeta: () => invoke<RouteMeta>('demo_meta'),
+    /** The built-in velodromes, each as ridden anticlockwise (its ID with `-clockwise` the other way). */
+    tracksMeta: () => invoke<RouteMeta[]>('tracks_meta'),
     isLoop: (routeId: string) => invoke<boolean>('route_is_loop', { routeId })
   },
   badges: () => invoke<Badge[]>('badges'),
@@ -164,6 +166,7 @@ export const api = {
         shift: number | null
         scroll: string | null
         laps: number | null
+        route: string | null
       } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })

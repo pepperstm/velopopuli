@@ -13,6 +13,7 @@ pub mod physics;
 pub mod ride;
 pub mod segments;
 pub mod types;
+pub mod velodrome;
 pub mod waymarked;
 pub mod workout;
 pub mod world;

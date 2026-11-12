@@ -96,6 +96,7 @@ fn main() {
             commands::routes_import_dialog,
             commands::routes_import_text,
             commands::demo_meta,
+            commands::tracks_meta,
             commands::badges,
             commands::choose_dir,
             commands::reveal_file,

@@ -17,6 +17,7 @@ mod scenery;
 mod structures;
 mod surface;
 mod trees;
+mod venue;
 
 pub use barriers::{barrier_model, BANNER_COLOURS, FENCE as BARRIER_FENCE, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
@@ -31,9 +32,10 @@ pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, 
 pub use structures::Structures;
 pub use surface::{
     highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, FORD, SINGLETRACK,
-    SINGLETRACK_WIDTH, TIMBER, UNMARKED, WAY_TAGS,
+    SINGLETRACK_WIDTH, TIMBER, TRACK, UNMARKED, WAY_TAGS,
 };
 pub use trees::{sprite_frame, tree_model, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, KINDS as TREE_KINDS, PINE, SPRITES_FROM, SPRITE_SPREAD, SPRUCE, TREE_FLOATS};
+pub use venue::Venue;
 
 use std::sync::Arc;
 
@@ -118,6 +120,8 @@ pub struct World {
     pub buildings: Buildings,
     pub scene: Scene,
     tree_line: f64,
+    /// A velodrome round the route, when the route is a built-in track.
+    pub venue: Option<Venue>,
 }
 
 /// Made-up field boundaries are drawn in chunks whose middle is this close to the route.
@@ -170,7 +174,7 @@ impl World {
         // Rough alpine tree line, falling with latitude.
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::new(route.clone(), dem, dem_offset);
-        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line }
+        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line, venue: None }
     }
 
     /// A world with OpenStreetMap scenery (forests, water, bridges, tunnels) and buildings.
@@ -180,7 +184,28 @@ impl World {
         let scene = Scene::new(&route, scenery);
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::with_kinds(route.clone(), dem, dem_offset, scene.kinds.clone());
-        Self { route, field, buildings: Buildings::default(), scene, tree_line }.with_buildings(footprints)
+        Self { route, field, buildings: Buildings::default(), scene, tree_line, venue: None }.with_buildings(footprints)
+    }
+
+    /// Makes the route a velodrome's track: banked, painted and as wide as the track, with its
+    /// grounds laid level and built on. Before the buildings, which stand on the ground.
+    pub fn with_venue(mut self, track: crate::velodrome::Track, clockwise: bool) -> Self {
+        let venue = Venue::new(track, clockwise, &self.route);
+        let n = self.route.n;
+        self.scene.widths = vec![track.width; n];
+        self.scene.marked = vec![false; n];
+        self.scene.trails = vec![None; n];
+        self.scene.surfaces = vec![Surface::Asphalt; n];
+        self.scene.fords.clear();
+        self.scene.banks = venue.banks(&self.route);
+        self.field.set_grounds(venue.grounds.clone());
+        self.venue = Some(venue);
+        self
+    }
+
+    /// Whether `(x, z)` is on a velodrome's grounds, where nothing grows or is made up.
+    fn on_grounds(&self, x: f64, z: f64) -> bool {
+        self.venue.as_ref().is_some_and(|v| v.grounds.outside(x, z) < 2.0)
     }
 
     /// Adds buildings (OpenStreetMap footprints) to the landscape.
@@ -205,8 +230,10 @@ impl World {
         }
         mix([0.5, 0.48, 0.45], steep.max(high * 0.7));
         mix([0.95, 0.96, 1.0], smoothstep(self.tree_line + 1000.0, self.tree_line + 1500.0, height) * (1.0 - steep));
-        // A worn verge beside the tarmac.
-        mix([0.47, 0.44, 0.3], (1.0 - smoothstep(4.0, 13.0, road_distance)) * 0.6);
+        // A worn verge beside the tarmac; a velodrome's grass is kept right up to the track.
+        if !self.on_grounds(x, z) {
+            mix([0.47, 0.44, 0.3], (1.0 - smoothstep(4.0, 13.0, road_distance)) * 0.6);
+        }
         // The palette is authored in sRGB; vertex colours are linear.
         c.map(|v| v.powf(2.2) as f32)
     }
@@ -414,7 +441,7 @@ impl World {
             // Over a tunnel the mesh is the floor of its trench; the trees belong on the land above.
             let (ty, d) = if corners.iter().any(|&c| trench[c]) { self.field.surface(tx, tz) } else { (on_mesh(&h, pad, fx, fz), on_mesh(&near, pad, fx, fz)) };
             let drop = corners.iter().map(|&c| h[c]).fold(f64::MIN, f64::max) - corners.iter().map(|&c| h[c]).fold(f64::MAX, f64::min);
-            (d >= 9.0 && ty <= self.tree_line && (drop <= 8.0 || corners.iter().any(|&c| trench[c])) && !self.buildings.covers(tx, tz)).then_some(ty)
+            (d >= 9.0 && ty <= self.tree_line && (drop <= 8.0 || corners.iter().any(|&c| trench[c])) && !self.buildings.covers(tx, tz) && !self.on_grounds(tx, tz)).then_some(ty)
         };
         let mapped = scene.covers(&self.route, x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
 
@@ -468,7 +495,7 @@ impl World {
             if ways.clone().any(|s| [p, mid, q].iter().any(|&e| scenery::to_segment(e, s.a, s.b) < s.half + margin(s))) || streams.iter().any(|s| scenery::to_segment(mid, s.a, s.b) < s.half + 1.0) {
                 return false;
             }
-            if self.buildings.covers(mid.0, mid.1) {
+            if self.buildings.covers(mid.0, mid.1) || self.on_grounds(mid.0, mid.1) {
                 return false;
             }
             let drop = corners.iter().map(|&c| h[c]).fold(f64::MIN, f64::max) - corners.iter().map(|&c| h[c]).fold(f64::MAX, f64::min);
@@ -687,8 +714,10 @@ impl World {
         let kinds = self.field.kinds();
         // Texture columns: gravel shoulder on the outer 20/256ths, tarmac between.
         let us = [0.0f32, 0.0, 20.0 / 256.0, 236.0 / 256.0, 1.0, 1.0];
+        let venue = self.venue.as_ref();
         let looks = (0..n)
             .map(|i| match self.scene.surfaces.get(i) {
+                _ if venue.is_some() => TRACK,
                 _ if self.timber(i) => TIMBER,
                 // Stones under the water, from a sample before the crossing to one after.
                 _ if self.scene.fords.iter().any(|&f| f.abs_diff(i) <= 1) => FORD,
@@ -719,7 +748,16 @@ impl World {
             let slim = self.timber(i) || self.timber(i.saturating_sub(1)) || self.timber((i + 1).min(n - 1));
             let edge = self.half_width(i);
             let (foot, beyond) = if slim { (edge + 0.3, 0.05) } else { (edge + 2.6, 0.4) };
-            let offsets = [-foot - beyond, -foot, -edge, edge, foot, foot + beyond];
+            let mut offsets = [-foot - beyond, -foot, -edge, edge, foot, foot + beyond];
+            // A velodrome's grass bank falls away from the raised outside edge as steeply as it
+            // rises; on the inside the infield meets the track almost at once.
+            if let Some(v) = venue {
+                let outside = edge + 0.6 + 1.0 * self.surface_lift(i, -v.inside() * edge);
+                let inside = edge + 0.8;
+                let (minus, plus) = if v.inside() > 0.0 { (outside, inside) } else { (inside, outside) };
+                offsets = [-minus - 0.4, -minus, -edge, edge, plus, plus + 0.4];
+            }
+            let mirrored = venue.is_some_and(|v| v.clockwise);
             for k in 0..ROAD_SECTION {
                 let offset = if offsets[k] * curvature > 0.0 { offsets[k].signum() * offsets[k].abs().min(inside) } else { offsets[k] };
                 // A berm raises the outside edge of the riding surface; the embankment falls from it.
@@ -738,7 +776,7 @@ impl World {
                         }) as f32,
                     (r.z[i] - tx * offset) as f32,
                 ]);
-                mesh.uvs.extend_from_slice(&[us[k], (j as f64 * r.step / 12.0) as f32]);
+                mesh.uvs.extend_from_slice(&[if mirrored { 1.0 - us[k] } else { us[k] }, (j as f64 * r.step / 12.0) as f32]);
             }
         }
         mesh

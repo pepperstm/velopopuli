@@ -35,7 +35,13 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
     await api.devices.demoAdd()
     setScreen({
       name: 'ride',
-      request: { routeId: routes?.[0]?.id ?? 'demo', workoutId: smoke.workout, groupRoom: smoke.room, ghostIds: smoke.ghosts ?? [], laps: smoke.laps ?? null }
+      request: {
+        routeId: smoke.route ?? routes?.[0]?.id ?? 'demo',
+        workoutId: smoke.workout,
+        groupRoom: smoke.room,
+        ghostIds: smoke.ghosts ?? [],
+        laps: smoke.laps ?? null
+      }
     })
   } else if (
     smoke.screen === 'devices' ||

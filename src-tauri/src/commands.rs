@@ -136,6 +136,12 @@ pub fn demo_meta() -> RouteMeta {
     meta_for(DEMO_ROUTE_ID.into(), &demo_route(), 0)
 }
 
+/// The built-in velodromes, each as its route ridden the usual way round (anticlockwise).
+#[tauri::command]
+pub fn tracks_meta() -> Vec<RouteMeta> {
+    velopopuli_core::velodrome::TRACKS.iter().map(|t| meta_for(t.id.into(), &t.route(false), 0)).collect()
+}
+
 #[tauri::command]
 pub fn badges() -> &'static [Badge] {
     &BADGES
@@ -892,6 +898,8 @@ pub struct SmokeConfig {
     scroll: Option<String>,
     /// Laps to ride on a closed route (VP_SMOKE_LAPS, 0 = until stopped).
     laps: Option<u32>,
+    /// Ride this route instead of the newest in the library (VP_SMOKE_ROUTE, e.g. `herne-hill`).
+    route: Option<String>,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -922,6 +930,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         shift: std::env::var("VP_SMOKE_SHIFT").ok().and_then(|v| v.parse().ok()),
         scroll: std::env::var("VP_SMOKE_SCROLL").ok(),
         laps: std::env::var("VP_SMOKE_LAPS").ok().and_then(|v| v.parse().ok()),
+        route: std::env::var("VP_SMOKE_ROUTE").ok(),
     })
 }
 
