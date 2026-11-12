@@ -1,7 +1,7 @@
 //! Bluetooth Low Energy sensors and trainers, using the operating system's
 //! native stack (CoreBluetooth, WinRT, BlueZ) through btleplug.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,12 +35,48 @@ pub struct Ble {
     scanning: Arc<AtomicBool>,
     /// The app is looking for remembered sensors to connect again.
     looking: Arc<AtomicBool>,
+    /// Connections being made right now.
+    connecting: Arc<AtomicUsize>,
+}
+
+/// What a connection attempt needs to know about the radio: the adapter, whether a search
+/// still wants it scanning, and how many other connections are under way.
+#[derive(Clone)]
+struct Radio {
+    adapter: Adapter,
+    scanning: Arc<AtomicBool>,
+    looking: Arc<AtomicBool>,
+    connecting: Arc<AtomicUsize>,
+}
+
+impl Radio {
+    /// Connects to a peripheral (see `open_link`). On Linux the radio is quiet while it does:
+    /// the scan stops first and starts again once no connection is under way, if a search
+    /// still wants it.
+    async fn connect(&self, devices: Arc<Devices>, peripheral: Peripheral, peripheral_id: &str) -> Result<(), String> {
+        self.connecting.fetch_add(1, Ordering::SeqCst);
+        if QUIET_TO_CONNECT {
+            let _ = self.adapter.stop_scan().await;
+            diag::event("ble", format!("scan paused to connect id={peripheral_id}"));
+        }
+        let result = open_link(devices, peripheral, peripheral_id).await;
+        let still = self.connecting.fetch_sub(1, Ordering::SeqCst) - 1;
+        if QUIET_TO_CONNECT && still == 0 && (self.scanning.load(Ordering::SeqCst) || self.looking.load(Ordering::SeqCst)) {
+            let _ = self.adapter.start_scan(ScanFilter::default()).await;
+            diag::event("ble", "scan resumed");
+        }
+        result
+    }
 }
 
 /// How long to look for remembered sensors after launch: long enough to wake them.
 const LOOK_FOR: Duration = Duration::from_secs(180);
 /// How soon to try a remembered sensor again after a failed attempt.
 const RETRY_AFTER: Duration = Duration::from_secs(15);
+/// BlueZ often aborts a connection made while the radio is scanning
+/// ("le-connection-abort-by-local", "Service discovery timed out"), so on Linux the scan is
+/// stopped first. CoreBluetooth and WinRT connect fine while scanning.
+const QUIET_TO_CONNECT: bool = cfg!(target_os = "linux");
 
 /// What a device must advertise to be listed: a cycling sensor, or an OpenBikeControl controller.
 fn sensor_services() -> [Uuid; 6] {
@@ -52,6 +88,10 @@ fn err(e: impl std::fmt::Display) -> String {
 }
 
 impl Ble {
+    async fn radio(&self) -> Result<Radio, String> {
+        Ok(Radio { adapter: self.adapter().await?.clone(), scanning: self.scanning.clone(), looking: self.looking.clone(), connecting: self.connecting.clone() })
+    }
+
     async fn adapter(&self) -> Result<&Adapter, String> {
         self.adapter
             .get_or_try_init(|| async {
@@ -129,13 +169,14 @@ impl Ble {
         if missing(&devices).is_empty() || self.looking.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
-        let adapter = match self.adapter().await {
-            Ok(a) => a.clone(),
+        let radio = match self.radio().await {
+            Ok(r) => r,
             Err(e) => {
                 self.looking.store(false, Ordering::SeqCst);
                 return Err(e);
             }
         };
+        let adapter = radio.adapter.clone();
         if let Err(e) = adapter.start_scan(ScanFilter::default()).await {
             self.looking.store(false, Ordering::SeqCst);
             diag::event("ble", format!("scan for remembered sensors failed: {e}"));
@@ -159,9 +200,9 @@ impl Ble {
                     }
                     tried.insert(pid.clone(), tokio::time::Instant::now());
                     diag::event("ble", format!("heard remembered sensor id={pid}, connecting"));
-                    let devices = devices.clone();
+                    let (radio, devices) = (radio.clone(), devices.clone());
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = open_link(devices, p, &pid).await {
+                        if let Err(e) = radio.connect(devices, p, &pid).await {
                             diag::event("ble", format!("remembered sensor id={pid}: {e}"));
                         }
                     });
@@ -170,7 +211,7 @@ impl Ble {
             }
             devices.set_looking_for(Vec::new());
             looking.store(false, Ordering::SeqCst);
-            if !scanning.load(Ordering::SeqCst) {
+            if !scanning.load(Ordering::SeqCst) && radio.connecting.load(Ordering::SeqCst) == 0 {
                 let _ = adapter.stop_scan().await;
             }
             diag::event("ble", "stopped looking for remembered sensors");
@@ -184,9 +225,9 @@ impl Ble {
 
     /// Connects to a scanned peripheral and keeps it connected until it is removed.
     pub async fn connect(&self, devices: Arc<Devices>, peripheral_id: &str) -> Result<(), String> {
-        let adapter = self.adapter().await?;
-        let peripheral = adapter.peripherals().await.map_err(err)?.into_iter().find(|p| p.id().to_string() == peripheral_id).ok_or("That sensor is no longer in range.")?;
-        open_link(devices, peripheral, peripheral_id).await
+        let radio = self.radio().await?;
+        let peripheral = radio.adapter.peripherals().await.map_err(err)?.into_iter().find(|p| p.id().to_string() == peripheral_id).ok_or("That sensor is no longer in range.")?;
+        radio.connect(devices, peripheral, peripheral_id).await
     }
 }
 
