@@ -190,7 +190,7 @@ pub fn ble_scan_stop(state: State<AppState>) {
 
 #[tauri::command]
 pub async fn ble_connect(state: State<'_, AppState>, id: String) -> Res<()> {
-    state.ble.scan_stop();
+    state.ble.stop_to_connect().await;
     state.ble.connect(state.devices.clone(), &id).await
 }
 

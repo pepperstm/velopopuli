@@ -41,6 +41,10 @@ pub struct Ble {
 const LOOK_FOR: Duration = Duration::from_secs(180);
 /// How soon to try a remembered sensor again after a failed attempt.
 const RETRY_AFTER: Duration = Duration::from_secs(15);
+/// BlueZ often aborts a connection made while the radio is scanning
+/// ("le-connection-abort-by-local", "Service discovery timed out"), so on Linux the scan is
+/// stopped first. CoreBluetooth and WinRT connect fine while scanning.
+const QUIET_TO_CONNECT: bool = cfg!(target_os = "linux");
 
 /// What a device must advertise to be listed: a cycling sensor, or an OpenBikeControl controller.
 fn sensor_services() -> [Uuid; 6] {
@@ -159,12 +163,21 @@ impl Ble {
                     }
                     tried.insert(pid.clone(), tokio::time::Instant::now());
                     diag::event("ble", format!("heard remembered sensor id={pid}, connecting"));
-                    let devices = devices.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = open_link(devices, p, &pid).await {
+                    if QUIET_TO_CONNECT {
+                        // One at a time with the radio quiet, then back to looking for the rest.
+                        let _ = adapter.stop_scan().await;
+                        if let Err(e) = open_link(devices.clone(), p, &pid).await {
                             diag::event("ble", format!("remembered sensor id={pid}: {e}"));
                         }
-                    });
+                        let _ = adapter.start_scan(ScanFilter::default()).await;
+                    } else {
+                        let devices = devices.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = open_link(devices, p, &pid).await {
+                                diag::event("ble", format!("remembered sensor id={pid}: {e}"));
+                            }
+                        });
+                    }
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
@@ -180,6 +193,19 @@ impl Ble {
 
     pub fn scan_stop(&self) {
         self.scanning.store(false, Ordering::SeqCst);
+    }
+
+    /// Stops the search for a device to add before connecting to the one picked. On Linux the
+    /// radio is also stopped there and then, rather than when the search next checks, as BlueZ
+    /// aborts connections made while it scans.
+    pub async fn stop_to_connect(&self) {
+        self.scan_stop();
+        if QUIET_TO_CONNECT && !self.looking.load(Ordering::SeqCst) {
+            if let Some(adapter) = self.adapter.get() {
+                let _ = adapter.stop_scan().await;
+                diag::event("ble", "scan stopped to connect");
+            }
+        }
     }
 
     /// Connects to a scanned peripheral and keeps it connected until it is removed.
