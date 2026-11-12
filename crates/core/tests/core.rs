@@ -1942,7 +1942,7 @@ mod scenery {
 
 mod waymarked {
     use super::*;
-    use velopopuli_core::waymarked::{area_query, join, parse_area, parse_route, route_query, to_gpx};
+    use velopopuli_core::waymarked::{area_query, join, parse_area, parse_route, route_query, to_gpx, Kind};
 
     /// A point `north` and `east` metres from 45° N, 7° E.
     fn at(north: f64, east: f64) -> [f64; 2] {
@@ -1973,7 +1973,7 @@ mod waymarked {
             {"type":"relation","id":5,"tags":{"route":"mtb","name":"Anello del Melogno","distance":"23,5 km"}}
         ]}"#;
         // Longest first: 23.5 km mapped, against a box about 14 km across.
-        let routes = parse_area(area).unwrap();
+        let routes = parse_area(Kind::Mtb, area).unwrap();
         assert_eq!(routes.iter().map(|r| r.id).collect::<Vec<_>>(), vec![5, 7]);
         assert_eq!(routes[0].distance, Some(23_500.0));
         assert_eq!((routes[1].name.as_str(), routes[1].reference.as_str()), ("MTB route 12", "12"));
@@ -1994,12 +1994,52 @@ mod waymarked {
             p(1000.0),
             p(2000.0)
         );
-        let joined = parse_route(&route).unwrap();
+        let joined = parse_route(Kind::Mtb, &route).unwrap();
         // The side trip is left out; the rest is one line 2 km long.
-        assert_eq!((joined.name.as_str(), joined.gaps, joined.line.len()), ("Anello", 0, 3));
-        assert!(parse_route(r#"{"elements":[{"type":"relation","id":1,"members":[]}]}"#).is_err());
-        assert!(area_query([44.0, 8.0, 44.5, 8.5]).contains(r#"relation["route"="mtb"](44.00000,8.00000,44.50000,8.50000)"#));
-        assert!(route_query(5).contains("relation(5);out geom;"));
+        assert_eq!((joined.name.as_str(), joined.gaps, joined.line.len(), joined.clipped), ("Anello", 0, 3, false));
+        assert!(parse_route(Kind::Mtb, r#"{"elements":[{"type":"relation","id":1,"members":[]}]}"#).is_err());
+        assert!(area_query(Kind::Mtb, [44.0, 8.0, 44.5, 8.5]).contains(r#"relation["type"="route"]["route"="mtb"](44.00000,8.00000,44.50000,8.50000)"#));
+        assert!(route_query(5, None).contains("relation(5);out geom;"));
+    }
+
+    #[test]
+    fn road_routes_are_bicycle_routes_fetched_for_the_area() {
+        assert!(area_query(Kind::Road, [51.0, -2.5, 51.5, -2.0]).contains(r#"relation["type"="route"]["route"="bicycle"](51.00000,-2.50000,51.50000,-2.00000)"#));
+        assert!(route_query(9, Some([51.0, -2.5, 51.5, -2.0])).contains("relation(9);out geom(51.00000,-2.50000,51.50000,-2.00000);"));
+        let area = r#"{"elements":[{"type":"relation","id":3,"tags":{"route":"bicycle","ref":"4","network":"ncn"}}]}"#;
+        assert_eq!(parse_area(Kind::Road, area).unwrap()[0].name, "Cycle route 4");
+    }
+
+    #[test]
+    fn a_clipped_route_keeps_its_longest_stretch_in_the_area() {
+        // A route clipped to the area: a way that leaves and comes back (nulls where it is outside),
+        // a way wholly outside (no geometry), and a short piece far off. The longest run is 3 km.
+        let p = |n: f64| format!(r#"{{"lat":{},"lon":{}}}"#, at(n, 0.0)[0], at(n, 0.0)[1]);
+        let route = format!(
+            r#"{{"elements":[{{"type":"relation","id":4,"tags":{{"name":"National Route 4"}},"members":[
+                {{"type":"way","role":"","geometry":[{},{},null,null,{},{}]}},
+                {{"type":"way","role":"","geometry":[{},{}]}},
+                {{"type":"way","role":""}},
+                {{"type":"way","role":"","geometry":[{},{}]}}
+            ]}}]}}"#,
+            p(0.0),
+            p(1000.0),
+            p(9000.0),
+            p(9500.0),
+            p(1000.0),
+            p(3000.0),
+            p(20000.0),
+            p(20400.0)
+        );
+        let joined = parse_route(Kind::Road, &route).unwrap();
+        assert!(joined.clipped);
+        assert_eq!(joined.gaps, 0, "no jumps inside the stretch kept");
+        let north = |q: [f64; 2]| (q[0] - 45.0) * M_PER_DEG;
+        let span = joined.line.iter().map(|&q| north(q)).fold((f64::MAX, f64::MIN), |(lo, hi), n| (lo.min(n), hi.max(n)));
+        assert!(span.0.abs() < 1.0 && (span.1 - 3000.0).abs() < 1.0, "kept {span:?}");
+        // A route with nothing in the area says so.
+        let outside = r#"{"elements":[{"type":"relation","id":4,"members":[{"type":"way","role":""}]}]}"#;
+        assert_eq!(parse_route(Kind::Road, outside).unwrap_err(), "None of this route is in the area searched.");
     }
 
     #[test]

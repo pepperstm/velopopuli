@@ -28,14 +28,43 @@ interface Planned {
   profile: [number, number][]
   /** Where a waymarked route's mapped ways don't meet. */
   gaps?: number
+  /** Only the part of a waymarked route in the area searched. */
+  clipped?: boolean
 }
 
-interface MtbRoute {
+type Kind = 'mtb' | 'road'
+type Bounds = [number, number, number, number]
+
+/** The two kinds of waymarked route, as their sections on the page. */
+const KINDS: { kind: Kind; title: string; about: string; find: string; looking: string; none: string; numbered: string }[] = [
+  {
+    kind: 'road',
+    title: 'Signposted road routes',
+    about:
+      'Cycle routes on the signs, mapped in OpenStreetMap: local loops, regional routes and national ones. A long route is cut to its part in the area on the map.',
+    find: 'Find road routes here',
+    looking: 'Looking for signposted road routes…',
+    none: 'No signposted cycle routes here. Try another area, or plan one by clicking on the map.',
+    numbered: 'Cycle route'
+  },
+  {
+    kind: 'mtb',
+    title: 'Mountain-bike routes',
+    about: 'Waymarked trails mapped in OpenStreetMap, in the area on the map.',
+    find: 'Find MTB routes here',
+    looking: 'Looking for mountain-bike routes…',
+    none: 'No waymarked mountain-bike routes here. Try another area, or plan one with “Mountain bike (trails)”.',
+    numbered: 'MTB route'
+  }
+]
+
+interface WaymarkedRoute {
   id: number
   name: string
   reference: string
   network: string
   distance: number | null
+  bounds: [number, number, number, number] | null
 }
 
 const NETWORKS: Record<string, string> = { lcn: 'local', rcn: 'regional', ncn: 'national', icn: 'international' }
@@ -79,7 +108,8 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
-  const [mtbRoutes, setMtbRoutes] = useState<MtbRoute[] | null>(null)
+  /** Routes found for each kind, and the area they were looked for in. */
+  const [found, setFound] = useState<Partial<Record<Kind, { bounds: Bounds; routes: WaymarkedRoute[] }>>>({})
 
   useEffect(() => {
     const m = L.map(el.current!, { zoomControl: true }).setView([46.2, 7.2], 6)
@@ -152,13 +182,19 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
     }
   }
 
-  const findMtb = async (): Promise<void> => {
+  const findWaymarked = async (kind: Kind, looking: string): Promise<void> => {
     const b = map.current?.getBounds()
     if (!b) return
-    setBusy('Looking for mountain-bike routes…')
+    setBusy(looking)
     setError('')
     try {
-      setMtbRoutes(await api.geo.mtbRoutes([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]))
+      const bounds: Bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
+      const routes = await api.geo.waymarkedRoutes(kind, bounds)
+      // Road routes: the ones wholly on the map first, ahead of national routes that only pass through.
+      const fits = (r: WaymarkedRoute): boolean =>
+        !!r.bounds && r.bounds[0] >= bounds[0] && r.bounds[1] >= bounds[1] && r.bounds[2] <= bounds[2] && r.bounds[3] <= bounds[3]
+      if (kind === 'road') routes.sort((a, b) => Number(fits(b)) - Number(fits(a)))
+      setFound((f) => ({ ...f, [kind]: { bounds, routes } }))
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -166,12 +202,12 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
     }
   }
 
-  const pickMtb = async (r: MtbRoute): Promise<void> => {
+  const pickWaymarked = async (kind: Kind, r: WaymarkedRoute, bounds: Bounds): Promise<void> => {
     setPoints([])
     setBusy(`Fetching ${r.name} and its elevation…`)
     setError('')
     try {
-      const p = await api.geo.mtbRoute(r.id)
+      const p = await api.geo.waymarkedRoute(kind, r.id, bounds)
       setPlanned(p)
       setName(p.name ?? r.name)
       map.current?.fitBounds(L.latLngBounds(p.line).pad(0.15))
@@ -275,6 +311,9 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
                 {planned.gaps === 1 ? ' that gap' : ' those gaps'}.
               </div>
             )}
+            {planned.clipped && (
+              <div className="muted small">This is the part of the route in the area you searched. Move the map and search again for another stretch.</div>
+            )}
             <div className="row">
               <input value={name} placeholder="Name this route" onChange={(e) => setName(e.target.value)} />
               <button className="primary" onClick={() => void save()}>
@@ -284,32 +323,37 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
             {saved && <div className="ok small">“{saved}” is in your routes, ready to ride.</div>}
           </div>
         )}
-        <h2>Mountain-bike routes</h2>
-        <p className="muted small">Waymarked trails mapped in OpenStreetMap, in the area on the map.</p>
-        <button disabled={!!busy} onClick={() => void findMtb()}>
-          Find MTB routes here
-        </button>
-        {mtbRoutes && mtbRoutes.length === 0 && (
-          <div className="muted small">No waymarked mountain-bike routes here. Try another area, or plan one with “Mountain bike (trails)”.</div>
-        )}
-        {mtbRoutes && mtbRoutes.length > 0 && (
-          <div className="pick-list">
-            {mtbRoutes.map((r) => (
-              <button key={r.id} className="ghost" disabled={!!busy} onClick={() => void pickMtb(r)}>
-                <b>{r.name}</b>{' '}
-                <span className="muted small">
-                  {[
-                    r.reference && r.name !== `MTB route ${r.reference}` ? r.reference : '',
-                    NETWORKS[r.network] ?? '',
-                    r.distance ? fmtDist(r.distance, u) : ''
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
+        {KINDS.map((k) => {
+          const here = found[k.kind]
+          return (
+            <section key={k.kind}>
+              <h2>{k.title}</h2>
+              <p className="muted small">{k.about}</p>
+              <button disabled={!!busy} onClick={() => void findWaymarked(k.kind, k.looking)}>
+                {k.find}
               </button>
-            ))}
-          </div>
-        )}
+              {here && here.routes.length === 0 && <div className="muted small">{k.none}</div>}
+              {here && here.routes.length > 0 && (
+                <div className="pick-list">
+                  {here.routes.map((r) => (
+                    <button key={r.id} className="ghost" disabled={!!busy} onClick={() => void pickWaymarked(k.kind, r, here.bounds)}>
+                      <b>{r.name}</b>{' '}
+                      <span className="muted small">
+                        {[
+                          r.reference && r.name !== `${k.numbered} ${r.reference}` ? r.reference : '',
+                          NETWORKS[r.network] ?? '',
+                          r.distance ? fmtDist(r.distance, u) : ''
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })}
         <h2>Famous climbs</h2>
         <div className="pick-list classics">
           {classics.map((c) => (
