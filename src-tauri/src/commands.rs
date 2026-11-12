@@ -194,13 +194,31 @@ pub async fn ble_connect(state: State<'_, AppState>, id: String) -> Res<()> {
     state.ble.connect(state.devices.clone(), &id).await
 }
 
+/// Looks for the remembered Bluetooth sensors that aren't connected, for a few minutes.
+#[tauri::command]
+pub async fn devices_look_for_known(state: State<'_, AppState>) -> Res<()> {
+    state.ble.look_for_known(state.devices.clone()).await
+}
+
+/// Stops reconnecting a remembered Bluetooth sensor at launch.
+#[tauri::command]
+pub fn device_forget(state: State<AppState>, id: String) {
+    state.devices.change_remembered(|r| {
+        r.forget_ble(&id);
+    });
+    let pending = state.devices.snapshot().looking_for.into_iter().filter(|k| k.id != id).collect();
+    state.devices.set_looking_for(pending);
+}
+
 #[tauri::command]
 pub fn ant_start(state: State<AppState>) {
+    state.devices.change_remembered(|r| r.ant = true);
     state.ant.start(state.devices.clone());
 }
 
 #[tauri::command]
 pub fn ant_stop(state: State<AppState>) {
+    state.devices.change_remembered(|r| r.ant = false);
     state.ant.stop();
 }
 
@@ -214,9 +232,15 @@ pub fn demo_nudge(state: State<AppState>, delta: f64) {
     state.demo.nudge(delta);
 }
 
+/// Disconnects a device. A Bluetooth one is forgotten too, so it isn't reconnected at launch.
 #[tauri::command]
 pub fn device_remove(state: State<AppState>, id: String) {
     state.devices.remove(&id);
+    if let Some(peripheral) = id.strip_prefix("ble:") {
+        state.devices.change_remembered(|r| {
+            r.forget_ble(peripheral);
+        });
+    }
 }
 
 // ── Ride ───────────────────────────────────────────────────────────────────

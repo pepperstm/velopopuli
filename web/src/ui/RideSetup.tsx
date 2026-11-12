@@ -36,6 +36,8 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   const sourceNames = [...new Set(segments.map((s) => nameOf(s.connector)))].join(' and ')
 
   useEffect(() => {
+    // Sensors from last time that aren't connected yet: look for them while the ride is set up.
+    void api.devices.lookForKnown().catch(() => undefined)
     void api.workouts.list().then(setWorkouts)
     void api.routes.isLoop(rideId).then(setIsLoop, () => setIsLoop(false))
     void api.connectors.list().then(setConnectors)

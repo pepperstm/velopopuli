@@ -36,7 +36,7 @@ export function useSettings(): SettingsStore {
 }
 
 // The device list lives in Rust; this mirrors it and follows its change events.
-let devices: DevicesSnapshot = { devices: [], ant: { state: 'off', message: '' } }
+let devices: DevicesSnapshot = { devices: [], ant: { state: 'off', message: '' }, lookingFor: [] }
 const deviceListeners = new Set<() => void>()
 const setDevices = (next: DevicesSnapshot): void => {
   devices = next

@@ -134,7 +134,7 @@ To pair a device:
 4. It joins the list with its kind (*Smart trainer*, *Power meter*, *Heart rate*, *Cadence*, *Speed* or *Controller*) and *Connected*, with its live readings. A trainer says *controllable* when VeloPopuli can set its resistance, or *read-only* when it can only read it.
 5. Add the others the same way. When two devices measure the same thing, the most direct one is used.
 
-If a device drops out (it goes to sleep, the trainer is switched off) it shows *Signal lost — searching…* and reconnects by itself when it's back. **Remove** disconnects it. Devices aren't remembered between launches yet, so add them again after opening the app.
+If a device drops out (it goes to sleep, the trainer is switched off) it shows *Signal lost — searching…* and reconnects by itself when it's back. Bluetooth devices are remembered: when you next open the app it looks for them for a few minutes and connects each one as it wakes, and the Devices page shows which it's still looking for. **Remove** disconnects a device and forgets it; **Forget** does the same for one it's still looking for. If the ANT+ stick was on, it's turned on again too.
 
 - **macOS:** the first search asks for Bluetooth permission.
 - **Linux:** needs BlueZ running.
@@ -203,7 +203,6 @@ Your browser opens for approval. The key and tokens are stored in the system key
 - Native renderer: Windows and Linux, and making it the default
 - More from OpenStreetMap: mapped roof shapes, other land cover (farmland, rock, glaciers), mapped leaf types, squares and car parks
 - Wahoo legacy protocol and steering; Di2 and Zwift Click/Play controllers as shifters for virtual gears without a bridge
-- Remembering devices between launches
 
 ### Stretch: self-hosted group-ride servers
 
