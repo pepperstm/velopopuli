@@ -20,7 +20,7 @@
 - [[Reporting problems]]
 - [[FAQ]]
 
-**Developers**
+**For developers**
 - [[Contributing]]
 - [[Building from source]]
 - [[Architecture]]

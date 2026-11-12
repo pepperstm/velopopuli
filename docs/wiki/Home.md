@@ -14,22 +14,25 @@ VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open
 
 ## Using the app
 
-- [[Routes and the map]] — importing and finding routes; how the 3D world is built (buildings, surfaces, road widths, bridges)
-- [[Riding]] — the HUD, cameras, gradient and ERG, pace riders, ghosts, climbs, time of day and weather
+- [[Routes and the map]] — importing, planning and finding routes, Herne Hill Velodrome, and the world around you
+- [[Riding]] — the screen and keys, gradient and ERG, laps, ghosts and pace riders, time of day and weather, ending a ride
 - [[Workouts]] — built-in sessions, importing .zwo/.erg/.mrc
 - [[Virtual gears]] — shift with keys or a remote instead of your bike's gears (optional)
 - [[Progress and goals]] — power curve, FTP, training load, streaks, badges and the season goal
-- [[Strava]] — connect, upload, segments and friends' rides as ghosts
-- [[Dreeve]] — upload rides to your own Dreeve server
+- [[Strava]] — upload rides, ride your Strava routes, race your rides as ghosts, segments
+- [[Dreeve]] — upload rides to your own Dreeve server, and ride them again
 - [[Group rides and self-hosting]] — ride together; run your own relay
 - [[Fan and lights]] — Home Assistant, Shelly, Tasmota and webhooks
 
-## Help and contributing
+## Help
 
+- [[FAQ]]
 - [[Reporting problems]] — the diagnostics report and how to send it
-- [[Contributing]] — how to help, and the full project handoff notes
+
+## For developers
+
+- [[Contributing]] — how to help
 - [[Building from source]] — developing, testing and the automated checks
 - [[Architecture]] — how the code is organised
-- [[FAQ]]
 
-> **Status:** VeloPopuli is young. The 3D world, physics, workouts and progress tracking are tested; real trainers and sensors are only now being tried. If something doesn't work with your hardware, a [[diagnostics report|Reporting problems]] is the quickest way to get it fixed.
+> **VeloPopuli is young.** The 3D world, workouts and progress tracking are well tried, but only a few trainers and sensors have been used with it so far. If something doesn't work with yours, a [[diagnostics report|Reporting problems]] is the quickest way to get it fixed.

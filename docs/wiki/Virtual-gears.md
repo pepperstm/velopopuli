@@ -47,16 +47,13 @@ A controller can send several of these for one button, so that every app finds o
 
 ## How it works
 
-Your speed in VeloPopuli always comes from your power, so gears don't make you faster — they change how that power is delivered: in a harder gear, more force per pedal stroke at a lower cadence.
+Your speed always comes from your power, so gears don't make you faster. They change how that power feels: a harder gear means more force on each pedal stroke at a lower cadence, as on the road. VeloPopuli makes the trainer heavier or lighter to match the gear you're in, using the trainer's normal controls, so it works with every trainer the app supports.
 
-On the trainer, the flywheel turns at the speed your **real** gear gives for your cadence: `v_trainer = v × r_real / r_virtual`. To feel the virtual gear, the force it applies must be the road force scaled by the ratio: `F_trainer = F_road(v) × r_virtual / r_real`. Trainers in simulation mode work out their force from a gradient, rolling resistance and wind at their own speed, so VeloPopuli sends the gradient that makes that force come out right. It goes through the normal trainer commands, so it works with every trainer VeloPopuli supports (Bluetooth FTMS, Tacx FE-C over Bluetooth, ANT+ FE-C).
+A few things follow, just as outdoors:
 
-A few things follow from the physics:
-
-- On the flat at low speed there's little force to scale, so gears make little difference; they matter at speed and on climbs.
-- On a descent steep enough to push you along, no gear gives you anything to pedal against — as on a real bike.
-- Very hard gears at low speed can ask for more resistance than a wheel-on trainer can apply, and very easy ones on descents ask for less than it can free-wheel to. The trainer does what it can.
-- Gradients sent are kept between −25% and +40%.
+- On the flat at low speed there's little resistance to change, so gears make little difference. They matter at speed and on climbs.
+- On a descent steep enough to carry you, no gear gives you anything to push against.
+- Very hard gears at low speed can ask for more resistance than a wheel-on trainer can give, and very easy ones on descents for less. The trainer does what it can.
 
 ## Coming later
 

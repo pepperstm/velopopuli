@@ -16,7 +16,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 - **Herne Hill Velodrome, built in.** The 450 m outdoor track in south London where the 1948 Olympic track events were raced, at its real place: banked to 26° in the bends, painted with the côte d'azur and the sprinters' and stayers' lines, and ringed by the railing and floodlights, with the 2018 pavilion, the bleachers, the club's containers and canopy, and the junior track in the middle. Ride it anticlockwise as raced, or clockwise. It is the same track as OpenBikeNet's `herne-hill-450` route.
 - **A closed road, race-day style.** The road you ride is set apart from the map's road network: steel crowd barriers line both sides (with banners on some, each section standing on its feet and leaning with the road on hills, and orange netting round the outside of tight hairpins instead), its surface is the real one — tarmac, concrete slabs, cobbles, gravel or dirt — and so is its width: a 7 m main road, a 5 m village street, a 3 m farm track. Both come from OpenStreetMap's tags for the roads along the route (`surface`, `width`, `lanes`, and the road class), or are guessed from the road class when those can't be fetched. Where the route leaves the mapped roads for 100 m or more — across a field, along an unmapped trail — it becomes a dirt track. Widths change gradually, and buildings, signs, other riders and the barriers all follow them. Ride the Arenberg trench on its setts and the Strade Bianche on white gravel — and feel them: rougher surfaces roll heavier, so you slow down on screen and the trainer gets harder.
 - **Mountain-bike trails.** Where the route follows an unpaved path, a bridleway, a walking trail or a trail graded for mountain bikes (OpenStreetMap's `mtb:scale`, S0–S6, or estimated from the hiking grade), you ride a narrow earth singletrack with no barriers, the HUD shows the grade, and the harder the grade the heavier it rolls — on screen and on the trainer.
-- **Find a route in the app.** Search for a place, click waypoints on the map and get a route along bike-friendly roads with real elevation (BRouter), or pick one of eight famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). Mountain bikers can plan along trails, or pick from the **waymarked MTB routes** mapped in the area on screen.
+- **Find a route in the app.** Search for a place, click waypoints on the map and get a route along bike-friendly roads with real elevation (BRouter), or pick one of eight famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). Pick from the **signposted road routes** (OpenStreetMap cycle routes, local to national) or **waymarked MTB routes** mapped in the area on screen, or, with Strava connected, from **your Strava routes**. With Dreeve connected, any ride you've done can be imported as a route.
 - **Smart trainer control.** Gradient simulation or ERG mode, over Bluetooth FTMS, Tacx FE-C-over-Bluetooth, or ANT+ FE-C. The gradient "feel" scales the real slope, softens descents and caps the steepest pitch (so a 15% ramp is rideable on any trainer). Shift your bike's own gears as normal, or set up **virtual gears** — your own chainrings and cassette or a preset — and shift with keys, a Bluetooth remote, a handlebar controller or on-screen buttons.
 - **Structured workouts on any route.** Import Zwift `.zwo`, `.erg` or `.mrc` files, or use the built-in sessions (endurance, sweet spot, threshold, VO₂max, over-unders, sprints and an FTP ramp test). The trainer holds each target in ERG while the route scrolls by; adjust the intensity or skip a step mid-ride.
 - **Fitness tracking.** Power curve (5 s to 1 h), an FTP estimate you can apply in one click, power zones on the HUD, and a training-load chart of fitness, fatigue and form.
@@ -46,7 +46,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 
 | | |
 |---|---|
-| <img src="docs/images/screen-home.jpg" alt="The route library with route outlines"> | <img src="docs/images/screen-explore.jpg" alt="The route finder: a map, place search and famous climbs"> |
+| <img src="docs/images/screen-home.jpg" alt="The route library, with Herne Hill Velodrome and the Demo Loop built in"> | <img src="docs/images/screen-explore.jpg" alt="Find a route: a map, place search, your Strava routes, signposted road routes and mountain-bike routes"> |
 | **Your routes** — import GPX from anywhere | **Find a route** — plan one on the map or pick a famous climb |
 | <img src="docs/images/screen-workouts.jpg" alt="Built-in workouts with their power profiles"> | <img src="docs/images/screen-progress.jpg" alt="Progress: level, season goal, weekly distance, training load and power curve"> |
 | **Workouts** — built-in sessions or your own .zwo/.erg/.mrc | **Progress** — season goal, streaks, training load and power curve (sample data shown) |
@@ -69,7 +69,11 @@ Be aware of what has and has not been proven:
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
 | Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain |
 | Waymarked MTB routes | Listed and joined from the live Overpass API around Finale Ligure (a 23 km route joined with no gaps); the joining is unit-tested. The screen itself was only type-checked, not clicked through |
-| Strava segments and ghosts from Strava | Matching is unit-tested; the Strava calls have **not** been made against the live API |
+| Strava segments and ghosts from Strava | Matching is unit-tested; segments and ghost imports haven't yet been confirmed against the live API |
+| Signposted road routes | Listed from the live Overpass API (UK National Cycle Network and regional routes); clipping a long route to the area searched is unit-tested |
+| Remembered sensors | The saved list and the Devices notice checked with the smoke harness; reconnecting at launch not yet confirmed with real sensors |
+| Linux Bluetooth connecting | A Linux user's sensor failed to connect while the app was scanning (#70); 0.3.10 stops the scan first. Not yet confirmed by them |
+| Smooth bends and lean | Unit-tested (the heading turns smoothly through corners); checked by eye on Alpe d'Huez with the demo rider |
 | Street-level photos | Selection unit-tested and a bad token is reported correctly; not tried with a real Mapillary token |
 | Herne Hill Velodrome | Tested in code: a lap is 450 m from the line, the bends bank to 26°, the ground is level, and it works both ways round. Checked a live preview in demo mode on both renderers, riding each direction. Not yet ridden with a trainer. The buildings are sized from the map and photos, so they're close to the real ones but not exact |
 | Native renderer | Screenshots from the automated run match the built-in renderer (day, dusk with rain fog, high camera, the leaning barriers and tree sprites of 0.3.6, and the hedge banks of 0.3.7). The HUD on top of it was not checked in a screenshot of the real window |
@@ -81,8 +85,9 @@ Be aware of what has and has not been proven:
 | The surrounding road network | Verified against the live map tiles on the same three routes, from screenshots of the automated run: city streets, footways and tram lines, village junctions, forest tracks, and a suburb full of roundabouts and divided roads. Frame rate with a whole city's streets in view has not been measured (about 1.3 million extra vertices in the centre of Grenoble). |
 | Forests, water, bridges, tunnels, overpasses | Verified against the live map tiles on the same three routes: a valley town with a river, a reservoir road with a 1 km tunnel, and a city crossed by motorway and railway viaducts. Checked from screenshots of the automated run, not from a long ride. |
 | Bluetooth and ANT+ with **real hardware** | **Testing has begun.** The first real trainer (a Tacx Vortex Smart over Bluetooth) connected but dropped out and showed no power; a diagnostics log and report were added to track it down. Expect to find bugs; please send a report (see *Reporting problems*) with your device model. |
-| Strava connect and upload | **Not yet tested against the live API** (needs a personal API key). |
-| Windows and Linux | **Built** (installers: `.msi`/`.exe`, `.deb`/`.AppImage`) by GitHub Actions on every push, which also runs the tests on Linux. **Not yet run** on either. |
+| Strava connect, upload and routes | Tested against the live API on macOS: connecting, uploading a ride as a Virtual Ride, and listing and saving the rider's routes |
+| Dreeve | Tested by its contributor against a real Dreeve server (listing rides, tracks, upload); the https-only check confirmed in the app on macOS |
+| Windows and Linux | **Built** (installers: `.msi`/`.exe`, `.deb`/`.AppImage`) by GitHub Actions on every push, which also runs the tests on Linux. Linux has been used by at least one rider with real sensors (#70); Windows hasn't been reported on yet. |
 
 ## Installing on a Mac
 
@@ -120,7 +125,7 @@ To inspect a recorded ride: `cargo run -p velopopuli-core --example fitinfo -- p
 
 ## Connecting hardware
 
-<img src="docs/images/screen-devices.jpg" alt="The Devices page with Bluetooth and ANT+ search and a connected trainer" width="680">
+<img src="docs/images/screen-devices.jpg" alt="The Devices page, looking for a heart-rate strap remembered from last time, with the demo rider connected" width="680">
 
 ### Bluetooth
 
