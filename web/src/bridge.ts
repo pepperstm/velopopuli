@@ -3,26 +3,27 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type {
-  FitnessOverview,
-  GhostMeta,
-  RideRequest,
-  Segment,
-  RideSearch,
-  UploadRecord,
-  WorkoutMeta,
   Badge,
   BtCandidate,
+  ConnectorEntry,
+  ConnectorStatus,
   ControllerAction,
   DevicesSnapshot,
-  RideInit,
-  RideState,
+  FitnessOverview,
   GearPreview,
   GearSettings,
+  GhostMeta,
+  RideInit,
+  RideRequest,
+  RideSearch,
+  RideState,
   RideSummary,
+  RouteList,
   RouteMeta,
+  Segment,
   Settings,
-  ConnectorEntry,
-  ConnectorStatus
+  UploadRecord,
+  WorkoutMeta
 } from './types'
 
 /** Subscribes to a backend event; returns a synchronous unsubscribe. */
@@ -90,7 +91,22 @@ export const api = {
     disconnect: (id: string) => invoke<ConnectorStatus>('connector_disconnect', { id }),
     upload: (id: string, rideId: string, filePath: string, name: string, description: string) =>
       invoke<UploadRecord>('connector_upload', { id, rideId, filePath, name, description }),
-    rides: (id: string, routeId: string) => invoke<RideSearch>('connector_rides', { id, routeId })
+    rides: (id: string, routeId: string) => invoke<RideSearch>('connector_rides', { id, routeId }),
+    /** The rider's saved routes on the service. */
+    routes: (id: string) => invoke<RouteList>('connector_routes', { id }),
+    /** One saved route, ready to preview and save like a planned one. */
+    route: (id: string, routeId: string) =>
+      invoke<{
+        gpx: string
+        distance: number
+        ascent: number
+        climbs: number
+        line: [number, number][]
+        profile: [number, number][]
+        name: string | null
+        gaps: number
+        clipped: boolean
+      }>('connector_route', { id, routeId })
   },
   workouts: {
     list: () => invoke<WorkoutMeta[]>('workouts_list'),

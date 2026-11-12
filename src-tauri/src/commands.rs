@@ -495,13 +495,18 @@ pub struct ConnectorEntry {
     lists_rides: bool,
     /// The ride setup can ask this service for segments along the route.
     finds_segments: bool,
+    /// Find a route can list the rider's saved routes on this service.
+    lists_routes: bool,
 }
 
 /// Every connector with its description and current state, for the settings and upload UI.
 #[tauri::command]
 pub fn connectors_list(state: State<AppState>) -> Vec<ConnectorEntry> {
     let ctx = state.connector_ctx();
-    connectors::ALL.iter().map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments() }).collect()
+    connectors::ALL
+        .iter()
+        .map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments(), lists_routes: c.lists_routes() })
+        .collect()
 }
 
 /// The rider's rides on a connector, each marked whether it follows the route, for racing one
@@ -511,6 +516,21 @@ pub async fn connector_rides(state: State<'_, AppState>, id: String, route_id: S
     let route = load_route(&state.store, &route_id)?;
     let ctx = state.connector_ctx();
     connectors::find_rides(connectors::get(&id)?, &ctx, &route).await
+}
+
+/// The rider's saved routes on a connector, for adding one to the library.
+#[tauri::command]
+pub async fn connector_routes(state: State<'_, AppState>, id: String) -> Res<connectors::RouteList> {
+    connectors::get(&id)?.saved_routes(&state.connector_ctx()).await
+}
+
+/// One of the rider's saved routes on a connector, ready to preview and save like a planned one.
+#[tauri::command]
+pub async fn connector_route(state: State<'_, AppState>, id: String, route_id: String) -> Res<Planned> {
+    let gpx = connectors::get(&id)?.route_gpx(&state.connector_ctx(), &route_id).await?;
+    let (name, raw) = parse_gpx(&gpx)?;
+    let route = build_route(&name, &raw)?;
+    Ok(Planned::new(gpx, &route, Some(name).filter(|n| !n.trim().is_empty()), 0, false))
 }
 
 #[tauri::command]

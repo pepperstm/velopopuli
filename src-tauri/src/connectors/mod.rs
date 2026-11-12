@@ -182,6 +182,34 @@ pub struct RemoteSegment {
     pub record: Option<String>,
 }
 
+/// One of the rider's saved routes on a service, for adding to the library.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteRoute {
+    /// The service's own id, handed back to `route_gpx`. Kept as text: Strava's are too big for
+    /// a JavaScript number.
+    pub id: String,
+    pub name: String,
+    /// Length in metres.
+    pub distance: f64,
+    /// Climbing in metres.
+    pub ascent: f64,
+    /// Only the rider can see it on the service.
+    pub private: bool,
+    /// The rider starred it; listed first.
+    pub starred: bool,
+}
+
+/// What `saved_routes` found.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteList {
+    pub routes: Vec<RemoteRoute>,
+    /// The link to the service doesn't allow reading private routes, so any are left out.
+    /// Connecting again asks for that permission.
+    pub private_hidden: bool,
+}
+
 /// A ride to send: the FIT file this app recorded plus a title and a description.
 pub struct UploadRequest {
     pub file: PathBuf,
@@ -244,6 +272,23 @@ pub trait Connector: Send + Sync {
     /// The caller places them on the route and times the ones it follows end to end.
     async fn segments_near(&self, _ctx: &Ctx, _boxes: &[[f64; 4]]) -> Result<Vec<RemoteSegment>, String> {
         Err(format!("{} can't find segments.", self.info().name))
+    }
+
+    // ── Optional: the rider's saved routes on the service ────────────────────
+
+    /// True when `saved_routes` and `route_gpx` work; Find a route then offers "Your <name> routes".
+    fn lists_routes(&self) -> bool {
+        false
+    }
+
+    /// The routes the rider has made or saved on the service, starred ones first.
+    async fn saved_routes(&self, _ctx: &Ctx) -> Result<RouteList, String> {
+        Err(format!("{} can't list your routes.", self.info().name))
+    }
+
+    /// One route as a GPX file, by the id `saved_routes` gave.
+    async fn route_gpx(&self, _ctx: &Ctx, _id: &str) -> Result<String, String> {
+        Err(format!("{} can't fetch a route.", self.info().name))
     }
 }
 

@@ -167,6 +167,8 @@ fn main() {
             commands::connector_disconnect,
             commands::connector_upload,
             commands::connector_rides,
+            commands::connector_routes,
+            commands::connector_route,
             commands::smoke_config,
             commands::smoke_done,
             commands::smoke_frame,
