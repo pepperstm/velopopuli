@@ -300,7 +300,7 @@ impl Session {
                 eprintln!("Crossed overhead near {:.0} m by a {:.0} m wide {}", nearest as f64 * route.step, over.width, if over.rail { "railway" } else { "road" });
             }
         }
-        // Segments: the route's own climbs, plus any Strava segments found along it.
+        // Segments: the route's own climbs, plus any segments a connector found along it.
         let mut segments: Vec<Segment> = route
             .climbs
             .iter()
@@ -309,6 +309,7 @@ impl Session {
                 id: format!("climb-{i}"),
                 name: format!("Climb {}{}", i + 1, if c.category.is_empty() { String::new() } else { format!(" · Cat {}", c.category) }),
                 source: SegmentSource::Climb,
+                connector: None,
                 start: c.start,
                 end: c.end,
                 avg_grade: c.avg_grade,
@@ -517,7 +518,7 @@ impl Session {
         let mut segment_prs = Vec::new();
         for (id, best) in &engine.new_segment_bests {
             segment_bests.insert(id.clone(), best.clone());
-            if let Some(seg) = engine.segments.iter().find(|s| &s.id == id && s.source == SegmentSource::Strava) {
+            if let Some(seg) = engine.segments.iter().find(|s| &s.id == id && s.source == SegmentSource::Remote) {
                 segment_prs.push(seg.name.clone());
             }
         }
@@ -596,6 +597,7 @@ impl Session {
             xp,
             new_badges,
             file_path: path.to_string_lossy().into_owned(),
+            uploads: Default::default(),
             strava_activity_id: None,
             curve,
             workout: engine.workout.as_ref().map(|w| w.name.clone()),

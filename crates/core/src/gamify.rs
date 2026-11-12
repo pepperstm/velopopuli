@@ -57,7 +57,7 @@ pub const BADGES: [Badge; 23] = [
     Badge { id: "workout", name: "Structured", description: "Finish a structured workout" },
     Badge { id: "ramp", name: "Lab Rat", description: "Complete an FTP ramp test" },
     Badge { id: "ghost-hunter", name: "Ghost Hunter", description: "Finish ahead of someone else's ghost" },
-    Badge { id: "segment", name: "Segment Hunter", description: "Set a best time on a Strava segment" },
+    Badge { id: "segment", name: "Segment Hunter", description: "Set a best time on a segment from Strava or another connected service" },
     Badge { id: "segments-10", name: "Leaderboard Regular", description: "Set ten segment bests" },
     Badge { id: "group", name: "Peloton", description: "Ride with friends in a group ride" },
     Badge { id: "night", name: "Night Owl", description: "Start a ride after 9 pm" },

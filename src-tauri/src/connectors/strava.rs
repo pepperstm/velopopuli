@@ -3,17 +3,28 @@
 //! Strava requires every API application to have its own client ID/secret, and a
 //! secret can't be shipped in an open-source binary. Each user registers a free
 //! app at https://www.strava.com/settings/api with callback domain "localhost".
+//!
+//! Implements every part of [`Connector`]: link, unlink, upload, the rider's recent
+//! rides and their tracks for ghosts, and segments near a route.
 
-use std::path::Path;
+use std::collections::BTreeMap;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use velopopuli_core::types::UploadRecord;
 
-use crate::{now_ms, secrets};
+use super::{field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteSegment, RidePage, RideTrack, SetupStep, UploadRequest};
+use crate::now_ms;
+use velopopuli_core::segments::decode_polyline;
 
+/// The connector id, and the keychain entry name the tokens have always been kept under.
+pub const ID: &str = "strava";
 const PORT: u16 = 53682;
+
+pub struct Strava;
 
 #[derive(Default, Serialize, Deserialize)]
 struct Creds {
@@ -25,42 +36,97 @@ struct Creds {
     athlete: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct StravaStatus {
-    configured: bool,
-    #[serde(rename = "clientId")]
-    client_id: String,
-    connected: bool,
-    athlete: String,
+fn load(ctx: &Ctx) -> Creds {
+    ctx.load_creds(ID)
 }
 
-fn load(dir: &Path) -> Creds {
-    secrets::load(dir).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+fn save(ctx: &Ctx, creds: &Creds) -> Result<(), String> {
+    ctx.save_creds(ID, creds)
 }
 
-fn save(dir: &Path, creds: &Creds) -> Result<(), String> {
-    secrets::save(dir, &serde_json::to_string(creds).map_err(|e| e.to_string())?)
-}
-
-fn to_status(c: &Creds) -> StravaStatus {
-    StravaStatus {
+fn to_status(c: &Creds) -> ConnectorStatus {
+    ConnectorStatus {
+        id: ID,
         configured: !c.client_id.is_empty() && !c.client_secret.is_empty(),
-        client_id: c.client_id.clone(),
         connected: c.refresh_token.is_some(),
-        athlete: c.athlete.clone().unwrap_or_default(),
+        account: c.athlete.clone().unwrap_or_default(),
+        fields: BTreeMap::from([("clientId", c.client_id.clone())]),
     }
 }
 
-pub fn status(dir: &Path) -> StravaStatus {
-    to_status(&load(dir))
-}
+#[async_trait]
+impl Connector for Strava {
+    fn info(&self) -> ConnectorInfo {
+        ConnectorInfo {
+            id: ID,
+            name: "Strava",
+            description: "Rides upload as Virtual Rides with power, heart rate and the route map.",
+            auth: AuthKind::OAuth,
+            fields: vec![
+                ConfigField { key: "clientId", label: "Client ID", hint: "", kind: FieldKind::Text },
+                ConfigField { key: "clientSecret", label: "Client secret", hint: "", kind: FieldKind::Secret },
+            ],
+            setup: vec![
+                SetupStep { text: "Strava gives every app its own key, and an open-source app can't ship one — so you create a free personal key once (about a minute).", link: None },
+                SetupStep { text: "Open strava.com/settings/api and create an application (any name and website).", link: Some("https://www.strava.com/settings/api") },
+                SetupStep { text: "Set \"Authorization Callback Domain\" to localhost.", link: None },
+                SetupStep { text: "Paste the Client ID and Client Secret below, then connect.", link: None },
+            ],
+        }
+    }
 
-pub fn set_app(dir: &Path, client_id: &str, client_secret: &str) -> Result<StravaStatus, String> {
-    let prev = load(dir);
-    let secret = if client_secret.trim().is_empty() { prev.client_secret } else { client_secret.trim().to_string() };
-    let next = Creds { client_id: client_id.trim().to_string(), client_secret: secret, ..Default::default() };
-    save(dir, &next)?;
-    Ok(to_status(&next))
+    fn status(&self, ctx: &Ctx) -> ConnectorStatus {
+        to_status(&load(ctx))
+    }
+
+    fn configure(&self, ctx: &Ctx, fields: &BTreeMap<String, String>) -> Result<ConnectorStatus, String> {
+        let prev = load(ctx);
+        let client_secret = field(fields, "clientSecret");
+        let secret = if client_secret.is_empty() { prev.client_secret } else { client_secret };
+        let next = Creds { client_id: field(fields, "clientId"), client_secret: secret, ..Default::default() };
+        save(ctx, &next)?;
+        Ok(to_status(&next))
+    }
+
+    async fn connect(&self, ctx: &Ctx, open_browser: OpenBrowser) -> Result<ConnectorStatus, String> {
+        connect(ctx, open_browser).await
+    }
+
+    async fn disconnect(&self, ctx: &Ctx) -> Result<ConnectorStatus, String> {
+        let creds = load(ctx);
+        if let Some(token) = &creds.access_token {
+            let _ = ctx.http.post("https://www.strava.com/oauth/deauthorize").bearer_auth(token).send().await;
+        }
+        let next = Creds { client_id: creds.client_id, client_secret: creds.client_secret, ..Default::default() };
+        save(ctx, &next)?;
+        Ok(to_status(&next))
+    }
+
+    async fn upload(&self, ctx: &Ctx, req: &UploadRequest) -> Result<UploadRecord, String> {
+        let id = upload(ctx, req).await?;
+        Ok(UploadRecord { uploaded_at: now_ms(), reference: Some(id.to_string()), url: Some(format!("https://www.strava.com/activities/{id}")), message: None })
+    }
+
+    fn lists_rides(&self) -> bool {
+        true
+    }
+
+    async fn recent_rides(&self, ctx: &Ctx, page: u32) -> Result<RidePage, String> {
+        recent_rides(ctx, page).await
+    }
+
+    async fn ride_track(&self, ctx: &Ctx, id: &str) -> Result<RideTrack, String> {
+        let id: u64 = id.parse().map_err(|_| "Not a Strava activity id.".to_string())?;
+        activity_track(ctx, id).await
+    }
+
+    fn finds_segments(&self) -> bool {
+        true
+    }
+
+    async fn segments_near(&self, ctx: &Ctx, boxes: &[[f64; 4]]) -> Result<Vec<RemoteSegment>, String> {
+        segments_near(ctx, boxes).await
+    }
 }
 
 async fn token_request(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<serde_json::Value, String> {
@@ -114,8 +180,9 @@ async fn await_callback(listener: TcpListener, state: &str) -> Result<String, St
 }
 
 /// Runs the OAuth authorization-code flow. `open_browser` is handed the URL to show the user.
-pub async fn connect(dir: &Path, http: &reqwest::Client, open_browser: impl FnOnce(&str)) -> Result<StravaStatus, String> {
-    let mut creds = load(dir);
+async fn connect(ctx: &Ctx, open_browser: OpenBrowser) -> Result<ConnectorStatus, String> {
+    let http = &ctx.http;
+    let mut creds = load(ctx);
     if creds.client_id.is_empty() || creds.client_secret.is_empty() {
         return Err("Enter your Strava API client ID and secret first.".into());
     }
@@ -141,22 +208,13 @@ pub async fn connect(dir: &Path, http: &reqwest::Client, open_browser: impl FnOn
     apply_tokens(&mut creds, &tok);
     let name = [tok["athlete"]["firstname"].as_str(), tok["athlete"]["lastname"].as_str()].into_iter().flatten().collect::<Vec<_>>().join(" ");
     creds.athlete = Some(name);
-    save(dir, &creds)?;
+    save(ctx, &creds)?;
     Ok(to_status(&creds))
 }
 
-pub async fn disconnect(dir: &Path, http: &reqwest::Client) -> Result<StravaStatus, String> {
-    let creds = load(dir);
-    if let Some(token) = &creds.access_token {
-        let _ = http.post("https://www.strava.com/oauth/deauthorize").bearer_auth(token).send().await;
-    }
-    let next = Creds { client_id: creds.client_id, client_secret: creds.client_secret, ..Default::default() };
-    save(dir, &next)?;
-    Ok(to_status(&next))
-}
-
-async fn access_token(dir: &Path, http: &reqwest::Client) -> Result<String, String> {
-    let mut creds = load(dir);
+async fn access_token(ctx: &Ctx) -> Result<String, String> {
+    let http = &ctx.http;
+    let mut creds = load(ctx);
     let refresh = creds.refresh_token.clone().ok_or("Not connected to Strava.")?;
     if let (Some(token), Some(expires)) = (&creds.access_token, creds.expires_at) {
         if expires > now_ms() / 1000 + 120 {
@@ -165,16 +223,17 @@ async fn access_token(dir: &Path, http: &reqwest::Client) -> Result<String, Stri
     }
     let tok = token_request(http, &[("client_id", &creds.client_id), ("client_secret", &creds.client_secret), ("grant_type", "refresh_token"), ("refresh_token", &refresh)]).await?;
     apply_tokens(&mut creds, &tok);
-    save(dir, &creds)?;
+    save(ctx, &creds)?;
     creds.access_token.ok_or_else(|| "Strava did not return an access token.".into())
 }
 
 /// Uploads a FIT file and waits for Strava to process it. Resolves to the new activity ID.
-pub async fn upload(dir: &Path, http: &reqwest::Client, file: &Path, name: &str, description: &str) -> Result<u64, String> {
-    let token = access_token(dir, http).await?;
-    let file_name = file.file_name().and_then(|n| n.to_str()).unwrap_or("ride.fit").to_string();
+async fn upload(ctx: &Ctx, req: &UploadRequest) -> Result<u64, String> {
+    let http = &ctx.http;
+    let token = access_token(ctx).await?;
+    let file_name = req.file.file_name().and_then(|n| n.to_str()).unwrap_or("ride.fit").to_string();
     let bytes = tokio::task::spawn_blocking({
-        let file = file.to_path_buf();
+        let file = req.file.clone();
         move || std::fs::read(file)
     })
     .await
@@ -183,8 +242,8 @@ pub async fn upload(dir: &Path, http: &reqwest::Client, file: &Path, name: &str,
     let form = reqwest::multipart::Form::new()
         .part("file", reqwest::multipart::Part::bytes(bytes).file_name(file_name.clone()))
         .text("data_type", "fit")
-        .text("name", name.to_string())
-        .text("description", description.to_string())
+        .text("name", req.name.clone())
+        .text("description", req.description.clone())
         .text("sport_type", "VirtualRide")
         .text("external_id", file_name);
 
@@ -223,35 +282,29 @@ async fn get_json(http: &reqwest::Client, token: &str, url: &str) -> Result<serd
     }
 }
 
-/// A Strava segment's shape and details, as found near a route.
-pub struct FoundSegment {
-    pub id: u64,
-    pub name: String,
-    pub points: String,
-    pub distance: f64,
-    pub avg_grade: f64,
-}
-
 /// Segments Strava suggests in each part of the route, plus the rider's starred segments.
-/// `boxes` are `[south, west, north, east]` areas covering the route.
-pub async fn segments_near(dir: &Path, http: &reqwest::Client, boxes: &[[f64; 4]]) -> Result<Vec<FoundSegment>, String> {
-    let token = access_token(dir, http).await?;
-    let mut found: Vec<FoundSegment> = Vec::new();
+/// `boxes` are `[south, west, north, east]` areas covering the route; the explore call
+/// returns at most ten segments per area.
+async fn segments_near(ctx: &Ctx, boxes: &[[f64; 4]]) -> Result<Vec<RemoteSegment>, String> {
+    let http = &ctx.http;
+    let token = access_token(ctx).await?;
+    let mut found: Vec<RemoteSegment> = Vec::new();
     let mut push = |v: &serde_json::Value| {
         let Some(id) = v["id"].as_u64() else { return };
-        if found.iter().any(|f| f.id == id) {
+        if found.iter().any(|f| f.id == id.to_string()) {
             return;
         }
-        let points = v["points"].as_str().or(v["map"]["polyline"].as_str()).unwrap_or("").to_string();
+        let points = decode_polyline(v["points"].as_str().or(v["map"]["polyline"].as_str()).unwrap_or(""));
         if points.is_empty() {
             return;
         }
-        found.push(FoundSegment {
-            id,
+        found.push(RemoteSegment {
+            id: id.to_string(),
             name: v["name"].as_str().unwrap_or("Segment").trim().to_string(),
             points,
             distance: v["distance"].as_f64().unwrap_or(0.0),
             avg_grade: v["avg_grade"].as_f64().or(v["average_grade"].as_f64()).unwrap_or(0.0) / 100.0,
+            record: None,
         });
     };
     for b in boxes {
@@ -264,46 +317,44 @@ pub async fn segments_near(dir: &Path, http: &reqwest::Client, boxes: &[[f64; 4]
     Ok(found)
 }
 
-/// The rider's recent rides, for picking one to race as a ghost.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActivityItem {
-    id: u64,
-    name: String,
-    start: String,
-    distance: f64,
-    moving_time: f64,
-}
+/// Activities per page; Strava allows up to 200.
+const PAGE_SIZE: usize = 100;
 
-pub async fn recent_rides(dir: &Path, http: &reqwest::Client) -> Result<Vec<ActivityItem>, String> {
-    let token = access_token(dir, http).await?;
-    let json = get_json(http, &token, "https://www.strava.com/api/v3/athlete/activities?per_page=60").await?;
-    Ok(json
-        .as_array()
-        .into_iter()
-        .flatten()
+/// One page of the rider's rides with GPS, for picking one to race as a ghost.
+async fn recent_rides(ctx: &Ctx, page: u32) -> Result<RidePage, String> {
+    let http = &ctx.http;
+    let token = access_token(ctx).await?;
+    let json = get_json(http, &token, &format!("https://www.strava.com/api/v3/athlete/activities?per_page={PAGE_SIZE}&page={page}")).await?;
+    let all = json.as_array().cloned().unwrap_or_default();
+    let rides = all
+        .iter()
         .filter(|a| a["type"].as_str().is_some_and(|t| t.contains("Ride")) && a["start_latlng"].as_array().is_some_and(|l| !l.is_empty()))
         .filter_map(|a| {
-            Some(ActivityItem {
-                id: a["id"].as_u64()?,
+            Some(RemoteRide {
+                id: a["id"].as_u64()?.to_string(),
                 name: a["name"].as_str().unwrap_or("Ride").to_string(),
                 start: a["start_date_local"].as_str().unwrap_or("").to_string(),
                 distance: a["distance"].as_f64().unwrap_or(0.0),
                 moving_time: a["moving_time"].as_f64().unwrap_or(0.0),
+                outline: decode_polyline(a["map"]["summary_polyline"].as_str().unwrap_or("")),
+                ..Default::default()
             })
         })
-        .collect())
+        .collect();
+    // A full page of activities (rides or not) means there may be older ones.
+    Ok(RidePage { rides, more: all.len() == PAGE_SIZE })
 }
 
 /// An activity's timed GPS track as `(unix seconds, lat, lon)`.
-pub async fn activity_track(dir: &Path, http: &reqwest::Client, id: u64) -> Result<(String, Vec<(f64, f64, f64)>), String> {
-    let token = access_token(dir, http).await?;
+async fn activity_track(ctx: &Ctx, id: u64) -> Result<RideTrack, String> {
+    let http = &ctx.http;
+    let token = access_token(ctx).await?;
     let info = get_json(http, &token, &format!("https://www.strava.com/api/v3/activities/{id}")).await?;
     let start = info["start_date"].as_str().and_then(velopopuli_core::gpx::parse_iso_time).unwrap_or(0.0);
     let streams = get_json(http, &token, &format!("https://www.strava.com/api/v3/activities/{id}/streams?keys=latlng,time&key_by_type=true")).await?;
     let (Some(ll), Some(tt)) = (streams["latlng"]["data"].as_array(), streams["time"]["data"].as_array()) else {
         return Err("That activity has no GPS track.".into());
     };
-    let track = ll.iter().zip(tt).filter_map(|(p, t)| Some((start + t.as_f64()?, p[0].as_f64()?, p[1].as_f64()?))).collect();
-    Ok((info["name"].as_str().unwrap_or("Strava ride").to_string(), track))
+    let points = ll.iter().zip(tt).filter_map(|(p, t)| Some((start + t.as_f64()?, p[0].as_f64()?, p[1].as_f64()?))).collect();
+    Ok(RideTrack { name: info["name"].as_str().unwrap_or("Strava ride").to_string(), points })
 }

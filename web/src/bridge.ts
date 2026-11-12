@@ -7,7 +7,8 @@ import type {
   GhostMeta,
   RideRequest,
   Segment,
-  StravaActivity,
+  RideSearch,
+  UploadRecord,
   WorkoutMeta,
   Badge,
   BtCandidate,
@@ -20,7 +21,8 @@ import type {
   RideSummary,
   RouteMeta,
   Settings,
-  StravaStatus
+  ConnectorEntry,
+  ConnectorStatus
 } from './types'
 
 /** Subscribes to a backend event; returns a synchronous unsubscribe. */
@@ -80,12 +82,15 @@ export const api = {
     onLoading: (cb: (message: string) => void) => on('ride:loading', cb),
     onControllerAction: (cb: (action: ControllerAction) => void) => on('controller:action', cb)
   },
-  strava: {
-    status: () => invoke<StravaStatus>('strava_status'),
-    setApp: (clientId: string, clientSecret: string) => invoke<StravaStatus>('strava_set_app', { clientId, clientSecret }),
-    connect: () => invoke<StravaStatus>('strava_connect'),
-    disconnect: () => invoke<StravaStatus>('strava_disconnect'),
-    upload: (rideId: string, filePath: string, name: string, description: string) => invoke<number>('strava_upload', { rideId, filePath, name, description })
+  connectors: {
+    list: () => invoke<ConnectorEntry[]>('connectors_list'),
+    status: (id: string) => invoke<ConnectorStatus>('connector_status', { id }),
+    configure: (id: string, fields: Record<string, string>) => invoke<ConnectorStatus>('connector_configure', { id, fields }),
+    connect: (id: string) => invoke<ConnectorStatus>('connector_connect', { id }),
+    disconnect: (id: string) => invoke<ConnectorStatus>('connector_disconnect', { id }),
+    upload: (id: string, rideId: string, filePath: string, name: string, description: string) =>
+      invoke<UploadRecord>('connector_upload', { id, rideId, filePath, name, description }),
+    rides: (id: string, routeId: string) => invoke<RideSearch>('connector_rides', { id, routeId })
   },
   workouts: {
     list: () => invoke<WorkoutMeta[]>('workouts_list'),
@@ -96,12 +101,12 @@ export const api = {
   ghosts: {
     list: (routeId: string) => invoke<GhostMeta[]>('ghosts_list', { routeId }),
     importFile: (routeId: string) => invoke<GhostMeta | null>('ghost_import_file', { routeId }),
-    importStrava: (routeId: string, activityId: number) => invoke<GhostMeta>('ghost_import_strava', { routeId, activityId }),
+    importRemote: (id: string, routeId: string, rideId: string) => invoke<GhostMeta>('ghost_import_connector', { id, routeId, rideId }),
     remove: (routeId: string, id: string) => invoke<void>('ghost_delete', { routeId, id })
   },
   segments: {
     list: (routeId: string) => invoke<Segment[]>('segments_list', { routeId }),
-    fetch: (routeId: string) => invoke<Segment[]>('segments_fetch', { routeId })
+    fetch: (id: string, routeId: string) => invoke<Segment[]>('segments_fetch', { id, routeId })
   },
   photos: {
     forRide: () => invoke<{ distance: number; id: string; url: string; capturedAt: number }[]>('ride_photos'),
@@ -117,7 +122,6 @@ export const api = {
     saving: () => invoke<boolean>('native_saving')
   },
   weatherNow: (lat: number, lon: number) => invoke<number>('weather_now', { lat, lon }),
-  stravaActivities: () => invoke<StravaActivity[]>('strava_activities'),
   fitness: () => invoke<FitnessOverview>('fitness_overview'),
   geo: {
     search: (query: string) => invoke<{ name: string; detail: string; lat: number; lon: number }[]>('geo_search', { query }),

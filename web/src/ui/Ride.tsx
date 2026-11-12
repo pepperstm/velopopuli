@@ -520,7 +520,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             {settings.look.photos && routeId !== 'demo' && <StreetPhoto distance={hud.distance} />}
           </div>
 
-          {hud.segment && hud.segment.source === 'strava' && (
+          {hud.segment && hud.segment.source === 'remote' && (
             <div className="banner climb segment">
               <b>
                 ⏱ {hud.segment.name}
@@ -535,7 +535,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               </div>
             </div>
           )}
-          {!(hud.segment && hud.segment.source === 'strava') && hud.segmentResult && hud.segmentResult.source === 'strava' && (
+          {!(hud.segment && hud.segment.source === 'remote') && hud.segmentResult && hud.segmentResult.source === 'remote' && (
             <div className="banner summit">
               <b>
                 {hud.segmentResult.name}: {fmtTime(hud.segmentResult.timeS)}
@@ -549,7 +549,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               </span>
             </div>
           )}
-          {climb && !(hud.segment && hud.segment.source === 'strava') && (
+          {climb && !(hud.segment && hud.segment.source === 'remote') && (
             <div className="banner climb">
               <b>
                 Climb {hud.climbIndex! + 1}
