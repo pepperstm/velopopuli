@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { errorText } from '../bridge'
 import { fmtDist, fmtEle, fmtTime } from '../core/fmt'
 import { api, useSettings, useStored } from '../state'
-import type { RideRequest, RouteMeta } from '../types'
+import type { ConnectorEntry, RideRequest, RouteMeta } from '../types'
+import { RemoteImport } from './RemoteImport'
 import { RideSetup } from './RideSetup'
 
 export function RoutePreview({ outline }: { outline: [number, number][] }): React.JSX.Element {
@@ -37,8 +38,12 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
   const [setup, setSetup] = useState<{ route: RouteMeta; room?: string } | null>(null)
   const [joining, setJoining] = useState(false)
   const [room, setRoom] = useState('')
+  /** Connected services whose rides can be imported as routes. */
+  const [sources, setSources] = useState<ConnectorEntry[]>([])
+  const [importing, setImporting] = useState<ConnectorEntry | null>(null)
   useEffect(() => void api.routes.demoMeta().then(setDemo), [])
   useEffect(() => void api.routes.tracksMeta().then(setTracks), [])
+  useEffect(() => void api.connectors.list().then((all) => setSources(all.filter((c) => c.importsRoutes && c.listsRides && c.status.connected))), [])
 
   const add = (added: RouteMeta[], problems: string[]): void => {
     if (added.length) saveRoutes([...added, ...(routes ?? [])])
@@ -124,6 +129,11 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
         </div>
         <div className="row">
           <button onClick={() => setJoining(true)}>Join a group ride</button>
+          {sources.map((c) => (
+            <button key={c.info.id} className={c.info.id} onClick={() => setImporting(c)}>
+              Import from {c.info.name}…
+            </button>
+          ))}
           <button
             className="primary"
             onClick={() =>
@@ -175,6 +185,7 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
           </div>
         </div>
       )}
+      {importing && <RemoteImport connector={importing} onAdded={(route) => add([route], [])} onClose={() => setImporting(null)} />}
       {setup && <RideSetup route={setup.route} room={setup.room} onCancel={() => setSetup(null)} onStart={(r) => (setSetup(null), onRide(r))} />}
       {error && <div className="error">{error}</div>}
       <div className="grid">

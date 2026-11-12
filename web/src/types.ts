@@ -225,6 +225,10 @@ export interface RemoteRide {
   start: string
   distance: number
   movingTime: number
+  /** The service's sport type in Strava's vocabulary ("Ride", "GravelRide", …); empty if unknown. */
+  sport: string
+  /** A few `[lat, lon]` points of its outline, when listed for importing as a route. */
+  preview?: [number, number][]
   /** Its outline rides the route from its start for most of it. */
   followsRoute: boolean
   /** How far along the route it follows it, in metres. */
@@ -327,6 +331,8 @@ export interface ConnectorEntry {
   findsSegments: boolean
   /** The service can list the rider's saved routes (Find a route). */
   listsRoutes: boolean
+  /** One of the rider's rides on the service can be imported as a route. */
+  importsRoutes: boolean
 }
 
 /** One of the rider's saved routes on a service. */

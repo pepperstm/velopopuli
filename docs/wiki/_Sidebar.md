@@ -12,6 +12,7 @@
 - [[Virtual gears]]
 - [[Progress and goals]]
 - [[Strava]]
+- [[Dreeve]]
 - [[Group rides and self-hosting]]
 - [[Fan and lights]]
 

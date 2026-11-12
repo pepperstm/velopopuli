@@ -184,6 +184,8 @@ fn main() {
             commands::connector_rides,
             commands::connector_routes,
             commands::connector_route,
+            commands::connector_ride_list,
+            commands::route_import_connector,
             commands::smoke_config,
             commands::smoke_done,
             commands::smoke_frame,

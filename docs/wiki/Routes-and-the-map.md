@@ -6,6 +6,8 @@
 
 - **Import GPX** from anywhere. Routes without elevation (planner exports) get it filled in from open terrain data.
 - **Find a route** — search for a place, click waypoints and get a route along bike-friendly roads with real elevation (via [BRouter](https://brouter.de)), or pick one of the famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). **Prefer: Mountain bike (trails)** plans along tracks and singletrack instead of roads.
+- **Your Strava routes** — with [[Strava]] connected, **Find a route** lists the routes you made or starred on Strava, starred first. Pick one to preview it and save it to your library. Strava asks for extra permission to read private routes: if you linked before this existed, only public routes are listed and the page asks you to connect again.
+- **Import from Dreeve…** — with [[Dreeve]] connected, the routes page lists your finished rides there (search by name or date, filter by bike and distance, needs Dreeve 5.4 or later). Pick one to ride it again as a route. This is not the same as the Strava item above: that lists routes you planned, this turns a ride you already did into a route.
 - **Mountain-bike routes** — on **Find a route**, move the map to an area and press **Find MTB routes here** to list the waymarked mountain-bike routes mapped there (OpenStreetMap `route=mtb`), longest first. Pick one to see it on the map with its distance, climbing and elevation profile, then save it. Its mapped pieces are joined end to end; if some don't meet, you're told how many gaps there are, and you ride straight across them. The area can be up to about 60 km across.
 
 ![Route finder](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-explore.jpg)

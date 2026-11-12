@@ -27,6 +27,7 @@
   --ok: #4ddb8a;
   --warn: #ffd24a;
   --strava: #fc4c02;
+  --dreeve: #428f7e;
   color-scheme: dark;
 }
 
@@ -132,6 +133,12 @@ button.danger {
 button.strava {
   background: var(--strava);
   border-color: var(--strava);
+  color: #fff;
+  font-weight: 600;
+}
+button.dreeve {
+  background: var(--dreeve);
+  border-color: var(--dreeve);
   color: #fff;
   font-weight: 600;
 }
@@ -427,6 +434,84 @@ textarea:focus {
 }
 .modal .row {
   margin-top: 6px;
+}
+/* Importing a ride from a connected service as a route: 80 % of the window. */
+.modal.remote-import {
+  width: 80vw;
+  height: 80vh;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.remote-import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.remote-import-head h2 {
+  margin: 0;
+}
+.remote-import-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.remote-import-filters input[type='search'] {
+  flex: 1 1 240px;
+}
+.range-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+}
+/* Two handles on one track (DualRange in RemoteImport.tsx). */
+.dual-range {
+  position: relative;
+  height: 22px;
+  margin: 0 9px;
+  cursor: pointer;
+  touch-action: none;
+}
+.dual-range-rail,
+.dual-range-fill {
+  position: absolute;
+  top: 9px;
+  height: 4px;
+  border-radius: 2px;
+}
+.dual-range-rail {
+  left: 0;
+  right: 0;
+  background: var(--line);
+}
+.dual-range-fill {
+  background: var(--accent);
+}
+.dual-range-thumb {
+  position: absolute;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.dual-range-thumb:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.remote-import-list {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  align-content: start;
+  gap: 14px;
 }
 .picker {
   display: flex;

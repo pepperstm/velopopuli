@@ -34,7 +34,7 @@ Not yet: laps in the FIT file, ending the ride on the workout instead of the lap
 
 - **Pace riders** hold a steady W/kg to chase or drop (set them in Settings).
 - **Your ghost** — your best ride on the route.
-- **Other people's rides** as ghosts — from a GPX or FIT file, or from your Strava.
+- **Other people's rides** as ghosts — from a GPX or FIT file, or from your Strava or Dreeve.
 - **Climbs** are detected and categorised (4 → HC) and timed; **Strava segments** along the route are timed too.
 
 ## Time of day and weather
