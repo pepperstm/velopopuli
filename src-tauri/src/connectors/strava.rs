@@ -16,7 +16,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use velopopuli_core::types::UploadRecord;
 
-use super::{field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteRoute, RemoteSegment, RidePage, RideTrack, RouteList, SetupStep, UploadRequest};
+use super::{
+    field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteRoute, RemoteSegment, RidePage, RideTrack, RouteList, SetupStep,
+    UploadRequest,
+};
 use crate::now_ms;
 use velopopuli_core::segments::decode_polyline;
 

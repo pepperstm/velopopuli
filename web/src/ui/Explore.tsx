@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { errorText } from '../bridge'
 import { fmtDist, fmtEle } from '../core/fmt'
 import { api, useSettings } from '../state'
-import type { RouteMeta } from '../types'
+import type { ConnectorEntry, RemoteRoute, RouteList, RouteMeta } from '../types'
 
 interface Place {
   name: string
@@ -110,6 +110,9 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
   const [saved, setSaved] = useState('')
   /** Routes found for each kind, and the area they were looked for in. */
   const [found, setFound] = useState<Partial<Record<Kind, { bounds: Bounds; routes: WaymarkedRoute[] }>>>({})
+  /** Connected services that keep the rider's own routes, and the routes listed from each. */
+  const [connectors, setConnectors] = useState<ConnectorEntry[]>([])
+  const [remote, setRemote] = useState<Record<string, RouteList>>({})
 
   useEffect(() => {
     const m = L.map(el.current!, { zoomControl: true }).setView([46.2, 7.2], 6)
@@ -119,6 +122,7 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
     m.on('click', (e: L.LeafletMouseEvent) => setPoints((p) => [...p, [e.latlng.lat, e.latlng.lng]]))
     map.current = m
     void api.geo.classics().then(setClassics)
+    void api.connectors.list().then((all) => setConnectors(all.filter((c) => c.listsRoutes && c.status.connected)))
     return () => {
       m.remove()
       map.current = null
@@ -210,6 +214,35 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
       const p = await api.geo.waymarkedRoute(kind, r.id, bounds)
       setPlanned(p)
       setName(p.name ?? r.name)
+      map.current?.fitBounds(L.latLngBounds(p.line).pad(0.15))
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const listRemote = async (c: ConnectorEntry): Promise<void> => {
+    setBusy(`Loading your ${c.info.name} routes…`)
+    setError('')
+    try {
+      const list = await api.connectors.routes(c.info.id)
+      setRemote((all) => ({ ...all, [c.info.id]: list }))
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const pickRemote = async (c: ConnectorEntry, r: RemoteRoute): Promise<void> => {
+    setPoints([])
+    setBusy(`Fetching ${r.name} from ${c.info.name}…`)
+    setError('')
+    try {
+      const p = await api.connectors.route(c.info.id, r.id)
+      setPlanned(p)
+      setName(r.name)
       map.current?.fitBounds(L.latLngBounds(p.line).pad(0.15))
     } catch (err) {
       setError(errorText(err))
@@ -323,6 +356,39 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
             {saved && <div className="ok small">“{saved}” is in your routes, ready to ride.</div>}
           </div>
         )}
+        {connectors.map((c) => {
+          const list = remote[c.info.id]
+          return (
+            <section key={c.info.id}>
+              <h2>Your {c.info.name} routes</h2>
+              <p className="muted small">The routes you've made or saved on {c.info.name}, starred ones first.</p>
+              <button disabled={!!busy} onClick={() => void listRemote(c)}>
+                {list ? `Refresh my ${c.info.name} routes` : `Show my ${c.info.name} routes`}
+              </button>
+              {list?.privateHidden && (
+                <div className="muted small">
+                  Private routes aren't shown: VeloPopuli isn't allowed to read them yet. Connect {c.info.name} again in Settings and allow it, to include them.
+                </div>
+              )}
+              {list && list.routes.length === 0 && <div className="muted small">No routes on your {c.info.name} yet.</div>}
+              {list && list.routes.length > 0 && (
+                <div className="pick-list">
+                  {list.routes.map((r) => (
+                    <button key={r.id} className="ghost" disabled={!!busy} onClick={() => void pickRemote(c, r)}>
+                      <b>
+                        {r.starred ? '★ ' : ''}
+                        {r.name}
+                      </b>{' '}
+                      <span className="muted small">
+                        {[fmtDist(r.distance, u), r.ascent ? `↗ ${fmtEle(r.ascent, u)}` : '', r.private ? 'private' : ''].filter(Boolean).join(' · ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })}
         {KINDS.map((k) => {
           const here = found[k.kind]
           return (

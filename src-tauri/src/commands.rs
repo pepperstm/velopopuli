@@ -503,7 +503,10 @@ pub struct ConnectorEntry {
 #[tauri::command]
 pub fn connectors_list(state: State<AppState>) -> Vec<ConnectorEntry> {
     let ctx = state.connector_ctx();
-    connectors::ALL.iter().map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments(), lists_routes: c.lists_routes() }).collect()
+    connectors::ALL
+        .iter()
+        .map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments(), lists_routes: c.lists_routes() })
+        .collect()
 }
 
 /// The rider's rides on a connector, each marked whether it follows the route, for racing one
@@ -527,7 +530,7 @@ pub async fn connector_route(state: State<'_, AppState>, id: String, route_id: S
     let gpx = connectors::get(&id)?.route_gpx(&state.connector_ctx(), &route_id).await?;
     let (name, raw) = parse_gpx(&gpx)?;
     let route = build_route(&name, &raw)?;
-    Ok(Planned::new(gpx, &route, Some(name).filter(|n| !n.trim().is_empty()), 0))
+    Ok(Planned::new(gpx, &route, Some(name).filter(|n| !n.trim().is_empty()), 0, false))
 }
 
 #[tauri::command]

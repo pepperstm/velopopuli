@@ -325,6 +325,25 @@ export interface ConnectorEntry {
   listsRides: boolean
   /** The service can find segments along a route. */
   findsSegments: boolean
+  /** The service can list the rider's saved routes (Find a route). */
+  listsRoutes: boolean
+}
+
+/** One of the rider's saved routes on a service. */
+export interface RemoteRoute {
+  /** The service's id, as text: Strava's are too big for a number. */
+  id: string
+  name: string
+  distance: number
+  ascent: number
+  private: boolean
+  starred: boolean
+}
+
+export interface RouteList {
+  routes: RemoteRoute[]
+  /** Private routes were left out: the link doesn't allow reading them. */
+  privateHidden: boolean
 }
 
 export interface BtCandidate {
