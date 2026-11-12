@@ -16,7 +16,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use velopopuli_core::types::UploadRecord;
 
-use super::{field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteSegment, RidePage, RideTrack, SetupStep, UploadRequest};
+use super::{field, AuthKind, ConfigField, Connector, ConnectorInfo, ConnectorStatus, Ctx, FieldKind, OpenBrowser, RemoteRide, RemoteRoute, RemoteSegment, RidePage, RideTrack, RouteList, SetupStep, UploadRequest};
 use crate::now_ms;
 use velopopuli_core::segments::decode_polyline;
 
@@ -34,6 +34,16 @@ struct Creds {
     refresh_token: Option<String>,
     expires_at: Option<u64>,
     athlete: Option<String>,
+    /// The permissions granted when last connected, as Strava lists them ("read,activity:write").
+    /// None for a link made before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    scope: Option<String>,
+}
+
+/// Whether a granted scope list includes reading private routes (`read_all`, not to be
+/// confused with `activity:read_all`).
+fn reads_private(scope: Option<&str>) -> bool {
+    scope.is_some_and(|s| s.split(',').any(|p| p.trim() == "read_all"))
 }
 
 fn load(ctx: &Ctx) -> Creds {
@@ -127,6 +137,22 @@ impl Connector for Strava {
     async fn segments_near(&self, ctx: &Ctx, boxes: &[[f64; 4]]) -> Result<Vec<RemoteSegment>, String> {
         segments_near(ctx, boxes).await
     }
+
+    fn lists_routes(&self) -> bool {
+        true
+    }
+
+    async fn saved_routes(&self, ctx: &Ctx) -> Result<RouteList, String> {
+        saved_routes(ctx).await
+    }
+
+    async fn route_gpx(&self, ctx: &Ctx, id: &str) -> Result<String, String> {
+        // It goes into the request path, so digits only.
+        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+            return Err("Not a Strava route id.".into());
+        }
+        route_gpx(ctx, id).await
+    }
 }
 
 async fn token_request(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<serde_json::Value, String> {
@@ -145,8 +171,9 @@ fn apply_tokens(creds: &mut Creds, tok: &serde_json::Value) {
     creds.expires_at = tok["expires_at"].as_u64();
 }
 
-/// Waits for Strava's redirect on the loopback port and returns the authorization code.
-async fn await_callback(listener: TcpListener, state: &str) -> Result<String, String> {
+/// Waits for Strava's redirect on the loopback port and returns the authorization code and the
+/// permissions the rider granted.
+async fn await_callback(listener: TcpListener, state: &str) -> Result<(String, String), String> {
     loop {
         let (mut socket, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut buf = vec![0u8; 8192];
@@ -160,7 +187,8 @@ async fn await_callback(listener: TcpListener, state: &str) -> Result<String, St
         }
         let param = |name: &str| url.query_pairs().find(|(k, _)| k == name).map(|(_, v)| v.into_owned());
         let code = param("code").filter(|_| param("state").as_deref() == Some(state));
-        let granted = code.is_some() && param("scope").unwrap_or_default().contains("activity:write");
+        let scope = param("scope").unwrap_or_default();
+        let granted = code.is_some() && scope.split(',').any(|p| p == "activity:write");
         let (title, detail) = if granted {
             ("VeloPopuli is connected to Strava", "You can close this tab.")
         } else if code.is_some() {
@@ -172,7 +200,7 @@ async fn await_callback(listener: TcpListener, state: &str) -> Result<String, St
         let _ = socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await;
         let _ = socket.shutdown().await;
         return match (granted, code) {
-            (true, Some(code)) => Ok(code),
+            (true, Some(code)) => Ok((code, scope)),
             (false, Some(_)) => Err("Upload permission was not granted.".into()),
             _ => Err("Strava authorization was denied.".into()),
         };
@@ -195,19 +223,21 @@ async fn connect(ctx: &Ctx, open_browser: OpenBrowser) -> Result<ConnectorStatus
             ("client_id", creds.client_id.as_str()),
             ("response_type", "code"),
             ("redirect_uri", &redirect),
-            ("approval_prompt", "auto"),
-            ("scope", "read,activity:read_all,activity:write"),
+            // Always ask, so a link made before routes were read gets the chance to add read_all.
+            ("approval_prompt", "force"),
+            ("scope", "read,read_all,activity:read_all,activity:write"),
             ("state", &state),
         ],
     )
     .map_err(|e| e.to_string())?;
     open_browser(auth.as_str());
 
-    let code = tokio::time::timeout(Duration::from_secs(300), await_callback(listener, &state)).await.map_err(|_| "Timed out waiting for Strava authorization.".to_string())??;
+    let (code, scope) = tokio::time::timeout(Duration::from_secs(300), await_callback(listener, &state)).await.map_err(|_| "Timed out waiting for Strava authorization.".to_string())??;
     let tok = token_request(http, &[("client_id", &creds.client_id), ("client_secret", &creds.client_secret), ("code", &code), ("grant_type", "authorization_code")]).await?;
     apply_tokens(&mut creds, &tok);
     let name = [tok["athlete"]["firstname"].as_str(), tok["athlete"]["lastname"].as_str()].into_iter().flatten().collect::<Vec<_>>().join(" ");
     creds.athlete = Some(name);
+    creds.scope = Some(scope);
     save(ctx, &creds)?;
     Ok(to_status(&creds))
 }
@@ -357,4 +387,77 @@ async fn activity_track(ctx: &Ctx, id: u64) -> Result<RideTrack, String> {
     };
     let points = ll.iter().zip(tt).filter_map(|(p, t)| Some((start + t.as_f64()?, p[0].as_f64()?, p[1].as_f64()?))).collect();
     Ok(RideTrack { name: info["name"].as_str().unwrap_or("Strava ride").to_string(), points })
+}
+
+/// Routes per page; Strava allows up to 200.
+const ROUTES_PAGE: usize = 200;
+/// Pages of routes to read at most.
+const ROUTE_PAGES: u32 = 3;
+
+/// The routes the rider has made or starred on Strava, starred first, newest first after that.
+async fn saved_routes(ctx: &Ctx) -> Result<RouteList, String> {
+    let http = &ctx.http;
+    let token = access_token(ctx).await?;
+    let athlete = get_json(http, &token, "https://www.strava.com/api/v3/athlete").await?;
+    let athlete = athlete["id"].as_u64().ok_or("Strava didn't say which athlete you are.")?;
+    let mut routes = Vec::new();
+    for page in 1..=ROUTE_PAGES {
+        let json = get_json(http, &token, &format!("https://www.strava.com/api/v3/athletes/{athlete}/routes?per_page={ROUTES_PAGE}&page={page}")).await?;
+        let all = json.as_array().cloned().unwrap_or_default();
+        routes.extend(all.iter().filter_map(parse_route));
+        if all.len() < ROUTES_PAGE {
+            break;
+        }
+    }
+    routes.sort_by_key(|r| !r.starred);
+    Ok(RouteList { routes, private_hidden: !reads_private(load(ctx).scope.as_deref()) })
+}
+
+/// One route from Strava's list. Its id is read from `id_str`: the number is too big for a double.
+fn parse_route(v: &serde_json::Value) -> Option<RemoteRoute> {
+    let id = v["id_str"].as_str().map(str::to_string).or_else(|| v["id"].as_u64().map(|n| n.to_string()))?;
+    Some(RemoteRoute {
+        id,
+        name: v["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Strava route").to_string(),
+        distance: v["distance"].as_f64().unwrap_or(0.0),
+        ascent: v["elevation_gain"].as_f64().unwrap_or(0.0),
+        private: v["private"].as_bool().unwrap_or(false),
+        starred: v["starred"].as_bool().unwrap_or(false),
+    })
+}
+
+/// A route as Strava exports it: GPX with the route's line and elevation.
+async fn route_gpx(ctx: &Ctx, id: &str) -> Result<String, String> {
+    let token = access_token(ctx).await?;
+    let res = ctx.http.get(format!("https://www.strava.com/api/v3/routes/{id}/export_gpx")).bearer_auth(&token).send().await.map_err(|e| format!("Could not reach Strava: {e}"))?;
+    match res.status().as_u16() {
+        200..=299 => res.text().await.map_err(|e| format!("Could not read the route from Strava: {e}")),
+        401 | 403 => Err("Strava refused: this route may be private. Connect Strava again in Settings and allow VeloPopuli to read private routes.".into()),
+        404 => Err("That route is no longer on Strava.".into()),
+        429 => Err("Strava's rate limit was reached — try again in 15 minutes.".into()),
+        code => Err(format!("Strava request failed ({code}).")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn private_routes_need_read_all_not_activity_read_all() {
+        assert!(reads_private(Some("read,read_all,activity:read_all,activity:write")));
+        assert!(!reads_private(Some("read,activity:read_all,activity:write")));
+        assert!(!reads_private(None));
+    }
+
+    #[test]
+    fn route_ids_are_read_as_text() {
+        // Bigger than 2^53: a JavaScript number would round it.
+        let v = serde_json::json!({"id": 3_344_556_677_889_900_123u64, "id_str": "3344556677889900123", "name": " Lanes loop ", "distance": 42_195.0, "elevation_gain": 610.0, "private": true, "starred": true});
+        let r = parse_route(&v).unwrap();
+        assert_eq!((r.id.as_str(), r.name.as_str(), r.private, r.starred), ("3344556677889900123", "Lanes loop", true, true));
+        assert_eq!((r.distance, r.ascent), (42_195.0, 610.0));
+        assert_eq!(parse_route(&serde_json::json!({"id": 5, "name": ""})).unwrap().name, "Strava route");
+        assert!(parse_route(&serde_json::json!({"name": "no id"})).is_none());
+    }
 }
