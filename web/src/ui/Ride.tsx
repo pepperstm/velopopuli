@@ -51,6 +51,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const [error, setError] = useState('')
   const [hud, setHud] = useState<RideState | null>(null)
   const [saving, setSaving] = useState(false)
+  /** End ride was pressed before the ride was long enough to save: asking whether to leave. */
+  const [leaving, setLeaving] = useState(false)
   const finishing = useRef(false)
   const units = settings.units
 
@@ -578,7 +580,42 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             </div>
           )}
 
-          {!hud.moving && !saving && !hud.finished && (
+          {leaving && !saving && !hud.finished && (
+            <div className="ride-overlay">
+              <div className="modal">
+                {hud.samples >= MIN_SAMPLES ? (
+                  <>
+                    <h2>Long enough to save</h2>
+                    <p className="muted">That's a minute ridden, so the ride can be saved now.</p>
+                    <div className="row">
+                      <button className="primary" onClick={() => void finish()}>
+                        End and save
+                      </button>
+                      <button onClick={() => setLeaving(false)}>Keep riding</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2>Too short to save</h2>
+                    <p className="muted">
+                      Rides under a minute aren't saved. Leave now and there's no summary, no .FIT file and nothing to upload. Ride another{' '}
+                      {MIN_SAMPLES - hud.samples} second{MIN_SAMPLES - hud.samples === 1 ? '' : 's'} to keep it.
+                    </p>
+                    <div className="row">
+                      <button className="primary" onClick={() => setLeaving(false)}>
+                        Keep riding
+                      </button>
+                      <button className="danger" onClick={onExit}>
+                        Leave without saving
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!leaving && !hud.moving && !saving && !hud.finished && (
             <div className="ride-overlay">
               <div className="modal">
                 {hud.noSensors ? (
@@ -665,7 +702,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                 disabled={saving}
                 onClick={() => {
                   if (hud.samples >= MIN_SAMPLES) void finish()
-                  else if (hud.samples === 0 || confirm('Rides under a minute are not saved. Leave anyway?')) onExit()
+                  else if (hud.samples === 0) onExit()
+                  else setLeaving(true)
                 }}
               >
                 {saving ? 'Saving…' : 'End ride'}
