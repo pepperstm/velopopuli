@@ -12,7 +12,8 @@ export interface Settings {
   realTerrain: boolean
   buildings: boolean
   scenery: boolean
-  stravaAutoUpload: boolean
+  /** Connector ids (see ConnectorInfo) every finished ride is sent to without asking. */
+  autoUpload: string[]
   exportDir: string
   goal: { name: string; distanceKm: number; deadline: string; from: string }
   look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string }
@@ -69,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   realTerrain: true,
   buildings: true,
   scenery: true,
-  stravaAutoUpload: false,
+  autoUpload: [],
   exportDir: '',
   goal: { name: 'Winter miles', distanceKm: 1000, deadline: '', from: '' },
   look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },
@@ -126,6 +127,9 @@ export interface RideSummary {
   xp: number
   newBadges: string[]
   filePath: string
+  /** Where the ride has been sent, by connector id. */
+  uploads?: Record<string, UploadRecord>
+  /** Older profiles recorded a Strava upload here; read through uploadOf(). */
   stravaActivityId?: number
   curve: number[]
   workout?: string
@@ -177,7 +181,9 @@ export interface WorkoutPos {
 export interface Segment {
   id: string
   name: string
-  source: 'climb' | 'strava'
+  source: 'climb' | 'remote'
+  /** The connector a remote segment came from. */
+  connector?: string
   start: number
   end: number
   avgGrade: number
@@ -187,7 +193,7 @@ export interface Segment {
 export interface SegmentLive {
   id: string
   name: string
-  source: 'climb' | 'strava'
+  source: 'climb' | 'remote'
   toGo: number
   length: number
   elapsed: number
@@ -199,7 +205,7 @@ export interface SegmentLive {
 export interface SegmentResult {
   id: string
   name: string
-  source: 'climb' | 'strava'
+  source: 'climb' | 'remote'
   timeS: number
   previousBest: number | null
 }
@@ -212,12 +218,24 @@ export interface GhostMeta {
   timeS: number
 }
 
-export interface StravaActivity {
-  id: number
+/** One of the rider's past rides on a connector, for racing it as a ghost. */
+export interface RemoteRide {
+  id: string
   name: string
   start: string
   distance: number
   movingTime: number
+  /** Its outline rides the route from its start for most of it. */
+  followsRoute: boolean
+  /** How far along the route it follows it, in metres. */
+  followedM: number
+}
+
+/** A connector's rides, newest first, as far back as the search went. */
+export interface RideSearch {
+  rides: RemoteRide[]
+  /** The service has older rides that weren't looked at. */
+  more: boolean
 }
 
 export interface LoadDay {
@@ -265,11 +283,48 @@ export interface Badge {
   description: string
 }
 
-export interface StravaStatus {
+export interface UploadRecord {
+  uploadedAt: number
+  reference?: string
+  url?: string
+  message?: string
+}
+
+/** The upload of a ride to a connector, including Strava uploads recorded by older versions. */
+export function uploadOf(ride: RideSummary, connector: string): UploadRecord | undefined {
+  const record = ride.uploads?.[connector]
+  if (record) return record
+  if (connector === 'strava' && ride.stravaActivityId) {
+    return { uploadedAt: ride.startedAt, reference: String(ride.stravaActivityId), url: `https://www.strava.com/activities/${ride.stravaActivityId}` }
+  }
+  return undefined
+}
+
+/** A connector as the backend describes it; the settings card is built from this. */
+export interface ConnectorInfo {
+  id: string
+  name: string
+  description: string
+  auth: 'oauth' | 'token'
+  fields: { key: string; label: string; hint: string; kind: 'text' | 'url' | 'secret' }[]
+  setup: { text: string; link?: string }[]
+}
+
+export interface ConnectorStatus {
+  id: string
   configured: boolean
-  clientId: string
   connected: boolean
-  athlete: string
+  account: string
+  fields: Record<string, string>
+}
+
+export interface ConnectorEntry {
+  info: ConnectorInfo
+  status: ConnectorStatus
+  /** The service can list the rider's past rides (the "From <name>…" ghost import). */
+  listsRides: boolean
+  /** The service can find segments along a route. */
+  findsSegments: boolean
 }
 
 export interface BtCandidate {

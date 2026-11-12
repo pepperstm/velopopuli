@@ -349,7 +349,8 @@ mod ride {
     #[test]
     fn segments_are_timed_each_lap_and_keep_the_fastest() {
         let route = ring(1000.0);
-        let segment = Segment { id: "whole".into(), name: "Whole lap".into(), source: SegmentSource::Strava, start: 0.0, end: route.total, avg_grade: 0.0, record: None };
+        let segment =
+            Segment { id: "whole".into(), name: "Whole lap".into(), source: SegmentSource::Remote, connector: Some("strava".into()), start: 0.0, end: route.total, avg_grade: 0.0, record: None };
         let mut engine = RideEngine::with_options(route, &settings(), None, RideOptions { laps: Some(0), segments: vec![segment], ..Default::default() });
         let mut clock = 0;
         ride_until_lap(&mut engine, 2, 300.0, &mut clock);

@@ -11,17 +11,17 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use velopopuli_core::gamify::{Badge, BADGES};
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Route};
-use velopopuli_core::types::{RideSummary, RouteMeta, Settings};
+use velopopuli_core::types::{RideSummary, RouteMeta, Settings, UploadRecord};
 use velopopuli_core::world::GridMesh;
 
+use crate::connectors::{self, ConnectorInfo, ConnectorStatus, Ctx, RideSearch, UploadRequest};
 use crate::devices::DevicesSnapshot;
 use crate::library::{self, GhostMeta, WorkoutMeta};
 use crate::session::{load_route, local_day, RideInit, RideRequest, Session, DEMO_ROUTE_ID};
-use crate::strava::{self, StravaStatus};
 use crate::{geo, group, now_ms, photos, secrets, smart, AppState};
 use velopopuli_core::fitness::{estimate_ftp, training_load, FtpEstimate, LoadDay, CURVE_DURATIONS};
 use velopopuli_core::gamify::{streaks, Streaks};
-use velopopuli_core::segments::{decode_polyline, place_segment, Segment, SegmentSource};
+use velopopuli_core::segments::{place_segment, Segment, SegmentSource};
 
 type Res<T> = Result<T, String>;
 
@@ -478,51 +478,91 @@ pub fn native_saving(state: State<AppState>) -> bool {
     state.native.lock().unwrap().as_ref().is_some_and(|n| n.saving())
 }
 
-// ── Strava ─────────────────────────────────────────────────────────────────
+// ── Connectors (Strava, …) ─────────────────────────────────────────────────
 
+impl AppState {
+    fn connector_ctx(&self) -> Ctx {
+        Ctx::new(self.store.dir(), &self.http)
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorEntry {
+    info: ConnectorInfo,
+    status: ConnectorStatus,
+    /// The ride setup can offer the rider's past rides on this service as ghosts.
+    lists_rides: bool,
+    /// The ride setup can ask this service for segments along the route.
+    finds_segments: bool,
+}
+
+/// Every connector with its description and current state, for the settings and upload UI.
 #[tauri::command]
-pub fn strava_status(state: State<AppState>) -> StravaStatus {
-    strava::status(state.store.dir())
+pub fn connectors_list(state: State<AppState>) -> Vec<ConnectorEntry> {
+    let ctx = state.connector_ctx();
+    connectors::ALL.iter().map(|c| ConnectorEntry { info: c.info(), status: c.status(&ctx), lists_rides: c.lists_rides(), finds_segments: c.finds_segments() }).collect()
+}
+
+/// The rider's rides on a connector, each marked whether it follows the route, for racing one
+/// as a ghost. Pages back through older rides until a few follow the route.
+#[tauri::command]
+pub async fn connector_rides(state: State<'_, AppState>, id: String, route_id: String) -> Res<RideSearch> {
+    let route = load_route(&state.store, &route_id)?;
+    let ctx = state.connector_ctx();
+    connectors::find_rides(connectors::get(&id)?, &ctx, &route).await
 }
 
 #[tauri::command]
-pub fn strava_set_app(state: State<AppState>, client_id: String, client_secret: String) -> Res<StravaStatus> {
-    strava::set_app(state.store.dir(), &client_id, &client_secret)
+pub fn connector_status(state: State<AppState>, id: String) -> Res<ConnectorStatus> {
+    Ok(connectors::get(&id)?.status(&state.connector_ctx()))
 }
 
 #[tauri::command]
-pub async fn strava_connect(app: AppHandle, state: State<'_, AppState>) -> Res<StravaStatus> {
-    strava::connect(state.store.dir(), &state.http, |url| {
-        let _ = app.opener().open_url(url, None::<&str>);
-    })
-    .await
+pub fn connector_configure(state: State<AppState>, id: String, fields: std::collections::BTreeMap<String, String>) -> Res<ConnectorStatus> {
+    connectors::get(&id)?.configure(&state.connector_ctx(), &fields)
 }
 
 #[tauri::command]
-pub async fn strava_disconnect(state: State<'_, AppState>) -> Res<StravaStatus> {
-    strava::disconnect(state.store.dir(), &state.http).await
+pub async fn connector_connect(app: AppHandle, state: State<'_, AppState>, id: String) -> Res<ConnectorStatus> {
+    let ctx = state.connector_ctx();
+    connectors::get(&id)?
+        .connect(
+            &ctx,
+            Box::new(move |url| {
+                let _ = app.opener().open_url(url, None::<&str>);
+            }),
+        )
+        .await
 }
 
 #[tauri::command]
-pub async fn strava_upload(state: State<'_, AppState>, ride_id: String, file_path: String, name: String, description: String) -> Res<u64> {
+pub async fn connector_disconnect(state: State<'_, AppState>, id: String) -> Res<ConnectorStatus> {
+    let ctx = state.connector_ctx();
+    connectors::get(&id)?.disconnect(&ctx).await
+}
+
+/// Sends a ride's FIT file to a connector and remembers the result against the ride,
+/// so the ride isn't uploaded there twice.
+#[tauri::command]
+pub async fn connector_upload(state: State<'_, AppState>, id: String, ride_id: String, file_path: String, name: String, description: String) -> Res<UploadRecord> {
     // Only files this app wrote are eligible — the UI can't use this to send arbitrary paths.
-    let path = PathBuf::from(&file_path);
-    if !state.store.owns_activity(&path) {
+    let file = PathBuf::from(&file_path);
+    if !state.store.owns_activity(&file) {
         return Err("Not a VeloPopuli activity file.".into());
     }
-    let activity_id = strava::upload(state.store.dir(), &state.http, &path, &name, &description).await?;
-    // Remember the link so the ride isn't uploaded twice.
+    let ctx = state.connector_ctx();
+    let record = connectors::get(&id)?.upload(&ctx, &UploadRequest { file, name, description }).await?;
+    // The upload above can take a while and runs for several connectors at once; only the
+    // read-change-write of the ride list is serialised.
+    let _guard = state.rides_lock.lock().unwrap();
     let mut rides: Vec<RideSummary> = state.store.get("rides").unwrap_or_default();
+    rides.iter_mut().for_each(RideSummary::migrate_uploads);
     if let Some(ride) = rides.iter_mut().find(|r| r.id == ride_id) {
-        ride.strava_activity_id = Some(activity_id);
-        state.store.set("rides", &rides)?;
+        ride.uploads.insert(id, record.clone());
     }
-    Ok(activity_id)
-}
-
-#[tauri::command]
-pub async fn strava_activities(state: State<'_, AppState>) -> Res<Vec<strava::ActivityItem>> {
-    strava::recent_rides(state.store.dir(), &state.http).await
+    state.store.set("rides", &rides)?;
+    Ok(record)
 }
 
 /// Whether the route is a closed loop that can be ridden in laps. Builds the route rather than reading the
@@ -532,11 +572,12 @@ pub async fn route_is_loop(state: State<'_, AppState>, route_id: String) -> Res<
     Ok(load_route(&state.store, &route_id)?.closed)
 }
 
-/// Finds Strava segments the route rides from start to finish and keeps them with the route.
+/// Asks a connector for segments along the route, keeps the ones the route rides from start
+/// to finish, and stores them with the route next to other connectors' segments.
 #[tauri::command]
-pub async fn segments_fetch(state: State<'_, AppState>, route_id: String) -> Res<Vec<Segment>> {
+pub async fn segments_fetch(state: State<'_, AppState>, id: String, route_id: String) -> Res<Vec<Segment>> {
     let route = load_route(&state.store, &route_id)?;
-    // Strava's explore call returns at most ten segments per area, so ask about the route in pieces.
+    // Services answer per area with a handful of segments, so ask about the route in pieces.
     let mut boxes = Vec::new();
     let mut d = 0.0;
     while d < route.total {
@@ -547,14 +588,13 @@ pub async fn segments_fetch(state: State<'_, AppState>, route_id: String) -> Res
         d += 3000.0;
     }
     boxes.truncate(40);
-    let found = strava::segments_near(state.store.dir(), &state.http, &boxes).await?;
-    let mut segments: Vec<Segment> = found
-        .iter()
-        .filter_map(|f| {
-            let (start, end) = place_segment(&route, &decode_polyline(&f.points), f.distance)?;
-            Some(Segment { id: format!("strava-{}", f.id), name: f.name.clone(), source: SegmentSource::Strava, start, end, avg_grade: f.avg_grade, record: None })
-        })
-        .collect();
+    let ctx = state.connector_ctx();
+    let found = connectors::get(&id)?.segments_near(&ctx, &boxes).await?;
+    let mut segments: Vec<Segment> = library::route_segments(&state.store, &route_id).into_iter().filter(|s| s.connector_id() != Some(id.as_str())).collect();
+    segments.extend(found.iter().filter_map(|f| {
+        let (start, end) = place_segment(&route, &f.points, f.distance)?;
+        Some(Segment { id: format!("{id}-{}", f.id), name: f.name.clone(), source: SegmentSource::Remote, connector: Some(id.clone()), start, end, avg_grade: f.avg_grade, record: f.record.clone() })
+    }));
     segments.sort_by(|a, b| a.start.total_cmp(&b.start));
     state.store.set(&format!("segments-{route_id}"), &segments)?;
     Ok(segments)
@@ -626,11 +666,13 @@ pub async fn ghost_import_file(app: AppHandle, state: State<'_, AppState>, route
     library::add_ghost(&state.store, &route_id, &route, &name, &track).map(Some)
 }
 
+/// Fetches one of the rider's rides from a connector and keeps it as a ghost for the route.
 #[tauri::command]
-pub async fn ghost_import_strava(state: State<'_, AppState>, route_id: String, activity_id: u64) -> Res<GhostMeta> {
-    let (name, track) = strava::activity_track(state.store.dir(), &state.http, activity_id).await?;
+pub async fn ghost_import_connector(state: State<'_, AppState>, id: String, route_id: String, ride_id: String) -> Res<GhostMeta> {
+    let ctx = state.connector_ctx();
+    let track = connectors::get(&id)?.ride_track(&ctx, &ride_id).await?;
     let route = load_route(&state.store, &route_id)?;
-    library::add_ghost(&state.store, &route_id, &route, &name, &track)
+    library::add_ghost(&state.store, &route_id, &route, &track.name, &track.points)
 }
 
 #[tauri::command]

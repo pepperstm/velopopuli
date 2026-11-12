@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { fmtDist, fmtTime } from '../core/fmt'
 import { api, useSettings } from '../state'
-import type { GhostMeta, RideRequest, RouteMeta, Segment, StravaActivity, WorkoutMeta } from '../types'
+import type { ConnectorEntry, GhostMeta, RemoteRide, RideRequest, RideSearch, RouteMeta, Segment, WorkoutMeta } from '../types'
 import { WorkoutShape } from './Workouts'
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`
 
-/** Chosen before a ride: a workout, ghosts to race, Strava segments and a group-ride room. */
+/** Chosen before a ride: a workout, ghosts to race, segments from connected services and a group-ride room. */
 export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: () => void; onStart: (r: RideRequest) => void }): React.JSX.Element {
   const { route } = props
   const { settings } = useSettings()
@@ -17,24 +17,28 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   const [ghosts, setGhosts] = useState<GhostMeta[]>([])
   const [ghostIds, setGhostIds] = useState<string[]>([])
   const [segments, setSegments] = useState<Segment[]>([])
-  const [activities, setActivities] = useState<StravaActivity[] | null>(null)
+  /** Rides fetched from one connector, while the rider picks one; `all` also lists those off this route. */
+  const [remote, setRemote] = useState<{ connector: ConnectorEntry; search: RideSearch; all: boolean } | null>(null)
   const [group, setGroup] = useState(Boolean(props.room))
   const [room, setRoom] = useState(props.room ?? Math.random().toString(36).slice(2, 8).toUpperCase())
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [isLoop, setIsLoop] = useState(false)
   const [laps, setLaps] = useState('')
-  const [stravaConnected, setStravaConnected] = useState(false)
+  const [connectors, setConnectors] = useState<ConnectorEntry[]>([])
   const isDemo = route.id === 'demo'
   // A built-in velodrome (its card is the anticlockwise route): which way round to ride it.
   const isTrack = route.id === 'herne-hill'
   const [clockwise, setClockwise] = useState(false)
   const rideId = isTrack && clockwise ? `${route.id}-clockwise` : route.id
+  const segmentConnectors = connectors.filter((c) => c.findsSegments && c.status.connected)
+  const nameOf = (id: string | undefined): string => connectors.find((c) => c.info.id === id)?.info.name ?? id ?? 'a service'
+  const sourceNames = [...new Set(segments.map((s) => nameOf(s.connector)))].join(' and ')
 
   useEffect(() => {
     void api.workouts.list().then(setWorkouts)
     void api.routes.isLoop(rideId).then(setIsLoop, () => setIsLoop(false))
-    void api.strava.status().then((s) => setStravaConnected(s.connected))
+    void api.connectors.list().then(setConnectors)
     if (!isDemo) {
       void api.ghosts.list(rideId).then((g) => {
         setGhosts(g)
@@ -60,6 +64,14 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
     if (!g) return
     setGhosts((all) => [...all, g])
     setGhostIds((ids) => [...ids, g.id])
+  }
+  const pickRemote = (a: RemoteRide): void => {
+    if (!remote) return
+    const { connector } = remote
+    void task(`Fetching the ride from ${connector.info.name}…`, async () => {
+      addGhost(await api.ghosts.importRemote(connector.info.id, rideId, a.id))
+      setRemote(null)
+    })
   }
 
   const lapRide = isLoop && laps !== ''
@@ -123,7 +135,9 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
             {!lapRide && (
               <>
                 <h3>Ghosts to race</h3>
-                {ghosts.length === 0 && <p className="muted small">Import someone's recorded ride of this road (GPX or FIT, or from Strava) to race it.</p>}
+                {ghosts.length === 0 && (
+                  <p className="muted small">Import someone's recorded ride of this road (GPX or FIT, or from a connected service) to race it.</p>
+                )}
                 {ghosts.map((g) => (
                   <label key={g.id} className="field toggle ghost-row">
                     <input
@@ -153,31 +167,30 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                   <button disabled={!!busy} onClick={() => void task('Reading the ride…', async () => addGhost(await api.ghosts.importFile(rideId)))}>
                     From a file…
                   </button>
-                  {stravaConnected && (
-                    <button disabled={!!busy} onClick={() => void task('Loading your Strava rides…', async () => setActivities(await api.stravaActivities()))}>
-                      From Strava…
-                    </button>
-                  )}
-                </div>
-                {activities && (
-                  <div className="pick-list">
-                    {activities.length === 0 && <div className="muted small">No rides with GPS on your Strava.</div>}
-                    {activities.map((a) => (
+                  {connectors
+                    .filter((c) => c.listsRides && c.status.connected)
+                    .map((c) => (
                       <button
-                        key={a.id}
-                        className="ghost"
+                        key={c.info.id}
                         disabled={!!busy}
                         onClick={() =>
-                          void task('Fetching the ride from Strava…', async () => {
-                            addGhost(await api.ghosts.importStrava(rideId, a.id))
-                            setActivities(null)
-                          })
+                          void task(`Loading your ${c.info.name} rides…`, async () =>
+                            setRemote({ connector: c, search: await api.connectors.rides(c.info.id, rideId), all: false })
+                          )
                         }
                       >
-                        {a.name} · {a.start.slice(0, 10)} · {fmtDist(a.distance, u)}
+                        From {c.info.name}…
                       </button>
                     ))}
-                  </div>
+                </div>
+                {remote && (
+                  <RemotePicker
+                    remote={remote}
+                    routeLength={route.distance}
+                    busy={!!busy}
+                    onAll={() => setRemote({ ...remote, all: true })}
+                    onPick={(a) => pickRemote(a)}
+                  />
                 )}
               </>
             )}
@@ -186,18 +199,33 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
             <p className="muted small">
               The route's climbs are always timed.{' '}
               {segments.length
-                ? `${segments.length} Strava segment${segments.length === 1 ? '' : 's'} on this route: ${segments
+                ? `${segments.length} segment${segments.length === 1 ? '' : 's'} from ${sourceNames} on this route: ${segments
                     .slice(0, 4)
                     .map((s) => s.name)
                     .join(', ')}${segments.length > 4 ? '…' : ''}`
-                : 'Strava segments along the route can be timed too.'}
+                : 'Segments from a connected service can be timed too.'}
             </p>
-            {stravaConnected ? (
-              <button disabled={!!busy} onClick={() => void task('Looking for Strava segments…', async () => setSegments(await api.segments.fetch(rideId)))}>
-                {segments.length ? 'Refresh Strava segments' : 'Find Strava segments'}
-              </button>
+            {segmentConnectors.length ? (
+              <div className="row">
+                {segmentConnectors.map((c) => (
+                  <button
+                    key={c.info.id}
+                    disabled={!!busy}
+                    onClick={() => void task(`Looking for ${c.info.name} segments…`, async () => setSegments(await api.segments.fetch(c.info.id, rideId)))}
+                  >
+                    {segments.some((s) => s.connector === c.info.id) ? `Refresh ${c.info.name} segments` : `Find ${c.info.name} segments`}
+                  </button>
+                ))}
+              </div>
             ) : (
-              <p className="muted small">Connect Strava in Settings to find segments.</p>
+              <p className="muted small">
+                Connect{' '}
+                {connectors
+                  .filter((c) => c.findsSegments)
+                  .map((c) => c.info.name)
+                  .join(' or ') || 'a service'}{' '}
+                in Settings to find segments.
+              </p>
             )}
           </>
         )}
@@ -246,6 +274,52 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
           <button onClick={props.onCancel}>Cancel</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** The rides that follow this route first; the rest on request, since a ride may still fit
+ *  where its simplified outline didn't. */
+function RemotePicker(props: {
+  remote: { connector: ConnectorEntry; search: RideSearch; all: boolean }
+  /** Metres. */
+  routeLength: number
+  busy: boolean
+  onAll: () => void
+  onPick: (ride: RemoteRide) => void
+}): React.JSX.Element {
+  const { settings } = useSettings()
+  const { connector, search, all } = props.remote
+  const name = connector.info.name
+  // The ones covering most of the route first; newest first among equals.
+  const fitting = search.rides.filter((r) => r.followsRoute).sort((a, b) => Math.round(b.followedM / 500) - Math.round(a.followedM / 500))
+  const others = search.rides.filter((r) => !r.followsRoute)
+  const row = (a: RemoteRide): React.JSX.Element => (
+    <button key={a.id} className="ghost" disabled={props.busy} onClick={() => props.onPick(a)}>
+      {a.name} · {a.start.slice(0, 10)} · {fmtDist(a.distance, settings.units)}
+      {a.followsRoute && ` · ${Math.min(100, Math.round((a.followedM / props.routeLength) * 100))} % of the route`}
+    </button>
+  )
+  const looked = `${search.rides.length}${search.more ? ' most recent' : ''}`
+  return (
+    <div className="pick-list">
+      {search.rides.length === 0 && <div className="muted small">No rides with GPS on your {name}.</div>}
+      {search.rides.length > 0 && (
+        <div className="muted small">
+          {fitting.length
+            ? `${fitting.length} of your ${looked} ${name} rides ride this route.`
+            : `None of your ${looked} ${name} rides seem to ride this route from its start.`}
+        </div>
+      )}
+      {fitting.map(row)}
+      {others.length > 0 &&
+        (all ? (
+          others.map(row)
+        ) : (
+          <button className="ghost" onClick={props.onAll}>
+            Show the other {others.length} rides
+          </button>
+        ))}
     </div>
   )
 }

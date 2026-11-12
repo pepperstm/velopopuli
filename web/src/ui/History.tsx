@@ -2,7 +2,7 @@ import { fmtDist, fmtEle, fmtTime, levelFor } from '../core/fmt'
 import { api, useBadges, useSettings, useStored } from '../state'
 import type { Profile, RideSummary } from '../types'
 import { Fitness } from './Fitness'
-import { StravaUpload } from './Summary'
+import { UploadButtons } from './Summary'
 
 export function History({ profile }: { profile: Profile }): React.JSX.Element {
   const { settings } = useSettings()
@@ -71,7 +71,7 @@ export function History({ profile }: { profile: Profile }): React.JSX.Element {
               <span>↗ {fmtEle(r.ascentM, u)}</span>
             </div>
             <div className="row">
-              <StravaUpload ride={r} />
+              <UploadButtons ride={r} />
               <button className="ghost" onClick={() => void api.revealFile(r.filePath)}>
                 File
               </button>

@@ -9,7 +9,7 @@ Strava gives every app its own key, and an open-source app can't ship a secret, 
 Then:
 
 - Rides upload as **Virtual Rides** with the route map — one click on the summary, or automatically (Settings).
-- **Segments** along a route are timed with a live gap to your best.
+- **Segments** along a route (press *Find Strava segments* when setting up a ride) are timed with a live gap to your best.
 - **Your activities** can be raced as ghosts.
 
 The key and tokens are kept in the system keychain (macOS, Windows) or a file only you can read (Linux).
