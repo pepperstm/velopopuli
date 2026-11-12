@@ -61,7 +61,11 @@ export const api = {
     antStop: () => invoke<void>('ant_stop'),
     demoAdd: () => invoke<void>('demo_add'),
     demoNudge: (delta: number) => invoke<void>('demo_nudge', { delta }),
-    remove: (id: string) => invoke<void>('device_remove', { id })
+    remove: (id: string) => invoke<void>('device_remove', { id }),
+    /** Looks again for the Bluetooth sensors connected before that aren't connected now. */
+    lookForKnown: () => invoke<void>('devices_look_for_known'),
+    /** Stops reconnecting a remembered Bluetooth sensor. */
+    forget: (id: string) => invoke<void>('device_forget', { id })
   },
   ride: {
     start: (request: RideRequest) => invoke<RideInit>('ride_start', { request }),
