@@ -80,14 +80,30 @@ export function sampleAt(route: Route, dist: number, out?: RoutePos): RoutePos {
   const i = Math.min(route.n - 2, Math.floor(f))
   const t = f - i
   const lerp = (a: Float64Array): number => a[i] + (a[i + 1] - a[i]) * t
-  // Heading is taken over a ~25 m baseline so GPS jitter doesn't shake the camera.
-  const a = Math.max(0, i - 2)
-  const b = Math.min(route.n - 1, i + 3)
   const o = out ?? ({} as RoutePos)
   o.x = lerp(route.x)
   o.z = lerp(route.z)
   o.ele = lerp(route.ele)
   o.grade = lerp(route.grade)
-  o.heading = Math.atan2(route.x[b] - route.x[a], route.z[b] - route.z[a])
+  o.heading = headingAt(route, f)
   return o
+}
+
+/** The direction of travel at `f` samples along, over a ~25 m baseline so GPS jitter doesn't
+ * shake the camera. Blended between neighbouring samples, so a corner turns smoothly rather
+ * than in a step at each one. */
+function headingAt(route: Route, f: number): number {
+  // Over samples k-2..k+3, centred on k + 0.5.
+  const over = (k: number): number => {
+    const a = Math.max(0, k - 2)
+    const b = Math.min(route.n - 1, k + 3)
+    return Math.atan2(route.x[b] - route.x[a], route.z[b] - route.z[a])
+  }
+  const u = Math.max(0, f - 0.5)
+  const k = Math.min(route.n - 2, Math.floor(u))
+  const s = Math.min(1, u - k)
+  const h0 = over(k)
+  // The short way round, across ±π.
+  const d = Math.atan2(Math.sin(over(k + 1) - h0), Math.cos(over(k + 1) - h0))
+  return h0 + d * s
 }

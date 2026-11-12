@@ -1486,14 +1486,31 @@ fn sample(route: &velopopuli_core::gpx::Route, dist: f64) -> Pos {
     let i = (f.floor() as usize).min(route.n - 2);
     let t = f - i as f64;
     let lerp = |a: f64, b: f64| a + (b - a) * t;
-    let (a, b) = (i.saturating_sub(2), (i + 3).min(route.n - 1));
     Pos {
         x: lerp(route.x[i], route.x[i + 1]),
         z: lerp(route.z[i], route.z[i + 1]),
         ele: lerp(route.ele[i] as f64, route.ele[i + 1] as f64),
         grade: lerp(route.grade[i] as f64, route.grade[i + 1] as f64),
-        heading: (route.x[b] - route.x[a]).atan2(route.z[b] - route.z[a]),
+        heading: heading_at(route, f),
     }
+}
+
+/// The direction of travel at `f` samples along, as the page's `headingAt` gives it: over a
+/// ~25 m baseline against GPS jitter, blended between neighbouring samples so a corner turns
+/// smoothly rather than in a step at each one.
+fn heading_at(route: &velopopuli_core::gpx::Route, f: f64) -> f64 {
+    // Over samples k-2..k+3, centred on k + 0.5.
+    let over = |k: usize| {
+        let (a, b) = (k.saturating_sub(2), (k + 3).min(route.n - 1));
+        (route.x[b] - route.x[a]).atan2(route.z[b] - route.z[a])
+    };
+    let u = (f - 0.5).max(0.0);
+    let k = (u.floor() as usize).min(route.n - 2);
+    let s = (u - k as f64).min(1.0);
+    let h0 = over(k);
+    // The short way round, across ±π.
+    let d = (over(k + 1) - h0).sin().atan2((over(k + 1) - h0).cos());
+    h0 + d * s
 }
 
 /// Ground height from a loaded chunk, if the chunk under the point is in.
@@ -1515,4 +1532,39 @@ fn write_png(path: &std::path::Path, w: u32, h: u32, rgba: &[u8]) -> Result<(), 
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
     enc.write_header().and_then(|mut wr| wr.write_image_data(rgba)).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use velopopuli_core::gpx::{build_route, RawPoint};
+
+    /// A rider going round a tight circle turns a little for every bit ridden, never in steps,
+    /// and faces along the road.
+    #[test]
+    fn corners_turn_smoothly() {
+        // Two laps of a 30 m-radius circle, a point every 2°.
+        let (lat0, lon0, r) = (51.0_f64, 0.0_f64, 30.0);
+        let m_lat = 111_320.0;
+        let raw: Vec<RawPoint> = (0..=360)
+            .map(|k| {
+                let a = (k as f64 * 2.0).to_radians();
+                RawPoint { lat: lat0 + r * a.sin() / m_lat, lon: lon0 + r * a.cos() / (m_lat * lat0.to_radians().cos()), ele: None }
+            })
+            .collect();
+        let route = build_route("Circle", &raw).unwrap();
+        let wrap = |d: f64| d.sin().atan2(d.cos());
+        let (from, to, dd) = (20.0, route.total - 20.0, 0.1);
+        let mut biggest: f64 = 0.0;
+        let mut d = from;
+        while d < to {
+            let (p, q) = (super::sample(&route, d), super::sample(&route, d + dd));
+            biggest = biggest.max(wrap(q.heading - p.heading).abs());
+            // Facing the way the rider moves.
+            let moving = (q.x - p.x).atan2(q.z - p.z);
+            assert!(wrap(p.heading - moving).abs() < 0.15, "at {d:.1} m facing {:.3}, moving {:.3}", p.heading, moving);
+            d += dd;
+        }
+        // Round a 30 m circle, 10 cm turns the rider by 1/300 rad; a step at each sample would be ~50 times that.
+        assert!(biggest < 3.0 * dd / r, "the heading jumped {biggest:.4} rad in {dd} m");
+    }
 }
