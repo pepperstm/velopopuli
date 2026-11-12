@@ -20,7 +20,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use velopopuli_core::ride::{RideEngine, RivalKind};
 use velopopuli_core::world::{
-    barrier_model, sprite_frame, surface_runs, tree_model, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, SPRITES_FROM, TIMBER, TREE_FLOATS, TREE_KINDS, UNMARKED,
+    barrier_model, sprite_frame, surface_runs, tree_model, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, SPRITES_FROM, TIMBER, TRACK, TREE_FLOATS, TREE_KINDS, UNMARKED,
 };
 use wgpu::util::DeviceExt;
 
@@ -775,6 +775,11 @@ impl Renderer {
     #[allow(clippy::too_many_arguments)]
     fn run(&mut self, world: Arc<World>, engine: Arc<Mutex<RideEngine>>, assets: Assets, control: Arc<Mutex<Control>>, stop: Arc<AtomicBool>, app: AppHandle, host: Arc<Mutex<Option<HostView>>>) {
         let route = world.route.clone();
+        // A lap ride goes round a closed route: distances wrap at the line.
+        let lap_ride = engine.lock().unwrap().lap_ride();
+        let total = route.total;
+        // The signed shortest way from `from` to `to` round the loop.
+        let wrapped = |from: f64, to: f64| (to - from + total / 2.0).rem_euclid(total) - total / 2.0;
         let mut look = assets.look;
         let mut origin = [route.x[0], route.z[0]];
         let mut scene = SceneMeshes::build(&self.device, &world, &assets, origin);
@@ -860,9 +865,13 @@ impl Renderer {
                 (e.distance, if e.moving { e.speed } else { 0.0 }, e.cadence.unwrap_or(if e.moving && e.power > 20.0 { 80.0 } else { 0.0 }), rivals)
             };
             shown += speed * dt;
-            shown += (distance - shown) * (1.0 - (-dt * 6.0).exp());
-            if (distance - shown).abs() > 30.0 {
+            let behind = |shown: f64| if lap_ride { wrapped(shown, distance) } else { distance - shown };
+            shown += behind(shown) * (1.0 - (-dt * 6.0).exp());
+            if behind(shown).abs() > 30.0 {
                 shown = distance;
+            } else if lap_ride {
+                // Fold back to the start once past the line, but keep the finish (distance == total) as it is.
+                shown = if distance >= total { shown.min(total) } else { shown.rem_euclid(total) };
             }
             crank += cadence / 60.0 * dt;
             let p = sample(&route, shown);
@@ -932,10 +941,15 @@ impl Renderer {
             if barriers_for.is_none_or(|(at, o)| (shown - at).abs() > 40.0 || o != origin) {
                 barriers_for = Some((shown, origin));
                 let mut per_look: Vec<Vec<f32>> = vec![Vec::new(); BARRIER_LOOKS];
-                let first = barrier_sections.partition_point(|b| (b[4] as f64) < shown - 150.0);
-                for b in barrier_sections[first..].iter().take_while(|b| (b[4] as f64) < shown + 900.0) {
-                    if let Some(list) = per_look.get_mut(b[5] as usize) {
-                        list.extend_from_slice(&[(b[0] as f64 - origin[0]) as f32, b[1], (b[2] as f64 - origin[1]) as f32, b[3], b[6], 0.0]);
+                // On a lap ride the stretch carries on across the line: the part past the end is the start.
+                let shifts = if lap_ride { vec![0.0, total, -total] } else { vec![0.0] };
+                for shift in shifts {
+                    let (from, to) = (shown - 150.0 + shift, shown + 900.0 + shift);
+                    let first = barrier_sections.partition_point(|b| (b[4] as f64) < from);
+                    for b in barrier_sections[first..].iter().take_while(|b| (b[4] as f64) < to) {
+                        if let Some(list) = per_look.get_mut(b[5] as usize) {
+                            list.extend_from_slice(&[(b[0] as f64 - origin[0]) as f32, b[1], (b[2] as f64 - origin[1]) as f32, b[3], b[6], 0.0]);
+                        }
                     }
                 }
                 for (slot, list) in barrier_instances.iter_mut().zip(per_look) {
@@ -1027,8 +1041,8 @@ impl Renderer {
             riders.push((slots.len() - 1, pose, false));
             let mut rider_tags: Vec<(String, [f64; 3])> = Vec::new();
             for (i, (id, kind, color, d, _)) in rivals.iter().enumerate() {
-                let gap = (d - shown).abs();
-                if gap > 700.0 || *d <= 0.0 || *d >= route.total || slots.len() as u64 >= MAX_DRAWS {
+                let gap = if lap_ride { wrapped(shown, *d).abs() } else { (d - shown).abs() };
+                if gap > 700.0 || (!lap_ride && (*d <= 0.0 || *d >= route.total)) || slots.len() as u64 >= MAX_DRAWS {
                     continue;
                 }
                 let lane = *lanes.entry(id.clone()).or_insert_with(|| (if i % 2 == 1 { 1.0 } else { -1.0 }) * (1.3 + 0.5 * (i / 2) as f64));
@@ -1398,7 +1412,8 @@ impl SceneMeshes {
         let route = &world.route;
         let road = world.road();
         let section = LAYOUT.road_section;
-        let n = route.n;
+        // Road sections: one per sample, and on a closed loop one more that joins the road up at the line.
+        let n = road.looks.len();
         // Daylight doesn't follow the road into a tunnel.
         let covered = &world.scene.covered;
         let dim = |i: usize| {
@@ -1432,6 +1447,7 @@ impl SceneMeshes {
                     _ if look == UNMARKED => "road_lane",
                     _ if look == TIMBER => "road_timber",
                     _ if look == SINGLETRACK => "road_singletrack",
+                    _ if look == TRACK => "road_track",
                     _ if look == FORD => "road_ford",
                     Some(Surface::Concrete) => "road_concrete",
                     Some(Surface::Cobbles) => "road_cobbles",

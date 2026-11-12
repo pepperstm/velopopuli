@@ -211,6 +211,9 @@ pub const TIMBER: u8 = 6;
 pub const SINGLETRACK: u8 = 7;
 /// …or `FORD` for the stones of a ford's bed, under its water.
 pub const FORD: u8 = 8;
+/// …or `TRACK` for a velodrome's track: the côte d'azur, the measuring, sprinters' and stayers'
+/// lines, painted with the inside of the track at the +offset edge (mirrored when ridden clockwise).
+pub const TRACK: u8 = 9;
 /// Earth trails narrower than this are singletrack; the off-map dirt track (3 m) is wider.
 pub const SINGLETRACK_WIDTH: f64 = 2.5;
 

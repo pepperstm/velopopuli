@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { Barriers } from './barriers'
 import { SURFACES, surfaceRuns, surfaceTexture } from './surfaces'
 import { api } from '../bridge'
-import { bankAt, halfWidthAt, sampleAt, type Route, type RoutePos } from '../core/gpx'
+import { bankAt, halfWidthAt, sampleAt, wrapDist, wrapGap, type Route, type RoutePos } from '../core/gpx'
 import type { Landmark, WorldLayout } from '../types'
 import { RiderModel } from './rider'
 import { Terrain } from './terrain'
@@ -217,7 +217,11 @@ export class World {
     private covered: [number, number][],
     kmLabel: (km: number) => string,
     markerSpacing: number,
-    private landmarks: Landmark[] = []
+    private landmarks: Landmark[] = [],
+    /** A lap ride goes round a closed route: distances wrap at the line, and there is no finish arch. */
+    private lapRide = false,
+    /** A velodrome's track, with its own finish line painted on it: no arches. */
+    private venue = false
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -248,7 +252,9 @@ export class World {
     this.scene.add(this.barriers.group)
     for (let k = 0; k < SURFACES.length; k++) surfaceTexture(k).anisotropy = this.renderer.capabilities.getMaxAnisotropy()
     const dim = (sample: number): number => 1 - 0.62 * this.cover(sample * this.route.step, 12)
-    this.scene.add(buildRoad(road, this.route.n, this.layout.roadSection, dim), ...buildStructures(structures))
+    // Per section: positions and uvs (5 floats a vertex) and its look; a closed loop has one section more than samples.
+    const sections = road.byteLength / ((this.layout.roadSection * 5 + 1) * 4)
+    this.scene.add(buildRoad(road, sections, this.layout.roadSection, dim), ...buildStructures(structures))
   }
 
   /** Everything the native renderer needs from this scene (see `native.ts`). */
@@ -349,8 +355,9 @@ export class World {
     })
 
     this.addLandmarks()
+    if (this.venue) return
     this.addArch(Math.min(12, route.total), 0x2f7fd8, 'START')
-    this.addArch(route.total - 4, 0xd8382f, 'FINISH')
+    if (!this.lapRide) this.addArch(route.total - 4, 0xd8382f, 'FINISH')
   }
 
   /** Place-name signs on posts where the road enters a village or town, and roadside points of interest. */
@@ -436,8 +443,8 @@ export class World {
         this.others.set(r.id, other)
         this.scene.add(other.model.group, label)
       }
-      const gap = Math.abs(r.distance - f.distance)
-      const visible = gap < 700 && r.distance > 0 && r.distance < this.route.total
+      const gap = this.lapRide ? Math.abs(wrapGap(this.route.total, f.distance, r.distance)) : Math.abs(r.distance - f.distance)
+      const visible = gap < 700 && (this.lapRide || (r.distance > 0 && r.distance < this.route.total))
       other.model.group.visible = visible
       other.label.visible = visible && gap < 250 && gap > 12
       if (!visible) return
@@ -460,7 +467,7 @@ export class World {
     }
 
     this.terrain.update(p.x, p.z)
-    this.barriers?.update(f.distance)
+    this.barriers?.update(f.distance, this.lapRide ? this.route.total : undefined)
     this.updateCamera(dt, p, f.distance)
     this.sky.position.copy(this.camera.position)
     // The rider's lamp, just ahead and above, lights the road at night.
@@ -492,7 +499,7 @@ export class World {
     const back = Math.max(c.back, CAMERAS[0].back)
     if (this.underCover(dist - back - 6, dist + 30)) {
       c = CAMERAS[0]
-      const behind = sampleAt(this.route, Math.max(0, dist - c.back), this.camPos)
+      const behind = sampleAt(this.route, this.lapRide ? wrapDist(this.route.total, dist - c.back) : Math.max(0, dist - c.back), this.camPos)
       tx = behind.x
       tz = behind.z
       ty = behind.ele + c.up

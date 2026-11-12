@@ -136,6 +136,12 @@ pub fn demo_meta() -> RouteMeta {
     meta_for(DEMO_ROUTE_ID.into(), &demo_route(), 0)
 }
 
+/// The built-in velodromes, each as its route ridden the usual way round (anticlockwise).
+#[tauri::command]
+pub fn tracks_meta() -> Vec<RouteMeta> {
+    velopopuli_core::velodrome::TRACKS.iter().map(|t| meta_for(t.id.into(), &t.route(false), 0)).collect()
+}
+
 #[tauri::command]
 pub fn badges() -> &'static [Badge] {
     &BADGES
@@ -519,6 +525,13 @@ pub async fn strava_activities(state: State<'_, AppState>) -> Res<Vec<strava::Ac
     strava::recent_rides(state.store.dir(), &state.http).await
 }
 
+/// Whether the route is a closed loop that can be ridden in laps. Builds the route rather than reading the
+/// stored list, so routes imported before laps existed work too.
+#[tauri::command]
+pub async fn route_is_loop(state: State<'_, AppState>, route_id: String) -> Res<bool> {
+    Ok(load_route(&state.store, &route_id)?.closed)
+}
+
 /// Finds Strava segments the route rides from start to finish and keeps them with the route.
 #[tauri::command]
 pub async fn segments_fetch(state: State<'_, AppState>, route_id: String) -> Res<Vec<Segment>> {
@@ -883,6 +896,10 @@ pub struct SmokeConfig {
     shift: Option<i32>,
     /// Scroll to the heading with this text before capturing (VP_SMOKE_SCROLL).
     scroll: Option<String>,
+    /// Laps to ride on a closed route (VP_SMOKE_LAPS, 0 = until stopped).
+    laps: Option<u32>,
+    /// Ride this route instead of the newest in the library (VP_SMOKE_ROUTE, e.g. `herne-hill`).
+    route: Option<String>,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -912,6 +929,8 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         clip: std::env::var("VP_SMOKE_CLIP").ok().and_then(|v| v.parse().ok()),
         shift: std::env::var("VP_SMOKE_SHIFT").ok().and_then(|v| v.parse().ok()),
         scroll: std::env::var("VP_SMOKE_SCROLL").ok(),
+        laps: std::env::var("VP_SMOKE_LAPS").ok().and_then(|v| v.parse().ok()),
+        route: std::env::var("VP_SMOKE_ROUTE").ok(),
     })
 }
 

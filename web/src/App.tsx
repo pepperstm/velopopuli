@@ -33,7 +33,16 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
     // Ride the newest library route (or the demo) with the simulated rider.
     const routes = await api.kv.get<RouteMeta[]>('routes')
     await api.devices.demoAdd()
-    setScreen({ name: 'ride', request: { routeId: routes?.[0]?.id ?? 'demo', workoutId: smoke.workout, groupRoom: smoke.room, ghostIds: smoke.ghosts ?? [] } })
+    setScreen({
+      name: 'ride',
+      request: {
+        routeId: smoke.route ?? routes?.[0]?.id ?? 'demo',
+        workoutId: smoke.workout,
+        groupRoom: smoke.room,
+        ghostIds: smoke.ghosts ?? [],
+        laps: smoke.laps ?? null
+      }
+    })
   } else if (
     smoke.screen === 'devices' ||
     smoke.screen === 'history' ||

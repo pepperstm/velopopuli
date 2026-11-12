@@ -22,20 +22,27 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   const [room, setRoom] = useState(props.room ?? Math.random().toString(36).slice(2, 8).toUpperCase())
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [isLoop, setIsLoop] = useState(false)
+  const [laps, setLaps] = useState('')
   const [stravaConnected, setStravaConnected] = useState(false)
   const isDemo = route.id === 'demo'
+  // A built-in velodrome (its card is the anticlockwise route): which way round to ride it.
+  const isTrack = route.id === 'herne-hill'
+  const [clockwise, setClockwise] = useState(false)
+  const rideId = isTrack && clockwise ? `${route.id}-clockwise` : route.id
 
   useEffect(() => {
     void api.workouts.list().then(setWorkouts)
+    void api.routes.isLoop(rideId).then(setIsLoop, () => setIsLoop(false))
     void api.strava.status().then((s) => setStravaConnected(s.connected))
     if (!isDemo) {
-      void api.ghosts.list(route.id).then((g) => {
+      void api.ghosts.list(rideId).then((g) => {
         setGhosts(g)
         setGhostIds(g.map((x) => x.id))
       })
-      void api.segments.list(route.id).then(setSegments)
+      void api.segments.list(rideId).then(setSegments)
     }
-  }, [route.id, isDemo])
+  }, [rideId, isDemo])
 
   const task = async (label: string, fn: () => Promise<void>): Promise<void> => {
     setBusy(label)
@@ -55,6 +62,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
     setGhostIds((ids) => [...ids, g.id])
   }
 
+  const lapRide = isLoop && laps !== ''
   const chosen = workouts.find((w) => w.id === workoutId)
 
   return (
@@ -64,6 +72,32 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
         <p className="muted">
           {fmtDist(route.distance, u)} · {route.climbs} climb{route.climbs === 1 ? '' : 's'}
         </p>
+
+        {isTrack && (
+          <>
+            <h3>Direction</h3>
+            <select value={clockwise ? 'clockwise' : 'anticlockwise'} onChange={(e) => setClockwise(e.target.value === 'clockwise')}>
+              <option value="anticlockwise">Anticlockwise, as raced</option>
+              <option value="clockwise">Clockwise</option>
+            </select>
+          </>
+        )}
+
+        {isLoop && (
+          <>
+            <h3>Laps</h3>
+            <select value={laps} onChange={(e) => setLaps(e.target.value)}>
+              <option value="">Once round</option>
+              {[2, 3, 5, 10, 20].map((n) => (
+                <option key={n} value={n}>
+                  {n} laps
+                </option>
+              ))}
+              <option value="0">Until I stop</option>
+            </select>
+            {laps !== '' && <p className="muted small">Ghosts are off on a lap ride, and it won't set the route's best time.</p>}
+          </>
+        )}
 
         <h3>Workout</h3>
         <select value={workoutId} onChange={(e) => setWorkoutId(e.target.value)}>
@@ -86,62 +120,66 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
 
         {!isDemo && (
           <>
-            <h3>Ghosts to race</h3>
-            {ghosts.length === 0 && <p className="muted small">Import someone's recorded ride of this road (GPX or FIT, or from Strava) to race it.</p>}
-            {ghosts.map((g) => (
-              <label key={g.id} className="field toggle ghost-row">
-                <input
-                  type="checkbox"
-                  checked={ghostIds.includes(g.id)}
-                  onChange={(e) => setGhostIds((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((i) => i !== g.id)))}
-                />
-                <i style={{ background: hex(g.color) }} />
-                <span>
-                  {g.name}{' '}
-                  <em className="muted small">
-                    {fmtDist(g.distance, u)} in {fmtTime(g.timeS)}
-                  </em>
-                </span>
-                <button
-                  className="ghost small"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    void api.ghosts.remove(route.id, g.id).then(() => setGhosts((all) => all.filter((x) => x.id !== g.id)))
-                  }}
-                >
-                  ✕
-                </button>
-              </label>
-            ))}
-            <div className="row">
-              <button disabled={!!busy} onClick={() => void task('Reading the ride…', async () => addGhost(await api.ghosts.importFile(route.id)))}>
-                From a file…
-              </button>
-              {stravaConnected && (
-                <button disabled={!!busy} onClick={() => void task('Loading your Strava rides…', async () => setActivities(await api.stravaActivities()))}>
-                  From Strava…
-                </button>
-              )}
-            </div>
-            {activities && (
-              <div className="pick-list">
-                {activities.length === 0 && <div className="muted small">No rides with GPS on your Strava.</div>}
-                {activities.map((a) => (
-                  <button
-                    key={a.id}
-                    className="ghost"
-                    disabled={!!busy}
-                    onClick={() =>
-                      void task('Fetching the ride from Strava…', async () => {
-                        addGhost(await api.ghosts.importStrava(route.id, a.id))
-                        setActivities(null)
-                      })
-                    }
-                  >
-                    {a.name} · {a.start.slice(0, 10)} · {fmtDist(a.distance, u)}
-                  </button>
+            {!lapRide && (
+              <>
+                <h3>Ghosts to race</h3>
+                {ghosts.length === 0 && <p className="muted small">Import someone's recorded ride of this road (GPX or FIT, or from Strava) to race it.</p>}
+                {ghosts.map((g) => (
+                  <label key={g.id} className="field toggle ghost-row">
+                    <input
+                      type="checkbox"
+                      checked={ghostIds.includes(g.id)}
+                      onChange={(e) => setGhostIds((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((i) => i !== g.id)))}
+                    />
+                    <i style={{ background: hex(g.color) }} />
+                    <span>
+                      {g.name}{' '}
+                      <em className="muted small">
+                        {fmtDist(g.distance, u)} in {fmtTime(g.timeS)}
+                      </em>
+                    </span>
+                    <button
+                      className="ghost small"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        void api.ghosts.remove(rideId, g.id).then(() => setGhosts((all) => all.filter((x) => x.id !== g.id)))
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </label>
                 ))}
-              </div>
+                <div className="row">
+                  <button disabled={!!busy} onClick={() => void task('Reading the ride…', async () => addGhost(await api.ghosts.importFile(rideId)))}>
+                    From a file…
+                  </button>
+                  {stravaConnected && (
+                    <button disabled={!!busy} onClick={() => void task('Loading your Strava rides…', async () => setActivities(await api.stravaActivities()))}>
+                      From Strava…
+                    </button>
+                  )}
+                </div>
+                {activities && (
+                  <div className="pick-list">
+                    {activities.length === 0 && <div className="muted small">No rides with GPS on your Strava.</div>}
+                    {activities.map((a) => (
+                      <button
+                        key={a.id}
+                        className="ghost"
+                        disabled={!!busy}
+                        onClick={() =>
+                          void task('Fetching the ride from Strava…', async () => {
+                            addGhost(await api.ghosts.importStrava(rideId, a.id))
+                            setActivities(null)
+                          })
+                        }
+                      >
+                        {a.name} · {a.start.slice(0, 10)} · {fmtDist(a.distance, u)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             <h3>Segments</h3>
@@ -155,7 +193,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                 : 'Strava segments along the route can be timed too.'}
             </p>
             {stravaConnected ? (
-              <button disabled={!!busy} onClick={() => void task('Looking for Strava segments…', async () => setSegments(await api.segments.fetch(route.id)))}>
+              <button disabled={!!busy} onClick={() => void task('Looking for Strava segments…', async () => setSegments(await api.segments.fetch(rideId)))}>
                 {segments.length ? 'Refresh Strava segments' : 'Find Strava segments'}
               </button>
             ) : (
@@ -193,7 +231,15 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
           <button
             className="primary"
             disabled={!!busy || (group && !room)}
-            onClick={() => props.onStart({ routeId: route.id, workoutId: workoutId || null, ghostIds, groupRoom: group ? room : null })}
+            onClick={() =>
+              props.onStart({
+                routeId: rideId,
+                workoutId: workoutId || null,
+                ghostIds: lapRide ? [] : ghostIds,
+                groupRoom: group ? room : null,
+                laps: lapRide ? Number(laps) : null
+              })
+            }
           >
             Start riding
           </button>

@@ -258,6 +258,10 @@ impl World {
     /// on the inside of a bend too tight to stand them; round a tight bend, fence panels
     /// (look `FENCE`) on the outside instead.
     pub fn barriers(&self) -> Vec<[f32; 7]> {
+        // A velodrome has its own railing.
+        if self.venue.is_some() {
+            return Vec::new();
+        }
         let r = &self.route;
         let kinds = self.field.kinds();
         let blocked = |i: usize| kinds.get(i).is_some_and(|&kind| kind != OPEN) || self.scene.trails.get(i).is_some_and(Option::is_some);

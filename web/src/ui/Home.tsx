@@ -33,10 +33,12 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [demo, setDemo] = useState<RouteMeta | null>(null)
+  const [tracks, setTracks] = useState<RouteMeta[]>([])
   const [setup, setSetup] = useState<{ route: RouteMeta; room?: string } | null>(null)
   const [joining, setJoining] = useState(false)
   const [room, setRoom] = useState('')
   useEffect(() => void api.routes.demoMeta().then(setDemo), [])
+  useEffect(() => void api.routes.tracksMeta().then(setTracks), [])
 
   const add = (added: RouteMeta[], problems: string[]): void => {
     if (added.length) saveRoutes([...added, ...(routes ?? [])])
@@ -83,7 +85,15 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
           {r.climbs} climb{r.climbs === 1 ? '' : 's'}
         </span>
       </div>
-      <div className="route-best">{bests?.[r.id] ? `Best ${fmtTime(bests[r.id])}` : builtIn ? 'Built-in demo route' : 'Not ridden yet'}</div>
+      <div className="route-best">
+        {bests?.[r.id]
+          ? `Best ${fmtTime(bests[r.id])}`
+          : tracks.some((t) => t.id === r.id)
+            ? 'Built-in velodrome'
+            : builtIn
+              ? 'Built-in demo route'
+              : 'Not ridden yet'}
+      </div>
       <div className="row">
         <button className="primary" onClick={() => setSetup({ route: r })}>
           Ride
@@ -169,6 +179,7 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
       {error && <div className="error">{error}</div>}
       <div className="grid">
         {(routes ?? []).map((r) => card(r, false))}
+        {tracks.map((t) => card(t, true))}
         {demo && card(demo, true)}
       </div>
     </div>

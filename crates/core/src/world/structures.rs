@@ -84,6 +84,9 @@ impl World {
         for deck in &self.scene.decks {
             self.deck(&mut out.lit, deck);
         }
+        if let Some(venue) = &self.venue {
+            venue.dress(self, &mut out.lit);
+        }
         out
     }
 

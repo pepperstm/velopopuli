@@ -52,6 +52,8 @@ pub struct RideRequest {
     pub ghost_ids: Vec<String>,
     /// Join or host this group-ride room.
     pub group_room: Option<String>,
+    /// Laps on a closed route: absent for none, 0 to keep going until stopped.
+    pub laps: Option<u32>,
 }
 
 /// Days since the Unix epoch in local time.
@@ -63,6 +65,9 @@ pub fn local_day(ms: u64) -> i64 {
 pub fn load_route(store: &Store, id: &str) -> Result<Route, String> {
     if id == DEMO_ROUTE_ID {
         return Ok(demo_route());
+    }
+    if let Some((track, clockwise)) = velopopuli_core::velodrome::track_for(id) {
+        return Ok(track.route(clockwise));
     }
     let stored: StoredRoute = store.get(&format!("route-{id}")).ok_or("This route is no longer in your library.")?;
     build_route(&stored.name, &parse_gpx(&stored.gpx)?.1)
@@ -94,6 +99,10 @@ pub struct RideInit {
     /// Local hour when the ride started (for "real time of day").
     hour: f64,
     landmarks: Vec<Landmark>,
+    /// Laps as the engine understands them (none on an open route).
+    laps: Option<u32>,
+    /// The route is a velodrome's track: no start and finish arches, it has its own line.
+    venue: bool,
 }
 
 #[derive(Serialize)]
@@ -119,7 +128,12 @@ struct GearHud {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RideState<'a> {
+    /// Position on the route; on a lap ride, on the loop.
     distance: f64,
+    /// Current lap, from 1.
+    lap: u32,
+    /// Total distance ridden, over all laps.
+    ridden: f64,
     speed: f64,
     power: f64,
     hr: Option<f64>,
@@ -203,7 +217,27 @@ impl Session {
         let pb: Option<PersonalBest> = store.get(&format!("pb-{route_id}"));
         let route = Arc::new(route);
         let real_terrain = dem.is_some();
-        let mut world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints);
+        // A built-in track: the velodrome round it takes the place of what the map has there.
+        let track = velopopuli_core::velodrome::track_for(route_id);
+        let mut world = match track {
+            Some((track, clockwise)) => {
+                let world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &[]).with_venue(track, clockwise);
+                let grounds = &world.venue.as_ref().expect("just added").grounds;
+                let footprints: Vec<_> = map
+                    .footprints
+                    .iter()
+                    .filter(|f| {
+                        let n = f.ring.len().max(1) as f64;
+                        let (lat, lon) = (f.ring.iter().map(|p| p[0]).sum::<f64>() / n, f.ring.iter().map(|p| p[1]).sum::<f64>() / n);
+                        let (x, z) = route.to_local(lat, lon);
+                        grounds.outside(x, z) > 0.0
+                    })
+                    .cloned()
+                    .collect();
+                world.with_buildings(&footprints)
+            }
+            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints),
+        };
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
         if let Some(s) = std::env::var("VP_SMOKE_SURFACE")
             .ok()
@@ -288,7 +322,7 @@ impl Session {
         };
         let ghosts = library::load_ghosts(store, route_id, &req.ghost_ids);
         let imported_ghosts = ghosts.iter().map(|g| g.id.clone()).collect();
-        let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default() };
+        let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default(), laps: req.laps };
         let mut engine = RideEngine::with_options(route.clone(), &settings, pb.clone(), options);
         engine.set_surfaces(world.scene.surfaces.clone());
         engine.set_trails(world.scene.trails.clone());
@@ -297,6 +331,7 @@ impl Session {
         if let Some(at) = std::env::var("VP_SMOKE_AT").ok().filter(|_| std::env::var_os("VP_SMOKE").is_some()).and_then(|v| v.parse::<f64>().ok()) {
             engine.distance = at.clamp(0.0, route.total - 50.0);
             engine.pos = route.sample_at(engine.distance);
+            engine.ridden = engine.distance;
         }
         let init = RideInit {
             name: route.name.clone(),
@@ -322,7 +357,10 @@ impl Session {
                 let t = Local::now();
                 t.hour() as f64 + t.minute() as f64 / 60.0
             },
-            landmarks: if settings.look.landmarks { landmarks(&route, map.scenery.as_ref()) } else { Vec::new() },
+            // No village signs on a velodrome's track.
+            landmarks: if settings.look.landmarks && track.is_none() { landmarks(&route, map.scenery.as_ref()) } else { Vec::new() },
+            laps: engine.laps,
+            venue: track.is_some(),
         };
         if std::env::var_os("VP_SMOKE").is_some() {
             for m in &init.landmarks {
@@ -469,7 +507,7 @@ impl Session {
         let completed = engine.finished;
         let prev = engine.pb.clone().unwrap_or_default();
         let had_time = prev.time_s > 0.0;
-        let is_pb = completed && (!had_time || engine.elapsed < prev.time_s);
+        let is_pb = engine.counts_for_route_best() && (!had_time || engine.elapsed < prev.time_s);
         let mut climbs = prev.climbs.clone();
         for (i, t) in &engine.climb_times {
             let best = climbs.entry(*i).or_insert(*t);
@@ -503,7 +541,7 @@ impl Session {
         routes.sort_unstable();
         routes.dedup();
         let goal_before = library::goal_progress(&settings.goal, &rides, 0.0);
-        let goal_after = library::goal_progress(&settings.goal, &rides, engine.distance);
+        let goal_after = library::goal_progress(&settings.goal, &rides, engine.ridden);
         let ramp_test = engine.workout.as_ref().is_some_and(|w| w.id == "builtin-ramp-test");
         let workout_done = engine.workout.is_some() && engine.workout_pos().is_none();
         let curve = power_curve(&engine.samples.iter().map(|s| s.power).collect::<Vec<_>>());
@@ -514,7 +552,7 @@ impl Session {
         };
         let beat_other_ghost = completed && engine.rivals.iter().any(|r| r.kind == RivalKind::Ghost && self.imported_ghosts.contains(&r.id) && r.distance < engine.route.total);
         let facts = RideFacts {
-            distance_m: engine.distance,
+            distance_m: engine.ridden,
             ascent_m: engine.ascent,
             duration_s: engine.elapsed,
             completed,
@@ -542,7 +580,7 @@ impl Session {
             route_name: engine.route.name.clone(),
             started_at: session.start_time,
             duration_s: engine.elapsed,
-            distance_m: engine.distance,
+            distance_m: engine.ridden,
             ascent_m: engine.ascent,
             avg_power: session.avg_power,
             max_power: session.max_power,
@@ -550,7 +588,7 @@ impl Session {
             avg_hr: session.avg_hr,
             max_hr: session.max_hr,
             avg_cadence: session.avg_cadence,
-            avg_speed: if engine.elapsed > 0.0 { engine.distance / engine.elapsed } else { 0.0 },
+            avg_speed: if engine.elapsed > 0.0 { engine.ridden / engine.elapsed } else { 0.0 },
             kj: session.kj,
             tss: engine.tss(),
             completed,
@@ -714,6 +752,8 @@ fn run(
             };
             let state = RideState {
                 distance: engine.distance,
+                lap: engine.lap,
+                ridden: engine.ridden,
                 speed: engine.speed,
                 power: tel.power,
                 hr: tel.hr,
@@ -755,7 +795,7 @@ fn run(
     }
     {
         let e = engine.lock().unwrap();
-        crate::diag::event("ride", format!("end distance_m={:.0} elapsed_s={:.0}", e.distance, e.elapsed));
+        crate::diag::event("ride", format!("end distance_m={:.0} elapsed_s={:.0}", e.ridden, e.elapsed));
     }
     // Leave the trainer on a flat road rather than stuck on the last gradient.
     devices.command_trainer(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.2 });
