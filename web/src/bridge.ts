@@ -38,7 +38,8 @@ export const api = {
   routes: {
     importDialog: () => invoke<{ added: RouteMeta[]; problems: string[] }>('routes_import_dialog'),
     importText: (name: string, text: string) => invoke<RouteMeta>('routes_import_text', { name, text }),
-    demoMeta: () => invoke<RouteMeta>('demo_meta')
+    demoMeta: () => invoke<RouteMeta>('demo_meta'),
+    isLoop: (routeId: string) => invoke<boolean>('route_is_loop', { routeId })
   },
   badges: () => invoke<Badge[]>('badges'),
   chooseDir: () => invoke<string | null>('choose_dir'),
@@ -162,6 +163,7 @@ export const api = {
         clip: number | null
         shift: number | null
         scroll: string | null
+        laps: number | null
       } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })

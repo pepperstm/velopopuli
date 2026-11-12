@@ -244,6 +244,8 @@ export interface RideRequest {
   workoutId?: string | null
   ghostIds?: string[]
   groupRoom?: string | null
+  /** Laps on a closed route: absent or null = none, 0 = until I stop, n = n laps. Ghosts are off on lap rides. */
+  laps?: number | null
 }
 
 export interface Profile {
@@ -340,6 +342,8 @@ export interface RideInit {
   /** Local hour when the ride started. */
   hour: number
   landmarks: Landmark[]
+  /** Laps the ride was started with, as the engine understood them; null on a ride without laps. */
+  laps: number | null
 }
 
 export interface Landmark {
@@ -362,7 +366,12 @@ export type ControllerAction = 'shiftHarder' | 'shiftEasier' | 'harder' | 'easie
 
 /** Streamed from the simulation about 20 times a second. */
 export interface RideState {
+  /** Position on the route (on a lap ride, on the loop). */
   distance: number
+  /** Current lap, from 1 (1 on a ride without laps). */
+  lap: number
+  /** Total metres ridden, across all laps. */
+  ridden: number
   speed: number
   power: number
   hr: number | null

@@ -125,6 +125,7 @@ fn main() {
             commands::gears_preview,
             commands::strava_activities,
             commands::segments_fetch,
+            commands::route_is_loop,
             commands::segments_list,
             commands::workouts_list,
             commands::workouts_import_dialog,

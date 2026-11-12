@@ -76,32 +76,41 @@ export class Barriers {
     }
   }
 
-  /** Shows the sections around `dist` metres along the route. */
-  update(dist: number): void {
+  /**
+   * Shows the sections around `dist` metres along the route. On a loop (`loopTotal` given) the
+   * stretch carries on across the line: what lies past the end is the start, and what lies
+   * before 0 is the end.
+   */
+  update(dist: number, loopTotal?: number): void {
     if (Math.abs(dist - this.shownAt) < STEP_M) return
     this.shownAt = dist
     const s = this.sections
     const n = s.length / SECTION
-    // First section within reach (they are in order along the route).
-    let lo = 0
-    let hi = n
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (s[mid * SECTION + 4] < dist - BEHIND_M) lo = mid + 1
-      else hi = mid
-    }
     const holder = new THREE.Object3D()
     const filled = this.meshes.map(() => 0)
-    for (let i = lo; i < n && s[i * SECTION + 4] < dist + AHEAD_M; i++) {
-      const at = i * SECTION
-      const look = s[at + 5]
-      const mesh = this.meshes[look]
-      if (!mesh || filled[look] >= mesh.instanceMatrix.count) continue
-      holder.position.set(s[at], s[at + 1], s[at + 2])
-      // Tipped along the slope first, then turned to follow the road.
-      holder.rotation.set(s[at + 6], s[at + 3], 0, 'YXZ')
-      holder.updateMatrix()
-      mesh.setMatrixAt(filled[look]++, holder.matrix)
+    const shifts = loopTotal ? [0, loopTotal, -loopTotal] : [0]
+    for (const shift of shifts) {
+      const from = dist - BEHIND_M + shift
+      const to = dist + AHEAD_M + shift
+      // First section within reach (they are in order along the route).
+      let lo = 0
+      let hi = n
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (s[mid * SECTION + 4] < from) lo = mid + 1
+        else hi = mid
+      }
+      for (let i = lo; i < n && s[i * SECTION + 4] < to; i++) {
+        const at = i * SECTION
+        const look = s[at + 5]
+        const mesh = this.meshes[look]
+        if (!mesh || filled[look] >= mesh.instanceMatrix.count) continue
+        holder.position.set(s[at], s[at + 1], s[at + 2])
+        // Tipped along the slope first, then turned to follow the road.
+        holder.rotation.set(s[at + 6], s[at + 3], 0, 'YXZ')
+        holder.updateMatrix()
+        mesh.setMatrixAt(filled[look]++, holder.matrix)
+      }
     }
     this.meshes.forEach((mesh, k) => {
       mesh.count = filled[k]
