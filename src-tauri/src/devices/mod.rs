@@ -7,7 +7,7 @@ pub mod sim;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use velopopuli_core::devices::obc;
 use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
@@ -28,25 +28,94 @@ pub struct AntStatus {
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DevicesSnapshot {
     pub devices: Vec<DeviceInfo>,
     pub ant: AntStatus,
+    /// Remembered Bluetooth sensors not connected yet, while the app looks for them.
+    pub looking_for: Vec<KnownBle>,
 }
+
+/// A Bluetooth sensor connected before, to connect again at launch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KnownBle {
+    /// The operating system's id for the peripheral (without the `ble:` prefix).
+    pub id: String,
+    pub name: String,
+}
+
+/// The sensors to reconnect at launch, kept in the store as `devices`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Remembered {
+    #[serde(default)]
+    pub ble: Vec<KnownBle>,
+    /// The ANT+ stick was on: start it again. ANT+ pairs whichever sensors are near, so there
+    /// is no list of them to keep.
+    #[serde(default)]
+    pub ant: bool,
+}
+
+impl Remembered {
+    /// Adds a sensor, or renames it if it is already there.
+    pub fn add_ble(&mut self, id: &str, name: &str) {
+        match self.ble.iter_mut().find(|k| k.id == id) {
+            Some(k) => k.name = name.to_string(),
+            None => self.ble.push(KnownBle { id: id.to_string(), name: name.to_string() }),
+        }
+    }
+
+    pub fn forget_ble(&mut self, id: &str) -> bool {
+        let before = self.ble.len();
+        self.ble.retain(|k| k.id != id);
+        self.ble.len() != before
+    }
+}
+
+const REMEMBERED: &str = "devices";
 
 pub struct Devices {
     app: AppHandle,
     hub: Mutex<Hub>,
     handles: Mutex<HashMap<String, Handle>>,
     ant_status: Mutex<AntStatus>,
+    looking_for: Mutex<Vec<KnownBle>>,
 }
 
 impl Devices {
     pub fn new(app: AppHandle) -> Self {
-        Self { app, hub: Mutex::default(), handles: Mutex::default(), ant_status: Mutex::new(AntStatus { state: "off", message: String::new() }) }
+        Self { app, hub: Mutex::default(), handles: Mutex::default(), ant_status: Mutex::new(AntStatus { state: "off", message: String::new() }), looking_for: Mutex::default() }
     }
 
     pub fn snapshot(&self) -> DevicesSnapshot {
-        DevicesSnapshot { devices: self.hub.lock().unwrap().snapshot(now_ms()), ant: self.ant_status.lock().unwrap().clone() }
+        DevicesSnapshot { devices: self.hub.lock().unwrap().snapshot(now_ms()), ant: self.ant_status.lock().unwrap().clone(), looking_for: self.looking_for.lock().unwrap().clone() }
+    }
+
+    /// The sensors to reconnect at launch.
+    pub fn remembered(&self) -> Remembered {
+        self.app.state::<crate::AppState>().store.get(REMEMBERED).unwrap_or_default()
+    }
+
+    /// Changes the remembered sensors and saves them.
+    pub fn change_remembered(&self, f: impl FnOnce(&mut Remembered)) {
+        let store = &self.app.state::<crate::AppState>().store;
+        let mut r: Remembered = store.get(REMEMBERED).unwrap_or_default();
+        let before = r.clone();
+        f(&mut r);
+        if r != before {
+            if let Err(e) = store.set(REMEMBERED, &r) {
+                diag::event("dev", format!("could not save remembered devices: {e}"));
+            }
+        }
+    }
+
+    /// Which remembered sensors are being looked for, shown on the Devices page.
+    pub fn set_looking_for(&self, pending: Vec<KnownBle>) {
+        let mut current = self.looking_for.lock().unwrap();
+        if *current != pending {
+            *current = pending;
+            drop(current);
+            self.changed();
+        }
     }
 
     /// Tells the UI the device list or a status changed.
@@ -149,5 +218,24 @@ impl Devices {
 
     pub fn app(&self) -> &AppHandle {
         &self.app
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remembered_sensors_are_kept_once_and_forgotten() {
+        let mut r = Remembered::default();
+        r.add_ble("A1", "Trainer");
+        r.add_ble("B2", "HRM");
+        r.add_ble("A1", "Tacx Neo");
+        assert_eq!(r.ble.iter().map(|k| (k.id.as_str(), k.name.as_str())).collect::<Vec<_>>(), [("A1", "Tacx Neo"), ("B2", "HRM")]);
+        assert!(r.forget_ble("A1") && !r.forget_ble("A1"));
+        assert_eq!(r.ble.len(), 1);
+        // Older stores have no list yet.
+        let old: Remembered = serde_json::from_str("{}").unwrap();
+        assert_eq!(old, Remembered::default());
     }
 }
