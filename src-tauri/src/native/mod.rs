@@ -1031,16 +1031,17 @@ impl Renderer {
             let pose_count = assets.poses.len().max(1);
             let pose = ((crank.fract() * pose_count as f64) as usize) % pose_count;
             // On a berm, a rider stands on the slope where they are across the trail and leans with it.
-            let place = |q: &Pos, d: f64, lane: f64| -> Mat {
+            // Riders also lean into bends, by what balances the turn at their speed.
+            let place = |q: &Pos, d: f64, lane: f64, speed: f64| -> Mat {
                 let (bank, lift) = world.bank_at(d, lane);
                 let at = rel([q.x + q.heading.cos() * lane, q.ele + LAYOUT.road_lift + lift, q.z - q.heading.sin() * lane]);
-                model_rolled(at, q.heading as f32, -(q.grade.atan()) as f32, bank.atan() as f32)
+                model_rolled(at, q.heading as f32, -(q.grade.atan()) as f32, (bank.atan() + lean_at(&route, d, speed)) as f32)
             };
             // The rider's own colour, #e9ff60, in linear light.
-            slots.push(Draw { model: place(&p, shown, 0.0), tint: [0.815, 1.0, 0.117, 1.0], flags: [1.0, 1.0, 0.0, 0.0] });
+            slots.push(Draw { model: place(&p, shown, 0.0, speed), tint: [0.815, 1.0, 0.117, 1.0], flags: [1.0, 1.0, 0.0, 0.0] });
             riders.push((slots.len() - 1, pose, false));
             let mut rider_tags: Vec<(String, [f64; 3])> = Vec::new();
-            for (i, (id, kind, color, d, _)) in rivals.iter().enumerate() {
+            for (i, (id, kind, color, d, rival_speed)) in rivals.iter().enumerate() {
                 let gap = if lap_ride { wrapped(shown, *d).abs() } else { (d - shown).abs() };
                 if gap > 700.0 || (!lap_ride && (*d <= 0.0 || *d >= route.total)) || slots.len() as u64 >= MAX_DRAWS {
                     continue;
@@ -1052,7 +1053,11 @@ impl Renderer {
                 let q = sample(&route, *d);
                 let ghost = *kind == RivalKind::Ghost;
                 let rgb = [((color >> 16) & 255) as f32 / 255.0, ((color >> 8) & 255) as f32 / 255.0, (color & 255) as f32 / 255.0].map(|c| c.powf(2.2));
-                slots.push(Draw { model: place(&q, *d, lane), tint: if ghost { [1.0, 1.0, 1.0, 0.38] } else { [rgb[0], rgb[1], rgb[2], 1.0] }, flags: [1.0, 1.0, 0.0, if ghost { 1.0 } else { 0.0 }] });
+                slots.push(Draw {
+                    model: place(&q, *d, lane, *rival_speed),
+                    tint: if ghost { [1.0, 1.0, 1.0, 0.38] } else { [rgb[0], rgb[1], rgb[2], 1.0] },
+                    flags: [1.0, 1.0, 0.0, if ghost { 1.0 } else { 0.0 }],
+                });
                 riders.push((slots.len() - 1, (pose + i * 2) % pose_count, ghost));
                 if gap < 250.0 && gap > 12.0 {
                     rider_tags.push((id.clone(), [q.x + q.heading.cos() * lane, q.ele + 2.3, q.z - q.heading.sin() * lane]));
@@ -1486,31 +1491,34 @@ fn sample(route: &velopopuli_core::gpx::Route, dist: f64) -> Pos {
     let i = (f.floor() as usize).min(route.n - 2);
     let t = f - i as f64;
     let lerp = |a: f64, b: f64| a + (b - a) * t;
-    Pos {
-        x: lerp(route.x[i], route.x[i + 1]),
-        z: lerp(route.z[i], route.z[i + 1]),
-        ele: lerp(route.ele[i] as f64, route.ele[i + 1] as f64),
-        grade: lerp(route.grade[i] as f64, route.grade[i + 1] as f64),
-        heading: heading_at(route, f),
-    }
+    // On a smooth curve through the samples, as the page's `sampleAt` does it, so a tight bend
+    // is ridden round rather than in a kink at every sample.
+    let (x, dx) = curve(&route.x, i, t);
+    let (z, dz) = curve(&route.z, i, t);
+    Pos { x, z, ele: lerp(route.ele[i] as f64, route.ele[i + 1] as f64), grade: lerp(route.grade[i] as f64, route.grade[i + 1] as f64), heading: dx.atan2(dz) }
 }
 
-/// The direction of travel at `f` samples along, as the page's `headingAt` gives it: over a
-/// ~25 m baseline against GPS jitter, blended between neighbouring samples so a corner turns
-/// smoothly rather than in a step at each one.
-fn heading_at(route: &velopopuli_core::gpx::Route, f: f64) -> f64 {
-    // Over samples k-2..k+3, centred on k + 0.5.
-    let over = |k: usize| {
-        let (a, b) = (k.saturating_sub(2), (k + 3).min(route.n - 1));
-        (route.x[b] - route.x[a]).atan2(route.z[b] - route.z[a])
-    };
-    let u = (f - 0.5).max(0.0);
-    let k = (u.floor() as usize).min(route.n - 2);
-    let s = (u - k as f64).min(1.0);
-    let h0 = over(k);
-    // The short way round, across ±π.
-    let d = (over(k + 1) - h0).sin().atan2((over(k + 1) - h0).cos());
-    h0 + d * s
+/// The Catmull-Rom curve through `a` between samples `i` and `i + 1`, at `t` of the way: its
+/// value and its rate of change.
+fn curve(a: &[f64], i: usize, t: f64) -> (f64, f64) {
+    let (p0, p1, p2, p3) = (a[i.saturating_sub(1)], a[i], a[i + 1], a[(i + 2).min(a.len() - 1)]);
+    let (b, c, d) = (p2 - p0, 2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3, -p0 + 3.0 * p1 - 3.0 * p2 + p3);
+    (p1 + 0.5 * t * (b + t * (c + t * d)), 0.5 * (b + t * (2.0 * c + 3.0 * t * d)))
+}
+
+/// Over how far a bend's tightness is judged, either side of the rider.
+const LEAN_SPAN: f64 = 4.0;
+/// The most a rider leans into a bend.
+const MAX_LEAN: f64 = 40.0 * std::f64::consts::PI / 180.0;
+
+/// How far a rider at `speed` (m/s) leans into the bend at `dist`, as the page's `leanAt`
+/// gives it: the lean that balances the turn, atan(v² / g r). Negative leans left.
+fn lean_at(route: &velopopuli_core::gpx::Route, dist: f64, speed: f64) -> f64 {
+    let h = |d: f64| sample(route, d).heading;
+    let dh = h(dist + LEAN_SPAN) - h(dist - LEAN_SPAN);
+    // Turning towards +x (heading rising) is turning left.
+    let lean = (speed * speed * (dh.sin().atan2(dh.cos()) / (2.0 * LEAN_SPAN)) / 9.81).atan();
+    -lean.clamp(-MAX_LEAN, MAX_LEAN)
 }
 
 /// Ground height from a loaded chunk, if the chunk under the point is in.
@@ -1539,10 +1547,10 @@ mod tests {
     use velopopuli_core::gpx::{build_route, RawPoint};
 
     /// A rider going round a tight circle turns a little for every bit ridden, never in steps,
-    /// and faces along the road.
+    /// moves on a path without kinks, faces along it, and leans into the turn.
     #[test]
     fn corners_turn_smoothly() {
-        // Two laps of a 30 m-radius circle, a point every 2°.
+        // Two laps of a 30 m-radius circle anticlockwise on the map (turning left), a point every 2°.
         let (lat0, lon0, r) = (51.0_f64, 0.0_f64, 30.0);
         let m_lat = 111_320.0;
         let raw: Vec<RawPoint> = (0..=360)
@@ -1554,17 +1562,26 @@ mod tests {
         let route = build_route("Circle", &raw).unwrap();
         let wrap = |d: f64| d.sin().atan2(d.cos());
         let (from, to, dd) = (20.0, route.total - 20.0, 0.1);
-        let mut biggest: f64 = 0.0;
+        let (mut turned, mut kinked): (f64, f64) = (0.0, 0.0);
         let mut d = from;
         while d < to {
-            let (p, q) = (super::sample(&route, d), super::sample(&route, d + dd));
-            biggest = biggest.max(wrap(q.heading - p.heading).abs());
-            // Facing the way the rider moves.
-            let moving = (q.x - p.x).atan2(q.z - p.z);
-            assert!(wrap(p.heading - moving).abs() < 0.15, "at {d:.1} m facing {:.3}, moving {:.3}", p.heading, moving);
+            let (p, q, s) = (super::sample(&route, d), super::sample(&route, d + dd), super::sample(&route, d + 2.0 * dd));
+            turned = turned.max(wrap(q.heading - p.heading).abs());
+            // The way it moves from one 10 cm to the next: a kink is a sudden change.
+            let (m1, m2) = ((q.x - p.x).atan2(q.z - p.z), (s.x - q.x).atan2(s.z - q.z));
+            kinked = kinked.max(wrap(m2 - m1).abs());
+            assert!(wrap(p.heading - m1).abs() < 0.02, "at {d:.1} m facing {:.3}, moving {m1:.3}", p.heading);
             d += dd;
         }
-        // Round a 30 m circle, 10 cm turns the rider by 1/300 rad; a step at each sample would be ~50 times that.
-        assert!(biggest < 3.0 * dd / r, "the heading jumped {biggest:.4} rad in {dd} m");
+        // Round a 30 m circle, 10 cm turns the rider by 1/300 rad; a step or kink at each 5 m
+        // sample would be ~50 times that.
+        assert!(turned < 3.0 * dd / r, "the heading jumped {turned:.4} rad in {dd} m");
+        assert!(kinked < 3.0 * dd / r, "the path kinked {kinked:.4} rad in {dd} m");
+        // At 10 m/s round 30 m, the balancing lean is atan(100 / (9.81 · 30)), about 19°, to the left.
+        let lean = super::lean_at(&route, route.total / 2.0, 10.0);
+        assert!((lean + (100.0_f64 / (9.81 * 30.0)).atan()).abs() < 0.03, "leans {:.1}°", lean.to_degrees());
+        // Standing still, no lean; and never past the limit, however fast.
+        assert!(super::lean_at(&route, route.total / 2.0, 0.0).abs() < 1e-9);
+        assert!((super::lean_at(&route, route.total / 2.0, 40.0) + super::MAX_LEAN).abs() < 1e-9);
     }
 }

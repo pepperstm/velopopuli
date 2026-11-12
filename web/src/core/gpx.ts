@@ -75,35 +75,50 @@ export interface RoutePos {
   heading: number
 }
 
+/** A point along the route. The line runs on a smooth curve through the samples (Catmull-Rom)
+ * rather than straight from one to the next, so a tight bend is ridden round, not in a kink at
+ * every sample; the heading is the curve's own direction there. */
 export function sampleAt(route: Route, dist: number, out?: RoutePos): RoutePos {
   const f = Math.max(0, Math.min(route.n - 1, dist / route.step))
   const i = Math.min(route.n - 2, Math.floor(f))
   const t = f - i
   const lerp = (a: Float64Array): number => a[i] + (a[i + 1] - a[i]) * t
+  const [x, dx] = curve(route.x, route.n, i, t)
+  const [z, dz] = curve(route.z, route.n, i, t)
   const o = out ?? ({} as RoutePos)
-  o.x = lerp(route.x)
-  o.z = lerp(route.z)
+  o.x = x
+  o.z = z
   o.ele = lerp(route.ele)
   o.grade = lerp(route.grade)
-  o.heading = headingAt(route, f)
+  o.heading = Math.atan2(dx, dz)
   return o
 }
 
-/** The direction of travel at `f` samples along, over a ~25 m baseline so GPS jitter doesn't
- * shake the camera. Blended between neighbouring samples, so a corner turns smoothly rather
- * than in a step at each one. */
-function headingAt(route: Route, f: number): number {
-  // Over samples k-2..k+3, centred on k + 0.5.
-  const over = (k: number): number => {
-    const a = Math.max(0, k - 2)
-    const b = Math.min(route.n - 1, k + 3)
-    return Math.atan2(route.x[b] - route.x[a], route.z[b] - route.z[a])
-  }
-  const u = Math.max(0, f - 0.5)
-  const k = Math.min(route.n - 2, Math.floor(u))
-  const s = Math.min(1, u - k)
-  const h0 = over(k)
-  // The short way round, across ±π.
-  const d = Math.atan2(Math.sin(over(k + 1) - h0), Math.cos(over(k + 1) - h0))
-  return h0 + d * s
+/** The Catmull-Rom curve through `a` between samples `i` and `i + 1`, at `t` of the way: its
+ * value and its rate of change. */
+function curve(a: Float64Array, n: number, i: number, t: number): [number, number] {
+  const p0 = a[Math.max(0, i - 1)]
+  const p1 = a[i]
+  const p2 = a[i + 1]
+  const p3 = a[Math.min(n - 1, i + 2)]
+  const b = p2 - p0
+  const c = 2 * p0 - 5 * p1 + 4 * p2 - p3
+  const d = -p0 + 3 * p1 - 3 * p2 + p3
+  return [p1 + 0.5 * t * (b + t * (c + t * d)), 0.5 * (b + t * (2 * c + 3 * t * d))]
 }
+
+/** Over how far a bend's tightness is judged, either side of the rider. */
+const LEAN_SPAN = 4
+/** The most a rider leans into a bend. */
+const MAX_LEAN = (40 * Math.PI) / 180
+
+/** How far a rider at `speed` (m/s) leans into the bend at `dist`, in radians: the lean that
+ * balances the turn, atan(v² / g r). Negative leans left, the way `rotation.z` rolls. */
+export function leanAt(route: Route, dist: number, speed: number): number {
+  const h = (d: number): number => sampleAt(route, d, scratch).heading
+  const turn = Math.atan2(Math.sin(h(dist + LEAN_SPAN) - h(dist - LEAN_SPAN)), Math.cos(h(dist + LEAN_SPAN) - h(dist - LEAN_SPAN)))
+  // Turning towards +x (heading rising) is turning left.
+  const lean = Math.atan((speed * speed * (turn / (2 * LEAN_SPAN))) / 9.81)
+  return -Math.max(-MAX_LEAN, Math.min(MAX_LEAN, lean))
+}
+const scratch = {} as RoutePos
