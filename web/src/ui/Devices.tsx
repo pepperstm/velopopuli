@@ -28,7 +28,7 @@ const ANT_HELP: Record<string, string> = {
 }
 
 export function Devices(): React.JSX.Element {
-  const { devices, ant } = useDevices()
+  const { devices, ant, lookingFor } = useDevices()
   const [scanning, setScanning] = useState(false)
   const [connecting, setConnecting] = useState('')
   const [candidates, setCandidates] = useState<BtCandidate[]>([])
@@ -41,6 +41,8 @@ export function Devices(): React.JSX.Element {
   }, [])
 
   useEffect(() => api.devices.onCandidates(setCandidates), [])
+  // Sensors from last time that haven't woken yet: keep looking while this screen is open.
+  useEffect(() => void api.devices.lookForKnown().catch(() => undefined), [])
   // Don't leave the radio scanning if the screen is closed mid-search.
   useEffect(() => () => void api.devices.scanStop(), [])
 
@@ -103,6 +105,21 @@ export function Devices(): React.JSX.Element {
       </div>
 
       {error && <div className="error">{error}</div>}
+      {lookingFor.length > 0 && (
+        <div className="notice">
+          Looking for your sensors from last time. Wake them (spin the cranks, wear the strap) and they connect by themselves.
+          <div className="row wrap">
+            {lookingFor.map((k) => (
+              <span key={k.id} className="chip">
+                {k.name || 'Bluetooth sensor'}{' '}
+                <button className="ghost small" onClick={() => void api.devices.forget(k.id)}>
+                  Forget
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {ant.state === 'opening' && <div className="notice">Opening ANT+ stick…</div>}
       {ant.state === 'scanning' && (
         <div className="notice">
