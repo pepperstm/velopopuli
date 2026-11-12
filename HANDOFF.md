@@ -2,7 +2,7 @@
 
 Everything someone needs to pick up the project: what it is, where it stands, how it is built and tested, how releases work, what is unfinished, and the decisions and traps that aren't obvious from the code. Keep this file current when you change something it describes.
 
-- Website: <https://velopopuli.com> · Repository: <https://github.com/pepperstm/velopopuli> · Guides: [wiki](https://github.com/pepperstm/velopopuli/wiki) (source in [`docs/wiki/`](docs/wiki))
+- Website: <https://velopopuli.com> · Repository: <https://github.com/pepperstm/velopopuli> · User's manual: [wiki](https://github.com/pepperstm/velopopuli/wiki) (source in [`docs/wiki/`](docs/wiki)) · How it's built: [`docs/developers/`](docs/developers/README.md)
 - Maintainer: Graham Barber (GitHub `pepperstm`)
 - Licence: GPL-3.0-or-later for all versions (versions up to v0.2.0 were first published as MIT and relicensed on 2026-10-19 — see *Decisions*)
 
@@ -25,9 +25,9 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 | **OpenBikeControl controllers** | Button decoding and the choice of one action per press are unit-tested; never connected to a real controller. |
 | **Herne Hill Velodrome** | Built-in track. The route is in `crates/core/src/velodrome.rs`; the banked track, its paint and the buildings are in `world/venue.rs`. Tested in code, and I've checked a live preview in demo mode on both renderers, each way round (`VP_SMOKE_ROUTE=herne-hill` or `herne-hill-clockwise`). Nobody has ridden it with a trainer yet. |
 | **Laps on loop routes** | Lap engine, bests, segments and renderers unit-tested in `crates/core`; smoke-run across the line on Linux with three.js, not yet with the native renderer (macOS). Group standings don't show who is a lap up. |
-| **Strava** (OAuth, upload, segments, activities as ghosts) | Never run against the live API. Users must create their own API key (open source can't ship a secret). Scope is `read,activity:read_all,activity:write`. |
+| **Strava** (OAuth, upload, routes, segments, activities as ghosts) | Connecting, upload and the route list were run against the live API on 2026-11-12; segments and ghost import not yet confirmed. Users must create their own API key (open source can't ship a secret). Scope is `read,read_all,activity:read_all,activity:write`; links made before 0.3.10 lack `read_all`, so private routes are hidden until the rider reconnects. |
 | **Dreeve** (API key, upload, rides as ghosts, rides imported as routes) | Request shapes and error mapping are tested against an in-process fake server (`connectors/dreeve.rs` tests). Connecting, listing rides, fetching a track and finding the rides that fit a route were run against a real Dreeve v5.8.2 with about 190 rides on 2026-11-10 (`live_dreeve_lists_rides_and_tracks`, ignored by default, takes `DREEVE_URL`, `DREEVE_API_KEY` and optionally `DREEVE_ROUTE_RIDE`). The upload was tested by hand against a real instance. |
-| **Windows and Linux** | Built and packaged by CI on every push (and Arch's package is installed in a container and its libraries checked), but **never run by a person**. |
+| **Windows and Linux** | Built and packaged by CI on every push (and Arch's package is installed in a container and its libraries checked). A Linux rider has used it with real sensors (#70: BlueZ aborted connects made while scanning, fixed in 0.3.10 by pausing the scan, not yet confirmed). Windows: no reports yet. |
 | **Native renderer** (macOS, opt-in) | wgpu/Metal in an NSView under a transparent webview. Matches three.js in screenshots; HUD-over-native never checked in a real window; no clean release-build performance comparison. |
 | **Dense woods and tree sprites** | Checked in both renderers with the smoke harness, and their cost measured only on Apple silicon (about 0.6 M triangles a frame on a wooded climb). Not tried on weaker graphics (Windows/Linux integrated GPUs). |
 | **Mapillary street photos** | Needs a user token; never tried with a real one. |
@@ -72,20 +72,21 @@ src-tauri/          The app (Tauri 2)
   geo, photos, smart, group, library, terrain, secrets, store
 web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, trees.ts (tree models, sprite atlas), rider.ts,
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
-docs/images/        README screenshots; docs/wiki/ wiki source
+docs/images/        README screenshots; docs/wiki/ wiki source (the user's manual)
+docs/developers/    How the app is built, chapter by chapter
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
 .github/workflows/build.yml   CI: all tests, installers for every platform, Arch package, releases
 .github/ISSUE_TEMPLATE, PULL_REQUEST_TEMPLATE.md   Bug, hardware-report and feature forms; the pull-request checklist
 resources/          99-ant-usb.rules (Linux udev rule for ANT+ sticks)
 ```
 
-How a ride flows end to end is in the wiki's [Architecture](https://github.com/pepperstm/velopopuli/wiki/Architecture) page.
+How a ride flows end to end, and how each part works, is in the [developer pages](docs/developers/README.md), starting with [Architecture](docs/developers/architecture.md).
 
 ## 4. Data and formats
 
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
 - `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
-- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (3, since trails added `mtb:scale`) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
+- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (4, since field boundaries in #58) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
 - **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space — kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux. Each connector's credentials are one entry named after its id (`strava`, …); the Home Assistant token is `homeassistant`.
 - **Uploads:** a ride records where it went in `RideSummary.uploads` by connector id. Rides from before v0.3.10 carry `stravaActivityId` instead; `RideSummary::upload()` (Rust) and `uploadOf()` (page) read both, and `connector_upload` copies it into `uploads` when it next writes the list. The old field is kept alongside for a release or two so 0.3.9 still sees the ride as uploaded. The old `stravaAutoUpload` setting becomes `autoUpload: ["strava"]` in `mergeSettings`.
 - **Logs:** `logs/diagnostics-<time>.log`, last 12 runs kept.
@@ -116,8 +117,8 @@ The full process is in [CONTRIBUTING.md](CONTRIBUTING.md): issue first → branc
 
 ## 6. Testing
 
-- `cargo test --workspace` — 114 tests: 107 core, 1 relay, 6 app (plus two app tests that need the network: `cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
-- **The smoke harness** is how most visual and end-to-end checking has been done: a debug build that rides (or opens a screen) by itself, saves pictures and the visible text, and quits. All the `VP_SMOKE_*` switches are documented in the wiki's [Building from source](https://github.com/pepperstm/velopopuli/wiki/Building-from-source). The most useful: `VP_SMOKE_AT` (start part-way), `VP_SMOKE_CAM=3` (overhead — good for junctions), `VP_SMOKE_WINDOW=1` (whole window with HUD), `VP_SMOKE_CLIP=6` (frames for a demo clip), `VP_SMOKE_SURFACE`, `VP_SKIP_OVERPASS`, `VP_SMOKE_REPORT`. With `"nativeRenderer": true` in the data folder's `settings.json`, the native renderer's own frame is saved too, as `<name>.native.png` — the only way to see it, since window snapshots capture just the web view.
+- `cargo test --workspace` — 145 tests: 122 core, 1 relay, 22 app, of which three app tests need the network and are skipped unless asked for (`cargo test -p velopopuli -- --ignored`); `npx tsc --noEmit` for the page. CI runs all of them.
+- **The smoke harness** is how most visual and end-to-end checking has been done: a debug build that rides (or opens a screen) by itself, saves pictures and the visible text, and quits. All the `VP_SMOKE_*` switches are documented in [Building and testing](docs/developers/building-and-testing.md#the-smoke-harness). The most useful: `VP_SMOKE_AT` (start part-way), `VP_SMOKE_CAM=3` (overhead — good for junctions), `VP_SMOKE_WINDOW=1` (whole window with HUD), `VP_SMOKE_CLIP=6` (frames for a demo clip), `VP_SMOKE_SURFACE`, `VP_SKIP_OVERPASS`, `VP_SMOKE_REPORT`. With `"nativeRenderer": true` in the data folder's `settings.json`, the native renderer's own frame is saved too, as `<name>.native.png` — the only way to see it, since window snapshots capture just the web view.
 - The ride-start diagnostics line `[ride] surfaces … trails … berms … fords … widths …` shows what the map matching decided; a smoke run also prints each berm and ford.
 - Good test routes: Bourg d'Oisans → Alpe d'Huez (town, river, hairpins — route it with BRouter); the Trouée d'Arenberg (OSM track "Drève des Boules d'Hérin", `surface=sett`); Meylan near Grenoble (roundabouts); any city crossing (viaducts). For trails, around Finale Ligure: graded singletrack and switchbacks (berms), Ponte dell'Acqua (OSM way 143650465, a log bridge), Strada Valle del Bosco (way 113195224, a ford over the Rio dell'Ericeto); a hike near Chamonix (grades estimated from `sac_scale`); a field near Chartres (the off-map dirt track). A test route is two files in the data folder: `data/routes.json` and `data/route-<id>.json` (`{name, gpx}`).
 - A smoke window that opens behind other windows gets few animation frames — the `.txt` says how many were drawn; a stale picture means a hidden window, not a bug.

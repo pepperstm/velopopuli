@@ -16,21 +16,29 @@ Open **Devices**. VeloPopuli talks to trainers and sensors directly — over you
 
 Once connected, the device joins the list with its kind (*Smart trainer*, *Power meter*, *Heart rate*, *Cadence*, *Speed* or *Controller*), *Connected* and its live readings. A trainer says *controllable* when VeloPopuli can set its resistance, or *read-only* when it can only read it. Add each device the same way; when two measure the same thing, the most direct one is used.
 
-If a device drops out (it sleeps, or the trainer is switched off) it shows *Signal lost — searching…* and reconnects by itself when it's back. **Remove** disconnects it. Devices aren't remembered between launches yet: add them again after opening the app.
+If a device drops out (it sleeps, or the trainer is switched off) it shows *Signal lost — searching…* and reconnects by itself when it's back.
 
-| Kind of device | How VeloPopuli talks to it |
+### Next time you open the app
+
+You only pair a Bluetooth device once. Next time you open the app, it looks for your devices from last time for a few minutes, and connects each one as it wakes up: spin the cranks, or put the strap on. The Devices page shows which ones it's still looking for. The ANT+ stick is turned on again too, if you used it.
+
+**Remove** disconnects a device and forgets it. **Forget** does the same for one the app is still looking for.
+
+### What works over Bluetooth
+
+| Device | What you get |
 |---|---|
-| Smart trainers made since about 2018 (Wahoo, Elite, Saris, Zwift, JetBlack and most others) | Bluetooth **FTMS**: gradient simulation and ERG |
-| Tacx smart trainers (Neo, Flux, Vortex, Bushido, Genius…) | **FE-C over Bluetooth** (Tacx's own channel) when the trainer has no FTMS |
-| Power meters | Cycling Power service |
-| Heart-rate straps and broadcasting watches | Heart Rate service |
-| Speed and cadence sensors | CSC service |
-| Handlebar controllers | **OpenBikeControl**: shifting, ERG and workout controls — see [Virtual gears](Virtual-gears#controllers) |
+| Smart trainers made since about 2018 (Wahoo, Elite, Saris, Zwift, JetBlack and most others) | Gradient and ERG control |
+| Tacx smart trainers (Neo, Flux, Vortex, Bushido, Genius…) | Gradient and ERG control, through Tacx's own connection if the trainer needs it |
+| Power meters | Power, and cadence if it sends it |
+| Heart-rate straps, and watches that broadcast heart rate | Heart rate |
+| Speed and cadence sensors | Speed and cadence |
+| Handlebar controllers (OpenBikeControl) | Shifting, ERG and workout controls: see [Virtual gears](Virtual-gears#controllers) |
 
-Not supported yet: older Wahoo KICKRs that only speak Wahoo's proprietary protocol (connect those over ANT+ FE-C instead).
+Not supported yet: older Wahoo KICKRs that only use Wahoo's own connection. Connect those over ANT+ instead.
 
 - **macOS** asks for Bluetooth permission on the first search.
-- **Linux** needs BlueZ running.
+- **Linux** needs Bluetooth (BlueZ) running. If a sensor shows up but won't connect, update to 0.3.10 or later, which pauses the search while it connects.
 
 ## ANT+
 
@@ -40,11 +48,11 @@ Plug in an ANT+ stick (Garmin/Dynastream ANTUSB2 or ANTUSB-m) and press **Device
 - **Linux:** allow non-root access with `sudo cp resources/99-ant-usb.rules /etc/udev/rules.d/ && sudo udevadm control --reload`, then replug. The `.deb` does this for you.
 - **macOS:** no setup; quit Garmin Express first.
 
-Current limits: one device of each kind (the first heard), and no pairing to a particular device number yet.
+For now ANT+ takes one device of each kind, the first it hears, and you can't pick a particular one.
 
 ## Several devices
 
-When more than one device reports the same thing, the most direct measurement wins: a crank power meter over the trainer's estimate, a chest strap over heart rate relayed by the trainer. A basic trainer with only a speed sensor can use **Settings → Trainer & physics → Estimate power from a speed sensor** (a typical fluid-trainer curve — approximate).
+When more than one device reports the same thing, the most direct measurement wins: a crank power meter over the trainer's estimate, a chest strap over heart rate relayed by the trainer. On a basic trainer with only a speed sensor, turn on **Settings → Trainer & physics → Estimate power from a speed sensor**. It works out your power from a typical fluid trainer, so treat it as a rough guide.
 
 ## It won't connect, or keeps dropping out
 

@@ -11,12 +11,7 @@ Group rides pass through a **relay** — a tiny server that forwards riders' pos
 
 ## Running a relay
 
-The relay is a single small program (`crates/relay`); CI builds it for Windows, macOS and Linux (`velopopuli-relay`), or build it yourself:
-
-```bash
-cargo run --release -p velopopuli-relay            # listens on 0.0.0.0:47800
-cargo run --release -p velopopuli-relay 0.0.0.0:9000
-```
+The relay is one small program. Download `velopopuli-relay` for Windows, macOS or Linux from the [latest release](https://github.com/pepperstm/velopopuli/releases) and run it on any computer the riders can reach. It listens on port 47800; give it an address to use another, such as `velopopuli-relay 0.0.0.0:9000`.
 
 Then everyone sets **Settings → Group rides → Relay address** to `ws://your-host:47800`.
 
@@ -24,6 +19,6 @@ Then everyone sets **Settings → Group rides → Relay address** to `ws://your-
 - To reach it from the internet, forward the port on your router, or run it on a small cloud server.
 - For a secure `wss://` address, put it behind a reverse proxy that handles TLS, such as Caddy (`reverse_proxy localhost:47800`) — the app accepts `wss://` relay addresses.
 
-## Coming: self-hosted club servers
+## Coming later
 
-The plan is to make running your own server for a club or group of friends first-class: a Docker image with `wss://` out of the box, private rooms, a server list in the app, scheduled rides, shared routes and leaderboards, and simple admin. Friends lists and accounts would work without any central server — your identity lives on your device and clubs run their own servers.
+Club servers that are easier to run, with private rooms, scheduled rides and shared routes.

@@ -1,12 +1,14 @@
 # Your first ride
 
-1. **Get a route.** On **Routes**, press **Import GPX…** (or drag files onto the window) — exports from Strava, Komoot, RideWithGPS or a bike computer all work, with or without elevation. Or plan one under **Find a route**. No route handy? The built-in **Demo Loop** is always there.
-2. **Connect your trainer** under **Devices** (see [[Connecting your trainer]]). No hardware? You can ride with the simulated **demo rider**.
-3. **Press Ride.** Choose what to ride against — pace riders, your own best (ghost), friends' rides — and optionally a workout or a group-ride room.
-4. The first ride on a route downloads its map and terrain (a few seconds to a minute); later rides start straight away.
+1. **Get a route.** On **Routes**, press **Import GPX…**, or drag a file onto the window. Exports from Strava, Komoot, RideWithGPS or a bike computer all work. Or open **Find a route** to plan one, or pick a famous climb or a signposted route there. No route handy? The **Demo Loop** and **Herne Hill Velodrome** are always in your library.
+2. **Connect your trainer** under **Devices** (see [[Connecting your trainer]]). No trainer? Press **Add demo rider** to try everything with a simulated one.
+3. **Press Ride** on the route. You can add a workout, ghosts to race, laps or a group ride, or just press **Start riding**.
+4. The first ride on a route downloads its map and landscape, which takes a few seconds to a minute. After that it starts straight away.
 
 ![Riding through Bourg d'Oisans](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-town.jpg)
 
-**During the ride:** `Space` pauses, `C` changes the camera (behind, high behind, alongside, overhead), and `↑`/`↓` change the ERG target, workout intensity or the demo rider's effort. See [[Riding]] for the rest.
+**During the ride:** `Space` pauses, `C` changes the camera, and `↑`/`↓` change the ERG target, the workout's intensity or the demo rider's effort. See [[Riding]] for the rest.
 
-**After the ride:** the summary shows your time, power, personal bests and badges. The ride is saved as a `.FIT` file, and can go to Strava in one click (see [[Strava]]).
+**After the ride:** finish the route or press **End ride**. The summary shows your time, power, personal bests and badges. The ride is saved as a `.FIT` file, and you can send it to [[Strava]] or [[Dreeve]] in one click. Rides under a minute aren't saved.
+
+**Next time:** your trainer and sensors connect by themselves when you open the app. Just wake them up.

@@ -1,48 +1,80 @@
 # Routes and the map
 
-![Route library](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-home.jpg)
+![Your routes](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-home.jpg)
 
-## Getting routes
+**Routes** is your library. Every route you add stays here, with its distance, climbing and your best time. Press **Ride** on a card to set up a ride, or **Remove** to delete it.
 
-- **Import GPX** from anywhere. Routes without elevation (planner exports) get it filled in from open terrain data.
-- **Find a route** — search for a place, click waypoints and get a route along bike-friendly roads with real elevation (via [BRouter](https://brouter.de)), or pick one of the famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). **Prefer: Mountain bike (trails)** plans along tracks and singletrack instead of roads.
-- **Your Strava routes** — with [[Strava]] connected, **Find a route** lists the routes you made or starred on Strava, starred first. Pick one to preview it and save it to your library. Strava asks for extra permission to read private routes: if you linked before this existed, only public routes are listed and the page asks you to connect again.
-- **Import from Dreeve…** — with [[Dreeve]] connected, the routes page lists your finished rides there (search by name or date, filter by bike and distance, needs Dreeve 5.4 or later). Pick one to ride it again as a route. This is not the same as the Strava item above: that lists routes you planned, this turns a ride you already did into a route.
-- **Mountain-bike routes** — on **Find a route**, move the map to an area and press **Find MTB routes here** to list the waymarked mountain-bike routes mapped there (OpenStreetMap `route=mtb`), longest first. Pick one to see it on the map with its distance, climbing and elevation profile, then save it. Its mapped pieces are joined end to end; if some don't meet, you're told how many gaps there are, and you ride straight across them. The area can be up to about 60 km across.
+Two routes are always there: the **Demo Loop**, and **Herne Hill Velodrome** (see [below](#herne-hill-velodrome)).
 
-![Route finder](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-explore.jpg)
+## Adding a route
 
-## How the world is built
+### Import a GPX file
 
-Everything comes from open data and is downloaded once per route, then kept on your computer.
+Press **Import GPX…**, or drag files onto the window. Any GPX works: exports from Strava, Komoot, RideWithGPS, Garmin Connect or a bike computer. If the file has no heights (many planners leave them out), they're filled in for you.
 
-- **Terrain** from open elevation tiles, out to the horizon. Near the road the ground is shaped to the route's own elevation so the road never floats or sinks: on a hillside the road is cut into the slope, with a rocky cutting above it and an embankment below.
-- **Buildings** from OpenStreetMap, within about 350 m of the road — with mapped heights where the detailed source (Overpass) answers, otherwise estimated.
-- **Forests, lakes, rivers, the surrounding roads and railways, bridges and tunnels** from OpenStreetMap's vector tiles, about a kilometre either side. Where your route crosses a mapped bridge or tunnel, you ride over the deck or through the bore. Woods are planted densely with spruce, pine, broadleaf, birch, cypress or poplar and bushes, in stands, chosen by altitude and latitude.
-- **Field boundaries**: the hedges, walls and fences mapped near the route where OpenStreetMap has them; elsewhere made-up fields in the local style: hedgerows in Britain, Ireland and north-west France, stone walls on hills and round the Mediterranean, timber fences in the mountains and the north. In hedge country, narrow lanes (yours included) run between high hedge banks.
+### Plan one on the map
+
+Open **Find a route**.
+
+1. Search for a place, or move the map there.
+2. Click to add waypoints from start to finish. Drag one to move it; click it to remove it.
+3. The route follows bike-friendly roads between them, with real heights. **Prefer** picks the kind of roads: **Road bike (fast roads)**, **Quiet roads and lanes**, **Safest (avoid traffic)**, or **Mountain bike (trails)** for tracks and singletrack.
+4. Give it a name and press **Save to library**.
+
+**Undo**, **Reverse** and **Clear** do what they say.
+
+![Find a route](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-explore.jpg)
+
+### Pick a ready-made route
+
+Also on **Find a route**:
+
+- **Your Strava routes.** With [[Strava]] connected, press **Show my Strava routes** to list the routes you've made or starred there, starred ones first. Pick one to see it on the map with its climbing and profile, then press **Save to library**. If you connected Strava before version 0.3.10, only your public routes are listed: connect again in Settings to see your private ones too.
+- **Signposted road routes.** Move the map to an area and press **Find road routes here**. You get the signposted cycle routes there: local loops, regional routes and national ones. A long national route is cut down to the part on the map.
+- **Mountain-bike routes.** **Find MTB routes here** does the same for waymarked mountain-bike trails. If a trail's pieces don't quite join up, you're told, and you ride straight across the gaps.
+- **Famous climbs.** Alpe d'Huez, Mont Ventoux, the Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan and Box Hill, ready to ride.
+
+The area searched can be up to about 60 km across: if the app asks you to zoom in a little, do that and search again.
+
+### Ride one of your Dreeve rides again
+
+With [[Dreeve]] connected, **Import from Dreeve…** on the Routes page lists the rides you've done. Search by name or date, or filter by bike and distance, then pick one to turn it into a route. It needs Dreeve 5.4 or later.
+
+## Herne Hill Velodrome
+
+The outdoor track in south London where the 1948 Olympic track races were held, built into the app. It's 450 m round, banked steeply into the bends, with the pavilion, the stands and the floodlights around it.
+
+When you set up a ride there, choose the **Direction**: anticlockwise, as they race it, or clockwise. Pick a number of **Laps** too (see [[Riding#laps]]).
+
+![The home straight at Herne Hill](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-herne-hill.jpg)
+
+## The world around your route
+
+The first time you ride a route, the app downloads the map and the landscape for it. That takes from a few seconds to a minute. After that it's kept on your computer, and the route starts straight away, even offline.
+
+What you ride through is built from real map data:
+
+- **The landscape** is the real one, out to the horizon, so the mountains you see are the ones that are there.
+- **Towns and villages** have their buildings, and there are village signs, summit boards, cafés, fountains and bike shops by the road.
+- **Woods, lakes, rivers, railways and other roads** are where the map puts them. You ride over bridges and through tunnels where the real road does.
+- **Fields** have hedges, stone walls or fences, in the style of the region. In hedge country, such as Devon, narrow lanes run between high hedge banks.
 
 ![A Devon lane between hedge banks](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-lane.jpg)
-- **Your road itself** is drawn as a closed race road, set apart from the map's road network by crowd barriers. It takes the real road's character from OpenStreetMap tags:
-  - **Surface** — tarmac, concrete, cobbles, gravel or dirt (`surface` tag);
-  - **Width** — from `width` or `lanes`, else typical for the road class (a 7 m main road, a 5 m village street, a 3 m track);
-  - **Markings** — a centre line on main roads only.
 
-  When the tags can't be fetched, surface and width are guessed from the road class, and fetching is tried again a day later.
+### The road you ride
 
-  **Trails** — an unpaved path or bridleway, a walking trail mapped as a footway (unpaved, or with a hiking grade), steps, or anything graded for mountain bikes (`mtb:scale` S0–S6, or `mtb:scale:imba`), is ridden as a trail: earth unless the map says otherwise, 1.5 m wide unless a width is mapped, no centre line and no crowd barriers. A narrow earth trail looks like singletrack — one worn line, with roots and stones across it — where a wider dirt track has two wheel ruts. Paved shared paths and town pavements are ridden like a lane.
+Your route is a closed road, lined with crowd barriers like a race. It has the real road's surface and width:
 
-  Where a trail has no mountain-bike grade, one is estimated from its hiking grade (`sac_scale`): hiking → S0, mountain hiking → S1, demanding mountain hiking → S2, alpine hiking → S3, harder → S4. Steps count as S2. The HUD shows **MTB trail · S2** for a mapped grade, **Trail · about S2** for an estimated one, or **Trail** when there's neither.
+- **Surface:** tarmac, concrete, cobbles, gravel or dirt. You can feel it: rougher surfaces are slower and make the trainer harder (see [[Riding#the-road-surface]]).
+- **Width:** a wide main road, a village street or a narrow lane, as it is on the map.
+- **Off-road:** paths, bridleways and mountain-bike trails become narrow earth trails without barriers. The HUD shows a trail's difficulty grade, from S0 (easy) to S5 and up, where the map has one. Tight turns on graded trails are banked. Where a trail crosses a stream with no bridge, you ride through the ford.
 
-  **Berms** — tight turns on trails with a mapped mountain-bike grade are banked: the outside edge rises (up to 35°, and never more than a metre), the inside stays at ground level, and riders lean into the turn with it. A bend counts as tight from a radius of about 30 m, fully banked from 12 m — measured on the route as ridden, whose corners are rounded off a little. Walking paths and farm tracks stay flat.
-
-  **Log bridges** — where a trail crosses a mapped bridge, it's a timber one: a plank deck barely wider than the trail, logs underneath, a wooden handrail on posts each side, and timber trestles under a longer span. Roads keep their concrete bridges.
-
-  **Fords** — where a trail crosses a mapped stream with no bridge, it goes through the water: the trail dips about 30 cm, its bed is wet stones, and the stream runs on across it, shallow at the edges and deepest in the middle. Riding through is about as heavy as an S2 trail and held to 12 km/h for a few metres either side; the HUD shows **Ford**. Roads over streams keep their culverts.
-
-  **Off the mapped roads** — where your route crosses a field, a beach or a trail nobody has mapped, for 100 m or more, you ride a 3 m dirt track. Shorter gaps (junctions, a GPS trace wandering off the road) keep the road either side, and where no map data could be loaded nothing is assumed: the road stays tarmac.
+If a road's surface or width is wrong, it's usually wrong on the map. See the [[FAQ]].
 
 ![The Arenberg cobbles](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-cobbles.jpg)
 
-- **Landmarks** — village and town signs, named summit boards, and cafés, fountains, bike shops and viewpoints by the road.
+## Privacy and turning things off
 
-Map data © OpenStreetMap contributors (ODbL). Downloads send the route's coordinates (or which map squares it passes through) to the OpenStreetMap services; buildings and scenery can be switched off in **Settings → Virtual world**.
+To build the world, the app sends the route's position to the OpenStreetMap services. Nothing else is sent. If you'd rather keep things simple, or your computer is slow, you can turn buildings and scenery off under **Settings → Virtual world**.
+
+Map data © OpenStreetMap contributors.

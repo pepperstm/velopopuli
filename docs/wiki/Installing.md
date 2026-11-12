@@ -1,6 +1,6 @@
 # Installing
 
-Download the installer for your system from the [latest release](https://github.com/pepperstm/velopopuli/releases). (Every change is also built automatically — the newest builds are under the repository's [Actions tab](https://github.com/pepperstm/velopopuli/actions).)
+Download the installer for your system from [velopopuli.com](https://velopopuli.com/#download) or the [latest release](https://github.com/pepperstm/velopopuli/releases).
 
 ## macOS
 
@@ -23,8 +23,8 @@ For an ANT+ stick, Windows needs the generic WinUSB driver — see [[Connecting 
 - **Anything else:** make the `.AppImage` executable and run it.
  Bluetooth needs BlueZ running. The `.deb` installs the rule that lets you use an ANT+ stick without root; with the AppImage, add it yourself (see [[Connecting your trainer]]).
 
-> Windows and Linux builds are produced and tested automatically, but have had little real-world use yet. Reports are very welcome — see [[Reporting problems]].
+> The Windows and Linux versions have had less use than the Mac one so far. If something goes wrong, please [[tell us|Reporting problems]].
 
 ## Where your data lives
 
-Routes, rides, settings and logs are kept in the app's data folder (on macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`). Account tokens (Strava, Home Assistant) go in the system keychain on macOS and Windows, and in files readable only by you on Linux. Rides are saved as standard `.FIT` files.
+Routes, rides, settings and logs are kept in the app's data folder (on macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`). Account details (Strava, Dreeve, Home Assistant) go in the system keychain on macOS and Windows, and in files readable only by you on Linux. Rides are saved as standard `.FIT` files.
