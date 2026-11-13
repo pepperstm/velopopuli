@@ -94,6 +94,39 @@ export const DEFAULT_SETTINGS: Settings = {
   }
 }
 
+export type SurfaceClass = 'paved' | 'cobbles' | 'gravel' | 'dirt' | 'unknown'
+export type WayClass = 'mainRoad' | 'minorRoad' | 'cyclePath' | 'track' | 'path'
+
+/** What a planned route is made of: how much of each surface and kind of way, and where. */
+export interface Breakdown {
+  surfaces: { class: SurfaceClass; metres: number }[]
+  ways: { class: WayClass; metres: number }[]
+  runs: { surface: SurfaceClass; way: WayClass; from: number; to: number; line: [number, number][] }[]
+}
+
+/** A route ready to preview and save: planned on the map, a waymarked route, or one from a service. */
+export interface Planned {
+  gpx: string
+  distance: number
+  ascent: number
+  climbs: number
+  climbList: Climb[]
+  /** `[lat, lon]` outline and `[distance, elevation]` profile, thinned for drawing. */
+  line: [number, number][]
+  profile: [number, number][]
+  name: string | null
+  /** Where a waymarked route's mapped ways don't meet. */
+  gaps: number
+  /** Only the part of a waymarked route in the area searched. */
+  clipped: boolean
+  /** Planned on the map: where each waypoint falls in `line`, and each section's length. */
+  ends: number[]
+  sections: number[]
+  breakdown: Breakdown | null
+  /** How long it takes at an easy endurance effort (three quarters of FTP). */
+  estimate: { seconds: number; watts: number }
+}
+
 export interface RouteMeta {
   id: string
   name: string

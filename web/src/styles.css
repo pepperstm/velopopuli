@@ -1273,6 +1273,99 @@ button.small {
   flex-direction: column;
   gap: 8px;
 }
+.chart.elevation .climb {
+  fill: rgba(255, 159, 67, 0.18);
+}
+.wp.ghost {
+  opacity: 0.8;
+}
+.leaflet-interactive.route-grab {
+  cursor: copy;
+}
+.row.wrap {
+  flex-wrap: wrap;
+}
+.card.make-loop,
+.card.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card.make-loop h2 {
+  margin: 0;
+}
+.make-loop input[type='number'] {
+  width: 70px;
+  flex: none;
+}
+.make-loop select {
+  flex: 1;
+  min-width: 0;
+}
+.section-row {
+  display: grid;
+  grid-template-columns: 70px 64px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.section-ends {
+  font-weight: 700;
+  font-size: 13px;
+}
+.climb-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.colour-by {
+  align-items: center;
+  gap: 6px;
+}
+.colour-by button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.shares {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.share-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 1px;
+}
+.share-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.share-legend li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: default;
+}
+.share-legend li.on,
+.share-legend li:hover {
+  background: var(--panel-2);
+}
+.share-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.share-legend span {
+  text-align: right;
+}
 .ok {
   color: var(--ok);
 }

@@ -13,6 +13,7 @@ import type {
   GearPreview,
   GearSettings,
   GhostMeta,
+  Planned,
   RideInit,
   RideRequest,
   RideSearch,
@@ -100,18 +101,7 @@ export const api = {
     /** The rider's saved routes on the service. */
     routes: (id: string) => invoke<RouteList>('connector_routes', { id }),
     /** One saved route, ready to preview and save like a planned one. */
-    route: (id: string, routeId: string) =>
-      invoke<{
-        gpx: string
-        distance: number
-        ascent: number
-        climbs: number
-        line: [number, number][]
-        profile: [number, number][]
-        name: string | null
-        gaps: number
-        clipped: boolean
-      }>('connector_route', { id, routeId }),
+    route: (id: string, routeId: string) => invoke<Planned>('connector_route', { id, routeId }),
     /** Every ride the rider has on the service, newest first, with a preview of each. */
     rideList: (id: string) => invoke<RideSearch>('connector_ride_list', { id })
   },
@@ -148,11 +138,11 @@ export const api = {
   fitness: () => invoke<FitnessOverview>('fitness_overview'),
   geo: {
     search: (query: string) => invoke<{ name: string; detail: string; lat: number; lon: number }[]>('geo_search', { query }),
-    plan: (points: [number, number][], profile: string) =>
-      invoke<{ gpx: string; distance: number; ascent: number; climbs: number; line: [number, number][]; profile: [number, number][] }>('geo_plan', {
-        points,
-        profile
-      }),
+    /** Plans through the waypoints, the section from waypoint i in `styles[i]` (missing ones take the last). */
+    plan: (points: [number, number][], styles: string[]) => invoke<Planned>('geo_plan', { points, styles }),
+    /** Waypoints for a loop of about `distance` metres from `start`, heading off towards `direction` (degrees from north). */
+    roundTrip: (start: [number, number], distance: number, direction: number, style: string) =>
+      invoke<[number, number][]>('geo_round_trip', { start, distance, direction, style }),
     classics: () => invoke<{ name: string; region: string; points: [number, number][] }[]>('geo_classics'),
     /** Waymarked routes of a kind (mountain-bike or signposted road) within `[south, west, north, east]`. */
     waymarkedRoutes: (kind: 'mtb' | 'road', bounds: [number, number, number, number]) =>
@@ -161,18 +151,7 @@ export const api = {
         { kind, bounds }
       ),
     /** One waymarked route, joined into a line with elevation, ready to save. A road route is cut down to its part within `bounds`. */
-    waymarkedRoute: (kind: 'mtb' | 'road', id: number, bounds: [number, number, number, number]) =>
-      invoke<{
-        gpx: string
-        distance: number
-        ascent: number
-        climbs: number
-        line: [number, number][]
-        profile: [number, number][]
-        name: string | null
-        gaps: number
-        clipped: boolean
-      }>('geo_waymarked_route', { kind, id, bounds })
+    waymarkedRoute: (kind: 'mtb' | 'road', id: number, bounds: [number, number, number, number]) => invoke<Planned>('geo_waymarked_route', { kind, id, bounds })
   },
   group: {
     fetchRoute: (room: string) => invoke<RouteMeta>('group_fetch_route', { room })
@@ -195,6 +174,7 @@ export const api = {
         scroll: string | null
         laps: number | null
         route: string | null
+        plan: string | null
       } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })
