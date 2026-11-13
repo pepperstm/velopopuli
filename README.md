@@ -209,6 +209,17 @@ Your browser opens for approval. The key and tokens are stored in the system key
 - More from OpenStreetMap: mapped roof shapes, other land cover (farmland, rock, glaciers), mapped leaf types, squares and car parks
 - Wahoo legacy protocol and steering; Di2 and Zwift Click/Play controllers as shifters for virtual gears without a bridge
 
+### Riding a real road, not a closed course
+
+A road ride today looks like a race on a closed circuit: crowd barriers line both sides, and the road ridden is a strip of its own that the map's other roads don't join. The aim is for it to feel like riding your bike on the real road network:
+
+- **Open roads.** No crowd barriers on an ordinary ride (kept for climbs and events, or as a setting). In their place, the real roadside: kerbs and pavements in towns, grass verges in the country, and the mapped hedges, walls and fences right up to the edge, with gateways and driveways in them.
+- **Junctions that join up.** Side roads meet the road being ridden as one surface, with give-way and stop lines, breaks in the centre line, and markings at roundabouts and crossings.
+- **One road network.** The road ridden is drawn like every other road on the map, with its markings from the map: lanes, cycle lanes, bus lanes, and the width changing at junctions.
+- **Life by the roadside.** Fingerposts at junctions pointing to the next places, street lights, bus stops, post boxes, and parked cars on town streets.
+- **Riding on your side of the road.** Keeping to the left or right as the country drives, with the rider's line through corners, rather than riding down the middle.
+- **Other road users.** Optional light traffic: other cyclists and the odd car on the roads around you, crossing at junctions.
+
 ### Stretch: self-hosted group-ride servers
 
 Group rides already go through a small relay anyone can run (`crates/relay`; CI builds it for every platform). The stretch goal is to make running your own server for a club or group of friends a first-class option:
