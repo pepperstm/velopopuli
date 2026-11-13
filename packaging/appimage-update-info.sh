@@ -18,11 +18,13 @@ trap 'rm -rf "$work"' EXIT
 cd "$work"
 "$appimage" --appimage-extract >/dev/null
 mkdir out
-# The .zsync names the AppImage it describes, so it's built under the final name.
-out="out/$(basename "$appimage")"
-ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream -u "$info" squashfs-root "$out"
+# The .zsync names the AppImage it describes, so it's built under the final name. Built
+# from inside `out`, since appimagetool writes the .zsync to the folder it runs in.
+name=$(basename "$appimage")
+(cd out && ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream -u "$info" ../squashfs-root "$name")
+out="out/$name"
 
-test -s "$out.zsync" || { echo "appimagetool made no .zsync file" >&2; exit 1; }
+test -s "$out.zsync" || { echo "appimagetool made no .zsync file:" >&2; find "$work" -maxdepth 2 -name '*.zsync' >&2; exit 1; }
 embedded=$("$out" --appimage-updateinformation)
 if [ "$embedded" != "$info" ]; then
   echo "update information not embedded: got '$embedded'" >&2
