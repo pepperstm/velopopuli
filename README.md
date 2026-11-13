@@ -211,9 +211,14 @@ Your browser opens for approval. The key and tokens are stored in the system key
 
 ### Riding a real road, not a closed course
 
-A road ride today looks like a race on a closed circuit: crowd barriers line both sides, and the road ridden is a strip of its own that the map's other roads don't join. The aim is for it to feel like riding your bike on the real road network:
+A road ride today looks like a race on a closed circuit: crowd barriers line both sides, and the road ridden is a strip of its own that the map's other roads don't join. That suits a race, but not every ride. The plan is a choice when you set up a ride:
 
-- **Open roads.** No crowd barriers on an ordinary ride (kept for climbs and events, or as a setting). In their place, the real roadside: kerbs and pavements in towns, grass verges in the country, and the mapped hedges, walls and fences right up to the edge, with gateways and driveways in them.
+- **Closed race:** the course as it is now, closed to traffic, with crowd barriers, netting on the hairpins and the road to yourself.
+- **Road ride:** riding your bike on the real road network, as below.
+
+For a road ride:
+
+- **Open roads.** No crowd barriers. In their place, the real roadside: kerbs and pavements in towns, grass verges in the country, and the mapped hedges, walls and fences right up to the edge, with gateways and driveways in them.
 - **Junctions that join up.** Side roads meet the road being ridden as one surface, with give-way and stop lines, breaks in the centre line, and markings at roundabouts and crossings.
 - **One road network.** The road ridden is drawn like every other road on the map, with its markings from the map: lanes, cycle lanes, bus lanes, and the width changing at junctions.
 - **Life by the roadside.** Fingerposts at junctions pointing to the next places, street lights, bus stops, post boxes, and parked cars on town streets.
