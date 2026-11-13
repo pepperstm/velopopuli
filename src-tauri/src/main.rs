@@ -160,6 +160,7 @@ fn main() {
             commands::smart_test,
             commands::geo_search,
             commands::geo_plan,
+            commands::geo_round_trip,
             commands::geo_classics,
             commands::geo_waymarked_routes,
             commands::geo_waymarked_route,

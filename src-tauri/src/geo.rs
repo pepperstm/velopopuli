@@ -1,8 +1,14 @@
 //! Finding places and planning routes inside the app: place search through
-//! OpenStreetMap's Nominatim, bike routing (with elevation) through BRouter, and
-//! waymarked mountain-bike routes through the Overpass API.
+//! OpenStreetMap's Nominatim, bike routing through BRouter (with elevation, section by
+//! section, and loops), and waymarked routes through the Overpass API.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+
+use futures::StreamExt;
 use serde::Serialize;
+use velopopuli_core::planner::{self, Leg};
 use velopopuli_core::waymarked::Kind;
 
 #[derive(Serialize)]
@@ -38,28 +44,99 @@ pub async fn search(http: &reqwest::Client, query: &str) -> Result<Vec<Place>, S
         .collect())
 }
 
-/// Routes through the given `[lat, lon]` waypoints and returns the GPX (with elevation).
-pub async fn plan(http: &reqwest::Client, points: &[[f64; 2]], profile: &str) -> Result<String, String> {
+/// Sections already planned, by style and end points, so moving one waypoint only plans the
+/// two sections that touch it again. Loops made by `round_trip` are put here in pieces too.
+static SECTIONS: OnceLock<Mutex<HashMap<String, Leg>>> = OnceLock::new();
+/// Enough for a few long routes and their edits; past it the oldest are dropped.
+const SECTIONS_KEPT: usize = 400;
+
+fn section_key(style: &str, from: [f64; 2], to: [f64; 2]) -> String {
+    format!("{style}|{:.6},{:.6}|{:.6},{:.6}", from[0], from[1], to[0], to[1])
+}
+
+fn remember(key: String, leg: Leg) {
+    let mut cache = SECTIONS.get_or_init(Mutex::default).lock().unwrap();
+    if cache.len() >= SECTIONS_KEPT {
+        cache.clear();
+    }
+    cache.insert(key, leg);
+}
+
+fn recall(key: &str) -> Option<Leg> {
+    SECTIONS.get_or_init(Mutex::default).lock().unwrap().get(key).cloned()
+}
+
+async fn brouter(http: &reqwest::Client, query: &str) -> Result<Leg, String> {
+    let url = format!("https://brouter.de/brouter?{query}&alternativeidx=0&format=geojson");
+    let res = http.get(url).timeout(Duration::from_secs(60)).send().await.map_err(|e| format!("Could not reach the route planner: {e}"))?;
+    let status = res.status();
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let reason = text.lines().next().unwrap_or("").chars().take(160).collect::<String>();
+        return Err(if reason.is_empty() { "no route".into() } else { reason });
+    }
+    planner::parse_brouter(&text)
+}
+
+/// Waypoint names as the map shows them: S, 1, 2, …, F.
+fn label(i: usize, count: usize) -> String {
+    match i {
+        0 => "S".into(),
+        i if i + 1 == count => "F".into(),
+        i => i.to_string(),
+    }
+}
+
+/// Plans each section between `[lat, lon]` waypoints in its own style (`styles[i]` for the
+/// section from waypoint i; a missing one takes the last given), reusing sections already planned.
+pub async fn plan(http: &reqwest::Client, points: &[[f64; 2]], styles: &[String]) -> Result<Vec<Leg>, String> {
     if points.len() < 2 {
         return Err("Add at least a start and a finish.".into());
     }
-    if points.len() > 30 {
-        return Err("Use at most 30 waypoints.".into());
+    if points.len() > 40 {
+        return Err("Use at most 40 waypoints.".into());
     }
-    let profile = match profile {
-        "trekking" | "safety" | "fastbike" | "mtb" => profile,
-        _ => "fastbike",
-    };
-    let lonlats = points.iter().map(|p| format!("{:.6},{:.6}", p[1], p[0])).collect::<Vec<_>>().join("|");
-    let url = format!("https://brouter.de/brouter?lonlats={lonlats}&profile={profile}&alternativeidx=0&format=gpx");
-    let res = http.get(url).timeout(std::time::Duration::from_secs(60)).send().await.map_err(|e| format!("Could not reach the route planner: {e}"))?;
-    let status = res.status();
-    let text = res.text().await.map_err(|e| e.to_string())?;
-    if !status.is_success() || !text.contains("<trkpt") {
-        let reason = text.lines().next().unwrap_or("").chars().take(160).collect::<String>();
-        return Err(format!("No route found between those points{}", if reason.is_empty() { ".".into() } else { format!(": {reason}") }));
+    let style_of = |i: usize| planner::style(styles.get(i).or(styles.last()).map_or("", String::as_str));
+    let sections = (0..points.len() - 1).map(|i| async move {
+        let key = section_key(style_of(i), points[i], points[i + 1]);
+        if let Some(leg) = recall(&key) {
+            return Ok(leg);
+        }
+        let lonlats = format!("{:.6},{:.6}|{:.6},{:.6}", points[i][1], points[i][0], points[i + 1][1], points[i + 1][0]);
+        match brouter(http, &format!("lonlats={lonlats}&profile={}", style_of(i))).await {
+            Ok(leg) => {
+                remember(key, leg.clone());
+                Ok(leg)
+            }
+            Err(e) => Err(format!("No route found from {} to {}: {e}", label(i, points.len()), label(i + 1, points.len()))),
+        }
+    });
+    // A few at a time: the planner is a free public service.
+    futures::stream::iter(sections).buffered(4).collect::<Vec<_>>().await.into_iter().collect()
+}
+
+/// A loop of about `distance` metres from `start`, heading off towards `direction` (degrees
+/// from north), as waypoints to plan and edit like any route. Its sections are remembered, so
+/// planning those waypoints gives back the loop as it was made.
+pub async fn round_trip(http: &reqwest::Client, start: [f64; 2], distance: f64, direction: f64, style: &str) -> Result<Vec<[f64; 2]>, String> {
+    let style = planner::style(style);
+    let ask = |radius: f64| format!("lonlats={:.6},{:.6}&profile={style}&engineMode=4&roundTripDistance={:.0}&direction={:.0}", start[1], start[0], radius, direction.rem_euclid(360.0));
+    let failed = |e: String| format!("No loop found from here: {e}");
+    let mut radius = planner::round_trip_radius(distance);
+    let mut leg = brouter(http, &ask(radius)).await.map_err(failed)?;
+    // The roads decide how long a loop really comes out; one more try gets closer.
+    let length = leg.length();
+    if length > 0.0 && (length / distance - 1.0).abs() > 0.2 {
+        radius = (radius * distance / length).clamp(500.0, 60_000.0);
+        if let Ok(again) = brouter(http, &ask(radius)).await {
+            leg = again;
+        }
     }
-    Ok(text)
+    let waypoints = planner::loop_waypoints(&leg, distance / 8.0);
+    for w in waypoints.windows(2) {
+        remember(section_key(style, w[0].1, w[1].1), leg.slice(w[0].0, w[1].0));
+    }
+    Ok(waypoints.into_iter().map(|(_, p)| p).collect())
 }
 
 /// The waymarked routes of a kind within `[south, west, north, east]`.
@@ -103,7 +180,7 @@ pub const CLASSICS: &[Classic] = &[
 
 #[cfg(test)]
 mod tests {
-    use velopopuli_core::gpx::{build_route, parse_gpx};
+    use velopopuli_core::gpx::build_route;
     use velopopuli_core::waymarked::Kind;
 
     /// Needs the network: `cargo test -p velopopuli -- --ignored`.
@@ -114,11 +191,28 @@ mod tests {
         let found = super::search(&http, "Bourg d'Oisans").await.unwrap();
         assert!(found.iter().any(|p| (p.lat - 45.05).abs() < 0.05), "{}", found.len());
         for c in super::CLASSICS {
-            let gpx = super::plan(&http, c.points, "fastbike").await.unwrap();
-            let route = build_route(c.name, &parse_gpx(&gpx).unwrap().1).unwrap();
+            let legs = super::plan(&http, c.points, &["fastbike".to_string()]).await.unwrap();
+            assert_eq!(legs.len(), c.points.len() - 1);
+            let route = build_route(c.name, &velopopuli_core::planner::join(&legs).raw_points()).unwrap();
             println!("{}: {:.1} km, {:.0} m up, {} climbs", c.name, route.total / 1000.0, route.ascent, route.climbs.len());
             assert!(route.ascent > 100.0 && route.climbs.len() >= 1, "{}", c.name);
         }
+    }
+
+    /// Needs the network: `cargo test -p velopopuli -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn makes_loops_that_plan_back_as_they_were() {
+        let http = reqwest::Client::builder().user_agent("VeloPopuli/0.2 (open-source indoor cycling app)").build().unwrap();
+        // Bovey Tracey, Devon: about 40 km, heading east.
+        let start = [50.577, -3.676];
+        let points = super::round_trip(&http, start, 40_000.0, 90.0, "fastbike").await.unwrap();
+        assert!((5..=14).contains(&points.len()), "{}", points.len());
+        assert_eq!(points.first(), points.last());
+        let legs = super::plan(&http, &points, &["fastbike".to_string()]).await.unwrap();
+        let length = velopopuli_core::planner::join(&legs).length();
+        println!("loop: {} waypoints, {:.1} km", points.len(), length / 1000.0);
+        assert!((28_000.0..52_000.0).contains(&length), "{length}");
     }
 
     /// Needs the network: `cargo test -p velopopuli -- --ignored`.

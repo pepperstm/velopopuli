@@ -19,7 +19,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ crates/core/  (pure computation, no I/O)                                  │
 │   gpx · physics · ride · workout · fitness · gamify · segments · fit      │
-│   gearing · waymarked · velodrome · devices (protocols) · world (3D)      │
+│   gearing · waymarked · planner · velodrome · devices · world (3D)        │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -41,6 +41,7 @@ crates/core/src/
   segments.rs       Other rides and segments matched onto the route; ghosts; photos   → The ride
   fit.rs            FIT activity encoder                                              → The ride
   waymarked.rs      Signposted and MTB route relations joined into one line           → Routes
+  planner.rs        Planned sections joined; surfaces and ways; loops; ride time      → Routes
   velodrome.rs      Built-in tracks (Herne Hill) as routes                            → Routes
   types.rs          Settings and stored shapes shared with the app
   devices/          Bluetooth and ANT+ protocols, OpenBikeControl, the sensor hub     → Devices
