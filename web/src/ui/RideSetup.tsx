@@ -31,6 +31,8 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   const isTrack = route.id === 'herne-hill'
   const [clockwise, setClockwise] = useState(false)
   const rideId = isTrack && clockwise ? `${route.id}-clockwise` : route.id
+  // OpenBikeNet and a group-ride room are alternatives on a shared track.
+  const shared = isTrack && settings.openBikeNet.enabled
   const segmentConnectors = connectors.filter((c) => c.findsSegments && c.status.connected)
   const nameOf = (id: string | undefined): string => connectors.find((c) => c.info.id === id)?.info.name ?? id ?? 'a service'
   const sourceNames = [...new Set(segments.map((s) => nameOf(s.connector)))].join(' and ')
@@ -95,6 +97,13 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
               <option value="clockwise">Clockwise</option>
             </select>
           </>
+        )}
+
+        {shared && (
+          <p className="muted small">
+            Shared with other apps through OpenBikeNet. Their riders appear on the track;{' '}
+            {settings.openBikeNet.sharePower ? 'your power and cadence are shared too.' : 'your power and cadence stay private.'}
+          </p>
         )}
 
         {isLoop && (
@@ -232,27 +241,33 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
           </>
         )}
 
-        <h3>Group ride</h3>
-        <label className="field toggle">
-          <input type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} />
-          <span>Ride with friends</span>
-          <small>Share the room code; they choose “Join a group ride” on the Routes page. Relay: {settings.group.relayUrl}</small>
-        </label>
-        {group && (
-          <label className="field">
-            <span>Room code</span>
-            <input
-              value={room}
-              onChange={(e) =>
-                setRoom(
-                  e.target.value
-                    .toUpperCase()
-                    .replace(/[^A-Z0-9-]/g, '')
-                    .slice(0, 32)
-                )
-              }
-            />
-          </label>
+        {shared ? (
+          <p className="muted small">OpenBikeNet is on for this track, so a group-ride room is off here. Turn it off in Settings to ride with a room.</p>
+        ) : (
+          <>
+            <h3>Group ride</h3>
+            <label className="field toggle">
+              <input type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} />
+              <span>Ride with friends</span>
+              <small>Share the room code; they choose “Join a group ride” on the Routes page. Relay: {settings.group.relayUrl}</small>
+            </label>
+            {group && (
+              <label className="field">
+                <span>Room code</span>
+                <input
+                  value={room}
+                  onChange={(e) =>
+                    setRoom(
+                      e.target.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9-]/g, '')
+                        .slice(0, 32)
+                    )
+                  }
+                />
+              </label>
+            )}
+          </>
         )}
 
         {busy && <div className="muted">{busy}</div>}
@@ -260,13 +275,13 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
         <div className="row">
           <button
             className="primary"
-            disabled={!!busy || (group && !room)}
+            disabled={!!busy || (!shared && group && !room)}
             onClick={() =>
               props.onStart({
                 routeId: rideId,
                 workoutId: workoutId || null,
                 ghostIds: lapRide ? [] : ghostIds,
-                groupRoom: group ? room : null,
+                groupRoom: group && !shared ? room : null,
                 laps: lapRide ? Number(laps) : null
               })
             }

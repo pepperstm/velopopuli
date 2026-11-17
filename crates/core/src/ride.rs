@@ -38,6 +38,10 @@ pub struct Rival {
     pub color: u32,
     pub distance: f64,
     pub speed: f64,
+    /// When a remote rider's last position arrived, in ride seconds. Used to move them on
+    /// between updates, so 1 Hz updates don't look jerky.
+    #[serde(skip)]
+    pub updated: f64,
     /// Bots hold a constant power; the ghost replays a recorded trace.
     #[serde(skip)]
     pub power: f64,
@@ -203,10 +207,32 @@ impl RideEngine {
         // A recorded trace covers one trip along the route, so there are no ghosts on a lap ride.
         if laps.is_none() && pb.as_ref().is_some_and(|p| p.trace.len() > 1) {
             let trace = Arc::new(pb.as_ref().unwrap().trace.clone());
-            rivals.push(Rival { id: "ghost".into(), name: "Your best".into(), kind: RivalKind::Ghost, color: 0xffffff, distance: 0.0, speed: 0.0, power: 0.0, mass: 0.0, trace: Some(trace) });
+            rivals.push(Rival {
+                id: "ghost".into(),
+                name: "Your best".into(),
+                kind: RivalKind::Ghost,
+                color: 0xffffff,
+                distance: 0.0,
+                speed: 0.0,
+                updated: 0.0,
+                power: 0.0,
+                mass: 0.0,
+                trace: Some(trace),
+            });
         }
         for g in options.ghosts.iter().filter(|_| laps.is_none()) {
-            rivals.push(Rival { id: g.id.clone(), name: g.name.clone(), kind: RivalKind::Ghost, color: g.color, distance: 0.0, speed: 0.0, power: 0.0, mass: 0.0, trace: Some(g.trace.clone()) });
+            rivals.push(Rival {
+                id: g.id.clone(),
+                name: g.name.clone(),
+                kind: RivalKind::Ghost,
+                color: g.color,
+                distance: 0.0,
+                speed: 0.0,
+                updated: 0.0,
+                power: 0.0,
+                mass: 0.0,
+                trace: Some(g.trace.clone()),
+            });
         }
         if settings.bots.enabled {
             for (i, wkg) in settings.bots.wkg.iter().enumerate() {
@@ -217,6 +243,7 @@ impl RideEngine {
                     color: BOT_COLORS[i % BOT_COLORS.len()],
                     distance: 0.0,
                     speed: 0.0,
+                    updated: 0.0,
                     power: wkg * 75.0,
                     mass: 75.0 + 8.5,
                     trace: None,
@@ -366,7 +393,14 @@ impl RideEngine {
                     r.speed = if dt > 0.0 { (d - r.distance) / dt } else { 0.0 };
                     r.distance = d;
                 }
-                RivalKind::Remote => {}
+                RivalKind::Remote => {
+                    // Move on at the last speed for at most two seconds, so 1 Hz updates from
+                    // other apps (and group rides) look smooth instead of jumping.
+                    if self.elapsed - r.updated <= 2.0 + 1e-9 {
+                        let d = r.distance + r.speed * dt;
+                        r.distance = if lap_ride { d.rem_euclid(self.route.total) } else { d.min(self.route.total) };
+                    }
+                }
                 RivalKind::Bot if lap_ride => {
                     let p = self.route.sample_at(r.distance);
                     r.speed = step_speed(r.speed, r.power, p.grade, p.ele, &params, dt);
@@ -516,15 +550,16 @@ impl RideEngine {
         power_curve(&self.samples.iter().map(|s| s.power).collect::<Vec<_>>())
     }
 
-    /// Sets a group-ride partner's position (adds them if new).
+    /// Sets a group-ride partner's or another app's rider position (adds them if new).
     pub fn set_remote(&mut self, id: &str, name: &str, color: u32, distance: f64, speed: f64) {
         let distance = distance.clamp(0.0, self.route.total);
         if let Some(r) = self.rivals.iter_mut().find(|r| r.id == id) {
             r.distance = distance;
             r.speed = speed;
             r.name = name.to_string();
+            r.updated = self.elapsed;
         } else {
-            self.rivals.push(Rival { id: id.into(), name: name.into(), kind: RivalKind::Remote, color, distance, speed, power: 0.0, mass: 0.0, trace: None });
+            self.rivals.push(Rival { id: id.into(), name: name.into(), kind: RivalKind::Remote, color, distance, speed, updated: self.elapsed, power: 0.0, mass: 0.0, trace: None });
         }
     }
 

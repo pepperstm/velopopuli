@@ -94,7 +94,9 @@ export function Home({ onRide }: { onRide: (request: RideRequest) => void }): Re
         {bests?.[r.id]
           ? `Best ${fmtTime(bests[r.id])}`
           : tracks.some((t) => t.id === r.id)
-            ? 'Built-in velodrome'
+            ? settings.openBikeNet.enabled
+              ? 'Built-in velodrome · shared with other apps'
+              : 'Built-in velodrome'
             : builtIn
               ? 'Built-in demo route'
               : 'Not ridden yet'}

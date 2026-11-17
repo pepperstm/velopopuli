@@ -14,6 +14,7 @@
 - [[Strava]]
 - [[Dreeve]]
 - [[Group rides and self-hosting]]
+- [[Riders from other apps]]
 - [[Fan and lights]]
 
 **Help**

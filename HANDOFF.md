@@ -24,6 +24,7 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 | **Virtual gears** | The maths is unit-tested and shifting was checked with the demo rider and the smoke harness (`VP_SMOKE_SHIFT`), but it has **never been felt on a real trainer**. |
 | **OpenBikeControl controllers** | Button decoding and the choice of one action per press are unit-tested; never connected to a real controller. |
 | **Herne Hill Velodrome** | Built-in track. The route is in `crates/core/src/velodrome.rs`; the banked track, its paint and the buildings are in `world/venue.rs`. Tested in code, and I've checked a live preview in demo mode on both renderers, each way round (`VP_SMOKE_ROUTE=herne-hill` or `herne-hill-clockwise`). Nobody has ridden it with a trainer yet. |
+| **OpenBikeNet** | Meeting riders of other apps on the shared Herne Hill route. Messages, display-name rules, route mapping and the smooth movement between updates are unit-tested; the link reconnects and pings. **Not yet run against another app**, and off by default. On the track, a group-ride room is off while it is on. |
 | **Laps on loop routes** | Lap engine, bests, segments and renderers unit-tested in `crates/core`; smoke-run across the line on Linux with three.js, not yet with the native renderer (macOS). Group standings don't show who is a lap up. |
 | **Strava** (OAuth, upload, routes, segments, activities as ghosts) | Connecting, upload and the route list were run against the live API on 2026-11-12; segments and ghost import not yet confirmed. Users must create their own API key (open source can't ship a secret). Scope is `read,read_all,activity:read_all,activity:write`; links made before 0.3.10 lack `read_all`, so private routes are hidden until the rider reconnects. |
 | **Dreeve** (API key, upload, rides as ghosts, rides imported as routes) | Request shapes and error mapping are tested against an in-process fake server (`connectors/dreeve.rs` tests). Connecting, listing rides, fetching a track and finding the rides that fit a route were run against a real Dreeve v5.8.2 with about 190 rides on 2026-11-10 (`live_dreeve_lists_rides_and_tracks`, ignored by default, takes `DREEVE_URL`, `DREEVE_API_KEY` and optionally `DREEVE_ROUTE_RIDE`). The upload was tested by hand against a real instance. |
@@ -69,7 +70,7 @@ src-tauri/          The app (Tauri 2)
                     strava.rs (OAuth, upload, recent rides, segments),
                     dreeve.rs (API key, upload, recent rides, ride GPX for route import; a self-hosted Dreeve).
                     docs/ADDING_A_CONNECTOR.md explains adding one.
-  geo, photos, smart, group, library, terrain, secrets, store
+  geo, photos, smart, group, obn, library, terrain, secrets, store
 web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (scene.ts, terrain.ts, trees.ts (tree models, sprite atlas), rider.ts,
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source (the user's manual)

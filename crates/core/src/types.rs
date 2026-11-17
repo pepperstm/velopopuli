@@ -217,6 +217,23 @@ impl Default for GroupSettings {
     }
 }
 
+/// Meeting riders of other indoor cycling apps on a shared track (OpenBikeNet).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OpenBikeNetSettings {
+    /// Off by default: nothing leaves the app until the rider turns it on.
+    pub enabled: bool,
+    pub server: String,
+    /// Share power and cadence. Heart rate is never sent, whatever this says.
+    pub share_power: bool,
+}
+
+impl Default for OpenBikeNetSettings {
+    fn default() -> Self {
+        Self { enabled: false, server: "wss://openbikenet.cloud/v0".into(), share_power: false }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BotSettings {
@@ -251,6 +268,8 @@ pub struct Settings {
     pub look: WorldLook,
     pub smart: SmartHome,
     pub group: GroupSettings,
+    /// Meet riders of other indoor cycling apps on shared tracks.
+    pub open_bike_net: OpenBikeNetSettings,
     /// Draw the 3D world with the GPU directly instead of in the web page (macOS, experimental).
     pub native_renderer: bool,
     /// Log the raw data every sensor sends, for diagnostics reports.
@@ -276,6 +295,7 @@ impl Default for Settings {
             look: Default::default(),
             smart: Default::default(),
             group: Default::default(),
+            open_bike_net: Default::default(),
             native_renderer: false,
             diagnostics: true,
             gears: Default::default(),
