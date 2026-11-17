@@ -27,6 +27,8 @@ export interface Settings {
     fanFull: number
   }
   group: { relayUrl: string }
+  /** Meet riders of other indoor cycling apps on shared tracks. */
+  openBikeNet: { enabled: boolean; server: string; sharePower: boolean }
   /** Draw the 3D world with the GPU directly instead of in the page (macOS, experimental). */
   nativeRenderer: boolean
   diagnostics: boolean
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: Settings = {
   look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
+  openBikeNet: { enabled: false, server: 'wss://openbikenet.cloud/v0', sharePower: false },
   nativeRenderer: false,
   diagnostics: true,
   gears: {
