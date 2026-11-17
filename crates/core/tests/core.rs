@@ -593,6 +593,27 @@ mod ride {
         engine.set_surfaces(Vec::new());
         assert_eq!(engine.surface(), Surface::Asphalt);
     }
+
+    #[test]
+    fn remote_riders_move_on_between_updates() {
+        let route = ring(1000.0);
+        let mut engine = lap_engine(route, Some(0), None);
+        engine.set_remote("r1", "Anna", 0xffffff, 100.0, 10.0);
+        let d = |e: &RideEngine| e.rivals.iter().find(|r| r.id == "r1").unwrap().distance;
+        let mut clock = 0;
+        // The next update is a second away: move on at the last speed in between.
+        for _ in 0..10 {
+            clock += 100;
+            engine.tick(0.1, RideInput { power: 150.0, cadence: Some(90.0), hr: None }, clock);
+        }
+        assert!((d(&engine) - 110.0).abs() < 0.5, "after 1 s: {}", d(&engine));
+        // Two seconds after the last update they stop, so a silent rider doesn't ride off.
+        for _ in 0..20 {
+            clock += 100;
+            engine.tick(0.1, RideInput { power: 150.0, cadence: Some(90.0), hr: None }, clock);
+        }
+        assert!((d(&engine) - 120.0).abs() < 0.5, "after 3 s: {}", d(&engine));
+    }
 }
 
 mod gamify {

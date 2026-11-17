@@ -729,6 +729,43 @@ export function SettingsScreen(): React.JSX.Element {
         </label>
       </section>
 
+      <section className="card">
+        <h2>Other apps</h2>
+        <p className="muted">
+          Meet riders from other indoor cycling apps on shared tracks through{' '}
+          <a href="#" onClick={() => void api.openExternal('https://openbikenet.cloud')}>
+            OpenBikeNet
+          </a>
+          , an open protocol with a public server. Off by default. Your rider name, position, lap and speed are sent; power and cadence only if you allow it.
+          Heart rate is never sent.
+        </p>
+        <Toggle
+          label="Ride with riders from other apps"
+          hint="On the shared tracks (Herne Hill). A group-ride room is off there while this is on."
+          value={settings.openBikeNet.enabled}
+          onChange={(v) => update((s) => ({ ...s, openBikeNet: { ...s.openBikeNet, enabled: v } }))}
+        />
+        {settings.openBikeNet.enabled && (
+          <>
+            <label className="field">
+              <span>Server address</span>
+              <input
+                value={settings.openBikeNet.server}
+                onChange={(e) => update((s) => ({ ...s, openBikeNet: { ...s.openBikeNet, server: e.target.value.trim() } }))}
+                placeholder="wss://openbikenet.cloud/v0"
+              />
+              <small>The public server is the default. You can run your own.</small>
+            </label>
+            <Toggle
+              label="Share power and cadence"
+              hint="Other apps then show your power and cadence. Never heart rate."
+              value={settings.openBikeNet.sharePower}
+              onChange={(v) => update((s) => ({ ...s, openBikeNet: { ...s.openBikeNet, sharePower: v } }))}
+            />
+          </>
+        )}
+      </section>
+
       <ConnectorCards />
 
       <section className="card">

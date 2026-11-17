@@ -9,6 +9,7 @@ pub mod fitness;
 pub mod gamify;
 pub mod gearing;
 pub mod gpx;
+pub mod obn;
 pub mod physics;
 pub mod planner;
 pub mod ride;
