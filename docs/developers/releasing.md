@@ -44,9 +44,16 @@ The `release` job in [`build.yml`](../../.github/workflows/build.yml) collects t
 | `VeloPopuli_X.Y.Z_universal.dmg` | macOS, Apple silicon and Intel |
 | `VeloPopuli_X.Y.Z_x64_en-US.msi`, `VeloPopuli_X.Y.Z_x64-setup.exe` | Windows |
 | `VeloPopuli_X.Y.Z_amd64.deb`, `VeloPopuli_X.Y.Z_amd64.AppImage` | Linux |
+| `VeloPopuli_X.Y.Z_amd64.AppImage.zsync` | Updating the AppImage (below) |
 | `velopopuli-bin-X.Y.Z-1-x86_64.pkg.tar.zst`, `PKGBUILD` | Arch Linux |
 | `velopopuli-relay-macos-arm64`, `-linux-x86_64`, `-windows-x86_64.exe` | The group-ride relay |
 | `SHA256SUMS.txt` | Checksums of all of the above |
+
+### Updating the AppImage
+
+The AppImage carries update information, so [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) and tools like it can update an installed copy from the latest release, downloading only what changed. After `tauri build`, the Linux job runs [`packaging/appimage-update-info.sh`](../../packaging/appimage-update-info.sh), which unpacks the AppImage, packs it again with [appimagetool](https://github.com/AppImage/appimagetool) and `-u "gh-releases-zsync|pepperstm|velopopuli|latest|VeloPopuli_*_amd64.AppImage.zsync"`, and checks the result. The `.zsync` file it makes is published with the release. `latest` means pre-releases are never offered as updates.
+
+VeloPopuli is also listed in the [AppImage catalog](https://appimage.github.io), which reads the newest release from GitHub itself.
 
 ### Signing
 

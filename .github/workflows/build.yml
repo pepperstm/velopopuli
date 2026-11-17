@@ -69,6 +69,13 @@ jobs:
         if: runner.os == 'macOS'
         run: rustup target add x86_64-apple-darwin
       - run: npx tauri build ${{ matrix.args }}
+      - name: Update information in the AppImage
+        # So AppImageUpdate and similar tools can update it from the latest release.
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          APPIMAGETOOL="$RUNNER_TEMP/appimagetool" packaging/appimage-update-info.sh target/release/bundle/appimage/VeloPopuli_*_amd64.AppImage
       - name: Relay server
         run: cargo build --release -p velopopuli-relay
       - uses: actions/upload-artifact@v4
@@ -80,6 +87,7 @@ jobs:
             target/release/bundle/**/*-setup.exe
             target/release/bundle/**/*.deb
             target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.AppImage.zsync
             target/release/velopopuli-relay
             target/release/velopopuli-relay.exe
           if-no-files-found: warn
@@ -145,7 +153,7 @@ jobs:
       - name: Collect the files
         run: |
           mkdir out
-          find artifacts -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.pkg.tar.zst' -o -name 'PKGBUILD' \) -exec cp {} out/ \;
+          find artifacts -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.AppImage.zsync' -o -name '*.pkg.tar.zst' -o -name 'PKGBUILD' \) -exec cp {} out/ \;
           # The relay has the same name on every system; tell them apart.
           relay() { find "artifacts/VeloPopuli-$1" -type f -name "$2" | head -1; }
           cp "$(relay macOS velopopuli-relay)" out/velopopuli-relay-macos-arm64

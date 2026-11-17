@@ -21,6 +21,7 @@ For an ANT+ stick, Windows needs the generic WinUSB driver — see [[Connecting 
 - **Ubuntu, Debian, Mint, Pop!_OS…:** `sudo apt install ./VeloPopuli_<version>_amd64.deb`
 - **Arch, Manjaro, EndeavourOS…:** `sudo pacman -U velopopuli-bin-<version>-x86_64.pkg.tar.zst` (the `PKGBUILD` is attached to the release too)
 - **Anything else:** make the `.AppImage` executable and run it.
+  To update it later, use [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) (from version 0.3.11): it fetches the latest release and downloads only what has changed.
  Bluetooth needs BlueZ running. The `.deb` installs the rule that lets you use an ANT+ stick without root; with the AppImage, add it yourself (see [[Connecting your trainer]]).
 
 > The Windows and Linux versions have had less use than the Mac one so far. If something goes wrong, please [[tell us|Reporting problems]].
