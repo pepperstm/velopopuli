@@ -16,7 +16,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 - **Herne Hill Velodrome, built in.** The 450 m outdoor track in south London where the 1948 Olympic track events were raced, at its real place: banked to 26° in the bends, painted with the côte d'azur and the sprinters' and stayers' lines, and ringed by the railing and floodlights, with the 2018 pavilion, the bleachers, the club's containers and canopy, and the junior track in the middle. Ride it anticlockwise as raced, or clockwise. It is the same track as OpenBikeNet's `herne-hill-450` route.
 - **A closed road, race-day style.** The road you ride is set apart from the map's road network: steel crowd barriers line both sides (with banners on some, each section standing on its feet and leaning with the road on hills, and orange netting round the outside of tight hairpins instead), its surface is the real one — tarmac, concrete slabs, cobbles, gravel or dirt — and so is its width: a 7 m main road, a 5 m village street, a 3 m farm track. Both come from OpenStreetMap's tags for the roads along the route (`surface`, `width`, `lanes`, and the road class), or are guessed from the road class when those can't be fetched. Where the route leaves the mapped roads for 100 m or more — across a field, along an unmapped trail — it becomes a dirt track. Widths change gradually, and buildings, signs, other riders and the barriers all follow them. Ride the Arenberg trench on its setts and the Strade Bianche on white gravel — and feel them: rougher surfaces roll heavier, so you slow down on screen and the trainer gets harder.
 - **Mountain-bike trails.** Where the route follows an unpaved path, a bridleway, a walking trail or a trail graded for mountain bikes (OpenStreetMap's `mtb:scale`, S0–S6, or estimated from the hiking grade), you ride a narrow earth singletrack with no barriers, the HUD shows the grade, and the harder the grade the heavier it rolls — on screen and on the trainer.
-- **Find a route in the app.** Search for a place, click waypoints on the map and get a route along bike-friendly roads with real elevation (BRouter), or pick one of eight famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). Pick from the **signposted road routes** (OpenStreetMap cycle routes, local to national) or **waymarked MTB routes** mapped in the area on screen, or, with Strava connected, from **your Strava routes**. With Dreeve connected, any ride you've done can be imported as a route.
+- **Find a route in the app.** Search for a place, click waypoints on the map and get a route with real elevation (BRouter), in six styles from road bike to gravel and mountain bike, a different one for each section if you like. Drag the route to change it, or let the app **make a loop** of the distance you want. See what it's made of before you ride: surfaces, main roads and lanes, the climbs, and how long it'll take. Or pick one of eight famous climbs (Alpe d'Huez, Mont Ventoux, Stelvio, Galibier, Tourmalet, Mortirolo, Zoncolan, Box Hill). Pick from the **signposted road routes** (OpenStreetMap cycle routes, local to national) or **waymarked MTB routes** mapped in the area on screen, or, with Strava connected, from **your Strava routes**. With Dreeve connected, any ride you've done can be imported as a route.
 - **Smart trainer control.** Gradient simulation or ERG mode, over Bluetooth FTMS, Tacx FE-C-over-Bluetooth, or ANT+ FE-C. The gradient "feel" scales the real slope, softens descents and caps the steepest pitch (so a 15% ramp is rideable on any trainer). Shift your bike's own gears as normal, or set up **virtual gears** — your own chainrings and cassette or a preset — and shift with keys, a Bluetooth remote, a handlebar controller or on-screen buttons.
 - **Structured workouts on any route.** Import Zwift `.zwo`, `.erg` or `.mrc` files, or use the built-in sessions (endurance, sweet spot, threshold, VO₂max, over-unders, sprints and an FTP ramp test). The trainer holds each target in ERG while the route scrolls by; adjust the intensity or skip a step mid-ride.
 - **Fitness tracking.** Power curve (5 s to 1 h), an FTP estimate you can apply in one click, power zones on the HUD, and a training-load chart of fitness, fatigue and form.
@@ -67,7 +67,7 @@ Be aware of what has and has not been proven:
 | Laps on loop routes | Unit-tested in `crates/core`: lap counting, distance ridden, climbs and segments timed on every lap, bests kept from the fastest lap, ghosts off. Smoke-run on Linux with the three.js renderer: the lap HUD, and riders, road and barriers across the line. **Not yet** run with the native renderer (macOS). FIT lap messages and ending the ride on the workout are not done |
 | Group-ride relay | Tested in-process (`cargo test -p velopopuli-relay`) and with two app instances riding together through a local relay |
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
-| Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain |
+| Route finder, famous climbs | All eight climbs planned through the live BRouter service and checked against their known length and height gain. Loops, sections and the surface breakdown are unit-tested, and a 40 km loop was made through the live service and checked in the smoke harness. Dragging the route and the undo list have **not yet** been tried by riders |
 | Waymarked MTB routes | Listed and joined from the live Overpass API around Finale Ligure (a 23 km route joined with no gaps); the joining is unit-tested. The screen itself was only type-checked, not clicked through |
 | Strava segments and ghosts from Strava | Matching is unit-tested; segments and ghost imports haven't yet been confirmed against the live API |
 | Signposted road routes | Listed from the live Overpass API (UK National Cycle Network and regional routes); clipping a long route to the area searched is unit-tested |
@@ -208,6 +208,22 @@ Your browser opens for approval. The key and tokens are stored in the system key
 - Native renderer: Windows and Linux, and making it the default
 - More from OpenStreetMap: mapped roof shapes, other land cover (farmland, rock, glaciers), mapped leaf types, squares and car parks
 - Wahoo legacy protocol and steering; Di2 and Zwift Click/Play controllers as shifters for virtual gears without a bridge
+
+### Riding a real road, not a closed course
+
+A road ride today looks like a race on a closed circuit: crowd barriers line both sides, and the road ridden is a strip of its own that the map's other roads don't join. That suits a race, but not every ride. The plan is a choice when you set up a ride:
+
+- **Closed race:** the course as it is now, closed to traffic, with crowd barriers, netting on the hairpins and the road to yourself.
+- **Road ride:** riding your bike on the real road network, as below.
+
+For a road ride:
+
+- **Open roads.** No crowd barriers. In their place, the real roadside: kerbs and pavements in towns, grass verges in the country, and the mapped hedges, walls and fences right up to the edge, with gateways and driveways in them.
+- **Junctions that join up.** Side roads meet the road being ridden as one surface, with give-way and stop lines, breaks in the centre line, and markings at roundabouts and crossings.
+- **One road network.** The road ridden is drawn like every other road on the map, with its markings from the map: lanes, cycle lanes, bus lanes, and the width changing at junctions.
+- **Life by the roadside.** Fingerposts at junctions pointing to the next places, street lights, bus stops, post boxes, and parked cars on town streets.
+- **Riding on your side of the road.** Keeping to the left or right as the country drives, with the rider's line through corners, rather than riding down the middle.
+- **Other road users.** Optional light traffic: other cyclists and the odd car on the roads around you, crossing at junctions.
 
 ### Stretch: self-hosted group-ride servers
 

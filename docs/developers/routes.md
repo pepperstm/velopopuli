@@ -67,7 +67,8 @@ Alpe d'Huez (about 13.8 km at 8.1%) scores about 112,000: HC. Each climb becomes
 | Source | How | Code |
 |---|---|---|
 | **A GPX file** | **Import GPX…** or dragging files on. The route is built once to check it, then the GPX text is stored. | `routes_import_dialog`, `routes_import_text`, `import_gpx` in `commands.rs` |
-| **Planned on the map** | Waypoints go to [BRouter](https://brouter.de), which returns a GPX with heights. Profiles: `fastbike`, `trekking`, `safety`, `mtb`. | `geo_plan` → `geo::plan` |
+| **Planned on the map** | Each section between waypoints goes to [BRouter](https://brouter.de) in its own style, and comes back with heights and the tags of every way (see [Planning on the map](#planning-on-the-map)) | `geo_plan` → `geo::plan`, [`planner.rs`](../../crates/core/src/planner.rs) |
+| **A loop** | BRouter's round-trip mode, turned into waypoints | `geo_round_trip` → `geo::round_trip` |
 | **Place search** | [Nominatim](https://nominatim.openstreetmap.org) | `geo_search` → `geo::search` |
 | **Famous climbs** | Eight start and finish points (`geo::CLASSICS`), planned through BRouter like any route | `geo_classics` |
 | **Signposted road routes, MTB routes** | OpenStreetMap route relations (`route=bicycle`, `route=mtb`) in the area on the map, through Overpass | `geo_waymarked_routes`, `geo_waymarked_route`, [`waymarked.rs`](../../crates/core/src/waymarked.rs) |
@@ -75,6 +76,33 @@ Alpe d'Huez (about 13.8 km at 8.1%) scores about 112,000: HC. Each climb becomes
 | **A Dreeve ride** | The connector's `list_rides` and `ride_gpx` | `connector_ride_list`, `route_import_connector` |
 | **Built in** | The Demo Loop (`demo_route`, a synthetic 16 km loop with one climb) and Herne Hill (`velodrome.rs`) | `load_route` in `session.rs` |
 | **A group ride** | The host's GPX, fetched from the relay | `group_fetch_route` |
+
+### Planning on the map
+
+The Explore screen ([`Explore.tsx`](../../web/src/ui/Explore.tsx)) keeps a plan: the waypoints, and a style for each section between them (`styles[i]` is the section from waypoint `i`). Every change (adding, inserting, moving or removing a waypoint, reversing, changing a style) is one step on an undo list, and the plan is sent to `geo_plan` 300 ms after the last change.
+
+**Styles** are BRouter profiles, listed in `planner::STYLES`:
+
+| Shown as | Profile |
+|---|---|
+| Road bike | `fastbike` |
+| Quiet roads | `fastbike-verylowtraffic` |
+| Gravel | `gravel` |
+| Touring | `trekking` |
+| Safest | `safety` |
+| Mountain bike | `mtb` |
+
+An unknown name falls back to `fastbike`.
+
+**Sections are planned one at a time** (`geo::plan`). Each section is one BRouter request, asked for as GeoJSON, four at once. The reply is read by `planner::parse_brouter` into a `Leg`: the points with their heights, and *stretches*, each running to a point index with the OSM tags of its way. Those come from BRouter's `messages` table, whose rows end at a point of the line. Each section is kept in memory by style and end points (`SECTIONS`, up to 400), so moving one waypoint only plans the two sections that touch it.
+
+`planner::join` puts the sections end to end, keeping their shared point once. That gives the GPX and the route, built like any other. From the joined leg:
+
+- **The breakdown** (`planner::breakdown`): each stretch is classified by `classify` into a surface (paved, cobbles, gravel, dirt, not mapped) and a kind of way (main road, minor road, cycle path, track, path). The surface comes from `surface=` through `Surface::from_osm`, from `tracktype=` on a track, and is taken as paved on an untagged road. Neighbouring stretches of the same kind become one *run*, with its own thinned line, so the map can colour the route by either. The shares are in metres, largest first.
+- **The outline** (`planner::outline`): the thinned line for the map, keeping the points where sections meet. `ends` says where they are, so the page can tell which section a point on the line belongs to, and dragging the line inserts a waypoint into that section.
+- **The time** (`planner::ride_time`): the route ridden in the app's own physics at three quarters of the rider's FTP, with their weight, bike, CdA and rolling resistance. With road surfaces on in Settings, each surface's rolling factor counts too (`rolling_lookup`), so gravel is slower. Waymarked and Strava routes get a time too, on tarmac.
+
+**Loops** (`geo::round_trip`) use BRouter's round-trip mode (`engineMode=4`) with a radius and a heading. A loop comes out about 6.4 times the radius (`planner::round_trip_radius`); if one is more than 20% off the distance asked for, it's asked again once with the radius corrected. The loop is then cut into 4 to 12 waypoints about an eighth of its length apart (`planner::loop_waypoints`), and each piece is put in the section memory under its style and ends. So the page gets back ordinary waypoints, planning them gives exactly the loop, and the rider can edit it like any route. **Try another** turns the heading a little each time, or picks a new one at random.
 
 ### Waymarked routes
 

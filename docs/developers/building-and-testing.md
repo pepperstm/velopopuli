@@ -26,7 +26,7 @@ A full debug build plus a universal release build need about 10 GB in `target/`.
 
 ## Tests
 
-There are 145 tests: 122 for the core, 1 for the relay and 22 for the app. `cargo test --workspace` runs all but three, which need the network and run only when asked for (`cargo test -p velopopuli -- --ignored`).
+There are 154 tests: 130 for the core, 1 for the relay and 23 for the app. `cargo test --workspace` runs all but four, which need the network and run only when asked for (`cargo test -p velopopuli -- --ignored`).
 
 | Where | What it covers |
 |---|---|
@@ -56,6 +56,7 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_DATA_DIR` | Use this folder for all data. It works without `VP_SMOKE` too, for a separate test profile. |
 | `VP_SMOKE` | Path of the picture to save (the 3D canvas). Also writes `<name>.txt` with the screen's text and the ride state. |
 | `VP_SMOKE_SCREEN` | `ride` (the default), `home`, `explore`, `workouts`, `devices`, `history` or `settings` |
+| `VP_SMOKE_PLAN` | On `explore`, plan through `lat,lon;lat,lon;…`, or make a loop with `loop:lat,lon,km` |
 | `VP_SMOKE_SCROLL` | Scroll to the section with this heading before capturing (e.g. `Gears` on Settings) |
 | `VP_SMOKE_MS` | How long to run before capturing (default 9000). Give maps and terrain longer. |
 | `VP_SMOKE_WINDOW` | Also save the whole window, HUD included, as `<name>.window.png` (macOS) |

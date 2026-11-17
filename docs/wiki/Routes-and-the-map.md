@@ -17,11 +17,44 @@ Press **Import GPX…**, or drag files onto the window. Any GPX works: exports f
 Open **Find a route**.
 
 1. Search for a place, or move the map there.
-2. Click to add waypoints from start to finish. Drag one to move it; click it to remove it.
-3. The route follows bike-friendly roads between them, with real heights. **Prefer** picks the kind of roads: **Road bike (fast roads)**, **Quiet roads and lanes**, **Safest (avoid traffic)**, or **Mountain bike (trails)** for tracks and singletrack.
-4. Give it a name and press **Save to library**.
+2. Pick a **Style for new sections**:
+   - **Road bike:** fast, direct roads.
+   - **Quiet roads:** lanes and minor roads, away from traffic.
+   - **Gravel:** gravel roads and good tracks where there are some.
+   - **Touring:** a mix of quiet roads, cycle paths and good tracks.
+   - **Safest:** cycle paths and the quietest roads, even if it's longer.
+   - **Mountain bike:** trails and paths.
+3. Click to add waypoints from start to finish. The route follows the roads between them, with real heights.
+4. Change it:
+   - **Drag the route** to pull in a new waypoint between two others.
+   - **Drag a waypoint** to move it. **Click one** to remove it.
+   - Under **Sections**, each stretch between two waypoints has its own style. So you can ride the lanes out, take a gravel track across, and come home on the main road.
+5. Give it a name and press **Save to library**.
 
-**Undo**, **Reverse** and **Clear** do what they say.
+The buttons:
+
+- **Undo** and **Redo** (also ⌘Z and ⇧⌘Z, or Ctrl+Z and Ctrl+Shift+Z).
+- **Reverse** rides it the other way.
+- **Close the loop** adds a way back from the finish to the start.
+- **Out and back** rides back the way you came.
+- **Clear** starts again.
+
+### Make a loop
+
+Under **Make a loop**, choose how far and which way to head off (or **Any way**), and press **Make a loop**. You get a round trip from your first waypoint, or from the middle of the map if you haven't added one, in the style for new sections. Don't like it? **Try another** gives a different one from the same place.
+
+The loop comes as ordinary waypoints, so you can drag it, move them or change a section's style like any route.
+
+### What the route is made of
+
+Under the route's distance and climbing you'll find:
+
+- **About how long it takes** at three quarters of your FTP, worked out with the same physics as your rides: your weight, your bike and the hills. With **Road surfaces** on in Settings, gravel and cobbles slow it down too.
+- **The elevation profile**, with the climbs shaded, and a list of the climbs.
+- **Surface:** how much is paved, cobbles, gravel or dirt, and how much isn't mapped.
+- **Road type:** how much is on main roads, minor roads, cycle paths, tracks and paths.
+
+Point at a surface or road type to show where it is on the map, or press **Surface** or **Road type** beside **On the map** to colour the whole route by it.
 
 ![Find a route](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-explore.jpg)
 

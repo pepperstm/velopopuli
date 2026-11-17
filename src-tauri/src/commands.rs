@@ -578,7 +578,7 @@ pub async fn connector_route(state: State<'_, AppState>, id: String, route_id: S
     let gpx = connectors::get(&id)?.route_gpx(&state.connector_ctx(), &route_id).await?;
     let (name, raw) = parse_gpx(&gpx)?;
     let route = build_route(&name, &raw)?;
-    Ok(Planned::new(gpx, &route, Some(name).filter(|n| !n.trim().is_empty()), 0, false))
+    Ok(Planned::new(gpx, &route, Some(name).filter(|n| !n.trim().is_empty()), 0, false, &state.store.get::<Settings>("settings").unwrap_or_default()))
 }
 
 #[tauri::command]
@@ -881,6 +881,7 @@ pub struct Planned {
     distance: f64,
     ascent: f64,
     climbs: usize,
+    climb_list: Vec<velopopuli_core::gpx::Climb>,
     /// `[lat, lon]` outline and `[distance, elevation]` profile, thinned for drawing.
     line: Vec<[f64; 2]>,
     profile: Vec<[f64; 2]>,
@@ -890,30 +891,90 @@ pub struct Planned {
     gaps: usize,
     /// Only the part of a waymarked route in the area searched.
     clipped: bool,
+    /// For a route planned on the map: where each waypoint falls in `line`, and how long each
+    /// section between them is.
+    ends: Vec<usize>,
+    sections: Vec<f64>,
+    /// What the route is made of, when the planner said.
+    breakdown: Option<velopopuli_core::planner::Breakdown>,
+    estimate: Estimate,
+}
+
+/// How long the route would take at an easy endurance effort.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Estimate {
+    seconds: f64,
+    watts: f64,
+}
+
+/// Three quarters of the rider's FTP, to the nearest 5 W: a steady endurance pace.
+fn estimate(route: &Route, settings: &Settings, rolling: impl Fn(f64) -> f64) -> Estimate {
+    let watts = ((settings.rider.ftp * 0.75) / 5.0).round() * 5.0;
+    let params = velopopuli_core::physics::PhysicsParams {
+        mass: settings.rider.weight_kg + settings.rider.bike_kg,
+        crr: settings.physics.crr,
+        cda: settings.physics.cda,
+        max_speed: settings.physics.max_speed_kph / 3.6,
+    };
+    let surfaces = settings.physics.road_surfaces;
+    Estimate { seconds: velopopuli_core::planner::ride_time(route, watts.max(50.0), &params, |d| if surfaces { rolling(d) } else { 1.0 }), watts }
 }
 
 impl Planned {
-    fn new(gpx: String, route: &Route, name: Option<String>, gaps: usize, clipped: bool) -> Self {
+    fn new(gpx: String, route: &Route, name: Option<String>, gaps: usize, clipped: bool, settings: &Settings) -> Self {
         let stride = (route.n / 600).max(1);
         Planned {
             distance: route.total,
             ascent: route.ascent,
             climbs: route.climbs.len(),
+            climb_list: route.climbs.clone(),
             line: route.preview_outline(1500),
             profile: (0..route.n).step_by(stride).map(|i| [i as f64 * route.step, route.ele[i] as f64]).collect(),
             gpx,
             name,
             gaps,
             clipped,
+            ends: Vec::new(),
+            sections: Vec::new(),
+            breakdown: None,
+            estimate: estimate(route, settings, |_| 1.0),
         }
+    }
+
+    /// A route planned on the map, section by section.
+    fn from_sections(legs: &[velopopuli_core::planner::Leg], settings: &Settings) -> Res<Self> {
+        use velopopuli_core::planner;
+        let joined = planner::join(legs);
+        let route = build_route("Planned route", &joined.raw_points())?;
+        let gpx = velopopuli_core::waymarked::to_gpx("Planned route", &joined.points);
+        let mut ends = vec![0];
+        for leg in legs {
+            ends.push(ends.last().unwrap() + leg.points.len().saturating_sub(1));
+        }
+        let breakdown = planner::breakdown(&joined, 3000);
+        let (line, ends) = planner::outline(&joined, &ends, 1500);
+        let estimate = estimate(&route, settings, planner::rolling_lookup(&breakdown, route.total));
+        Ok(Planned { line, ends, sections: legs.iter().map(planner::Leg::length).collect(), breakdown: Some(breakdown), estimate, ..Planned::new(gpx, &route, None, 0, false, settings) })
     }
 }
 
+/// Plans a route through `[lat, lon]` waypoints, each section in its own style (`styles[i]`
+/// from waypoint i; missing ones take the last).
 #[tauri::command]
-pub async fn geo_plan(state: State<'_, AppState>, points: Vec<[f64; 2]>, profile: String) -> Res<Planned> {
-    let gpx = geo::plan(&state.http, &points, &profile).await?;
-    let route = build_route("Planned", &parse_gpx(&gpx)?.1)?;
-    Ok(Planned::new(gpx, &route, None, 0, false))
+pub async fn geo_plan(state: State<'_, AppState>, points: Vec<[f64; 2]>, styles: Vec<String>) -> Res<Planned> {
+    let legs = geo::plan(&state.http, &points, &styles).await?;
+    Planned::from_sections(&legs, &state.store.get::<Settings>("settings").unwrap_or_default())
+}
+
+/// Waypoints for a loop of about `distance` metres from `start`, heading off towards
+/// `direction` (degrees from north). Planning them gives the loop.
+#[tauri::command]
+pub async fn geo_round_trip(state: State<'_, AppState>, start: [f64; 2], distance: f64, direction: f64, style: String) -> Res<Vec<[f64; 2]>> {
+    if !(2_000.0..=300_000.0).contains(&distance) {
+        return Err("Choose a loop between 2 and 300 km.".into());
+    }
+    geo::round_trip(&state.http, start, distance, direction, &style).await
 }
 
 /// The waymarked routes of a kind (mountain-bike or road) within `[south, west, north, east]`.
@@ -938,7 +999,7 @@ pub async fn geo_waymarked_route(state: State<'_, AppState>, kind: velopopuli_co
     let stride = ((20.0 / route.step).round() as usize).max(1);
     let points: Vec<([f64; 2], Option<f64>)> = (0..route.n).step_by(stride).chain([route.n - 1]).map(|i| ([route.lat[i], route.lon[i]], dem.as_ref().map(|_| route.ele[i] as f64))).collect();
     let gpx = velopopuli_core::waymarked::to_gpx(&way.name, &points);
-    Ok(Planned::new(gpx, &route, Some(way.name), way.gaps, way.clipped))
+    Ok(Planned::new(gpx, &route, Some(way.name), way.gaps, way.clipped, &state.store.get::<Settings>("settings").unwrap_or_default()))
 }
 
 /// Street-level photos along the route being ridden.
@@ -1014,6 +1075,8 @@ pub struct SmokeConfig {
     laps: Option<u32>,
     /// Ride this route instead of the newest in the library (VP_SMOKE_ROUTE, e.g. `herne-hill`).
     route: Option<String>,
+    /// On the Explore screen, plan `lat,lon;lat,lon;…` or make `loop:lat,lon,km` (VP_SMOKE_PLAN).
+    plan: Option<String>,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -1045,6 +1108,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         scroll: std::env::var("VP_SMOKE_SCROLL").ok(),
         laps: std::env::var("VP_SMOKE_LAPS").ok().and_then(|v| v.parse().ok()),
         route: std::env::var("VP_SMOKE_ROUTE").ok(),
+        plan: std::env::var("VP_SMOKE_PLAN").ok(),
     })
 }
 

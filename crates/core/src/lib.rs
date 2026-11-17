@@ -10,6 +10,7 @@ pub mod gamify;
 pub mod gearing;
 pub mod gpx;
 pub mod physics;
+pub mod planner;
 pub mod ride;
 pub mod segments;
 pub mod types;

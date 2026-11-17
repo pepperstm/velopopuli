@@ -85,7 +85,7 @@ There's no clock sync or prediction: a rider is drawn where they last said they 
 [`geo.rs`](../../src-tauri/src/geo.rs):
 
 - **Place search:** [Nominatim](https://nominatim.openstreetmap.org), up to 8 results.
-- **Planning:** [BRouter](https://brouter.de) with the waypoints and a profile (`fastbike`, `trekking`, `safety`, `mtb`), returning a GPX with heights.
+- **Planning:** [BRouter](https://brouter.de), one request per section between waypoints, each in its own profile, as GeoJSON with heights and way tags. Sections are kept in memory, so an edit only re-plans what changed. Loops use BRouter's round-trip mode. See [Routes](routes.md#planning-on-the-map).
 - **Famous climbs** (`CLASSICS`): eight climbs as start and finish points, planned through BRouter.
 - **Waymarked routes:** Overpass (see [Routes](routes.md#waymarked-routes)).
 
