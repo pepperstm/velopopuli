@@ -12,6 +12,8 @@ Then start a ride on **Herne Hill Velodrome**, either way round. Riders from oth
 
 The server address is the public one by default (`wss://openbikenet.cloud/v0`). If you run your own server, put its address there instead.
 
+If the connection drops, VeloPopuli reconnects on its own, waiting a little longer each time. If the server turns you away, for example because the track is full, the HUD says why and VeloPopuli stops trying until your next ride.
+
 ## What is sent
 
 - Your rider name, position on the track, lap and speed.
