@@ -2,7 +2,7 @@
 
 ![The Devices page](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/screen-devices.jpg)
 
-Open **Devices**. VeloPopuli talks to trainers and sensors directly — over your computer's Bluetooth, or over an ANT+ USB stick — with no manufacturer software in between.
+Open **Devices**. VeloPopuli talks to trainers and sensors directly, over your computer's Bluetooth or an ANT+ USB stick, with no manufacturer software in between.
 
 ## Before you start
 
@@ -66,4 +66,5 @@ Real-world testing has only just begun. Please add your trainer to an issue (wor
 
 | Trainer or sensor | Connection | Result |
 |---|---|---|
-| Tacx Vortex Smart (T2180) | Bluetooth | First test: dropped out and showed no power — being investigated with diagnostics |
+| Tacx Vortex Smart (T2180) | Bluetooth | First test: dropped out and showed no power; being investigated with diagnostics |
+| XOSS speed sensor | Bluetooth, Linux | Works from 0.3.10. Earlier versions couldn't connect while still searching ([#70](https://github.com/pepperstm/velopopuli/issues/70)) |

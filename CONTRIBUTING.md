@@ -1,14 +1,14 @@
 # Contributing to VeloPopuli
 
-Thank you for helping build the people's indoor ride. This is how work gets from an idea to the main branch. If you're new to the project, read [HANDOFF.md](HANDOFF.md) first — it explains where things stand and why they are the way they are.
+Thank you for helping build the people's indoor ride. This is how work gets from an idea to the main branch. If you're new to the project, read [HANDOFF.md](HANDOFF.md) first: it explains where things stand and why they are the way they are.
 
 ## 1. Start with an issue
 
 Every change starts as an issue, so effort isn't duplicated and the approach is agreed before code is written.
 
-- **Bug** — something doesn't work. Attach a diagnostics report if it involves a trainer or sensor (in the app: *Report a problem → Report on GitHub* does it for you).
-- **Hardware report** — your trainer or sensor worked, or didn't. These build the tested-hardware list.
-- **Feature or improvement** — describe the rider's problem first, then the idea.
+- **Bug:** something doesn't work. Attach a diagnostics report if it involves a trainer or sensor (in the app: *Report a problem → Report on GitHub* does it for you).
+- **Hardware report:** your trainer or sensor worked, or didn't. These build the tested-hardware list.
+- **Feature or improvement:** describe the rider's problem first, then the idea.
 
 For anything bigger than a small fix, say in the issue how you plan to do it and wait for a 👍 from the maintainer. Small fixes and documentation can go straight to a pull request that references an issue.
 
@@ -35,7 +35,7 @@ Build requirements, the tests and the automated smoke harness are described in [
 
 **Where code goes**
 
-- Anything that computes — routes, physics, protocols, terrain, map processing — goes in `crates/core`: pure Rust, no I/O, with tests.
+- Anything that computes (routes, physics, protocols, terrain, map processing) goes in `crates/core`: pure Rust, no I/O, with tests.
 - Hardware, files, network and the simulation loop go in `src-tauri`.
 - The page (`web/`) only draws and handles input. It gets data from Rust commands, large data in compact binary form.
 - Anything that appears in the 3D world should work in both renderers (three.js in `web/src/world/`, and the native one in `src-tauri/src/native/`), or say clearly in the PR that it doesn't yet.
@@ -54,9 +54,9 @@ Build requirements, the tests and the automated smoke harness are described in [
 - Visual changes: run the smoke harness (`VP_SMOKE_WINDOW=1` gives a full-window screenshot) and attach before/after screenshots to the PR.
 - Hardware changes: say exactly what device you tested on and how, or that you couldn't. Don't claim something works that you haven't seen work.
 
-**Documentation** — update in the same PR:
+**Documentation:** update in the same PR:
 
-- the README (features, and the *Project status* table — keep it honest about what was and wasn't verified),
+- the README (features, and the *Project status* table, and keep it honest about what was and wasn't verified),
 - the wiki source in `docs/wiki/` for anything a rider would need to know (the maintainer publishes it to the wiki after merging),
 - the developer pages in `docs/developers/` for anything about how it works inside,
 - `HANDOFF.md` if you change something it describes (structure, formats, decisions, traps),
@@ -67,7 +67,7 @@ Build requirements, the tests and the automated smoke harness are described in [
 - Summary line in the imperative, up to about 72 characters: *Keep the trainer connected when notifications pause*.
 - A body that explains what changed and why, wrapped at about 76 characters. Mention how it was tested.
 - Reference the issue: `Fixes #12` or `Refs #12`.
-- Commit under your own name. You're responsible for every line you submit, however it was produced — understand it and test it.
+- Commit under your own name. You're responsible for every line you submit, however it was produced, so understand it and test it.
 
 ## 4. Open a pull request
 
@@ -84,7 +84,7 @@ Open it as a **draft** early if you want feedback before it's finished.
 
 - CI must pass: formatting, type checks, lints, tests, and installers building on Windows, macOS and Linux.
 - The maintainer reviews every PR. Expect questions and requests for changes; push follow-up commits to the same branch (no need to force-push during review).
-- PRs are **squash-merged**: the whole PR becomes one commit on `main`, titled with the PR title and described by its summary — so write those as you would a good commit message.
+- PRs are **squash-merged**: the whole PR becomes one commit on `main`, titled with the PR title and described by its summary, so write those as you would a good commit message.
 - After merging, the maintainer syncs the wiki and, when it's time, tags a release (see [HANDOFF.md](HANDOFF.md#7-releases)).
 
 ## Licence

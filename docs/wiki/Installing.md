@@ -8,13 +8,13 @@ Download the installer for your system from [velopopuli.com](https://velopopuli.
 2. The app isn't notarised by Apple yet (that needs a paid developer account), so the first time you open it macOS refuses. Either:
    - open **System Settings → Privacy & Security**, scroll to *"VeloPopuli" was blocked* and click **Open Anyway**, or
    - run `xattr -dr com.apple.quarantine /Applications/VeloPopuli.app` once in Terminal.
-3. The first time you search for a Bluetooth sensor, macOS asks to let VeloPopuli use Bluetooth — allow it.
+3. The first time you search for a Bluetooth sensor, macOS asks to let VeloPopuli use Bluetooth. Allow it.
 
 ## Windows
 
 Run the `.msi` or the `-setup.exe`. Windows SmartScreen may warn that the app is unrecognised (it isn't code-signed yet): choose **More info → Run anyway**. WebView2 is already part of Windows 10 and 11.
 
-For an ANT+ stick, Windows needs the generic WinUSB driver — see [[Connecting your trainer]].
+For an ANT+ stick, Windows needs the generic WinUSB driver; see [[Connecting your trainer]].
 
 ## Linux
 
