@@ -70,8 +70,13 @@ pub enum ClientMessage {
     Subscribe {
         route: String,
         room: String,
+        /// Echoed in an `error` about this message, so a refusal can be told apart (spec 3.2).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        r#ref: Option<String>,
     },
     Join {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        r#ref: Option<String>,
         rider: String,
         route: String,
         room: String,
@@ -178,6 +183,9 @@ pub enum ServerMessage {
         message: String,
         #[serde(default)]
         fatal: bool,
+        /// The `ref` of the message that caused it, if that message had one.
+        #[serde(default)]
+        r#ref: Option<String>,
     },
     Pong {
         #[serde(default)]
@@ -191,22 +199,32 @@ pub enum ServerMessage {
 /// characters (except U+200D, which emoji sequences need), at most 32 characters, and never
 /// only whitespace. Receivers show the result as plain text.
 pub fn clean_name(raw: &str) -> String {
-    let mut out = String::new();
-    let mut chars = 0;
-    for c in raw.chars() {
-        if c == '\u{200D}' || !forbidden(c) {
-            if chars == 32 {
-                break;
-            }
-            out.push(c);
-            chars += 1;
-        }
-    }
-    let trimmed = out.trim();
-    if trimmed.is_empty() {
+    let kept: String = raw.chars().filter(|&c| c == '\u{200D}' || !forbidden(c)).collect();
+    // Trim before cutting to 32, so leading spaces don't use up the name.
+    let cut: String = kept.trim().chars().take(32).collect();
+    let name = cut.trim_end();
+    if name.is_empty() {
         "Rider".into()
     } else {
-        trimmed.to_string()
+        name.to_string()
+    }
+}
+
+/// What the rider sees when the server refuses the connection or a place on the track. The
+/// server's `message` is meant for developers, so it follows in brackets after a plain reason.
+pub fn refusal(code: &str, message: &str) -> String {
+    let reason = match code {
+        "unknown_route" => "this server doesn't have this track",
+        "limit_exceeded" => "the track is full",
+        "invalid_value" => "the server didn't accept the rider's name",
+        "invalid_room" => "the server didn't accept the room",
+        _ => "the server refused the connection",
+    };
+    let message = message.trim();
+    if message.is_empty() {
+        reason.to_string()
+    } else {
+        format!("{reason} ({})", clean_name(message))
     }
 }
 
@@ -238,6 +256,8 @@ fn forbidden(c: char) -> bool {
             | '\u{E0001}'
             | '\u{E0020}'..='\u{E007F}'
             | '\u{E000}'..='\u{F8FF}'
+            | '\u{F0000}'..='\u{FFFFD}'
+            | '\u{100000}'..='\u{10FFFD}'
             | '\u{2028}'
             | '\u{2029}'
     )
@@ -277,6 +297,18 @@ mod tests {
         assert_eq!(clean_name("\u{202E}\u{200B}"), "Rider");
         assert_eq!(clean_name("   "), "Rider");
         assert_eq!(clean_name(&"a".repeat(40)), "a".repeat(32));
+        // Leading spaces don't count towards the 32, and a cut never leaves a trailing space.
+        assert_eq!(clean_name(&format!("    {}", "a".repeat(32))), "a".repeat(32));
+        assert_eq!(clean_name(&format!("{} b", "a".repeat(31))), "a".repeat(31));
+        // Private use, including the supplementary planes.
+        assert_eq!(clean_name("A\u{E000}n\u{F0000}n\u{10FFFD}a"), "Anna");
+    }
+
+    #[test]
+    fn explains_a_refusal_in_plain_words() {
+        assert_eq!(refusal("limit_exceeded", "max_riders reached"), "the track is full (max_riders reached)");
+        assert_eq!(refusal("unknown_route", ""), "this server doesn't have this track");
+        assert_eq!(refusal("something_new", "nope"), "the server refused the connection (nope)");
     }
 
     #[test]
@@ -287,6 +319,7 @@ mod tests {
         assert_eq!(hello["app"]["name"], "VeloPopuli");
 
         let join = serde_json::to_value(ClientMessage::Join {
+            r#ref: None,
             rider: "vp-1".into(),
             route: "herne-hill-450".into(),
             room: "public".into(),
@@ -340,6 +373,8 @@ mod tests {
 
         let error: ServerMessage = serde_json::from_str(r#"{"type":"error","code":"unknown_route","message":"no","fatal":false}"#).unwrap();
         assert!(matches!(error, ServerMessage::Error { ref code, .. } if code == "unknown_route"));
+        let error: ServerMessage = serde_json::from_str(r#"{"type":"error","code":"limit_exceeded","message":"full","ref":"join","fatal":false}"#).unwrap();
+        assert!(matches!(error, ServerMessage::Error { r#ref: Some(ref r), .. } if r == "join"));
 
         let pong: ServerMessage = serde_json::from_str(r#"{"type":"pong","ref":"hb-17"}"#).unwrap();
         assert!(matches!(pong, ServerMessage::Pong { .. }));
