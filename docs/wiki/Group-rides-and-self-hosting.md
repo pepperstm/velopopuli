@@ -7,7 +7,7 @@ Ride a route together: everyone's rider appears in everyone's world.
 1. One person starts a ride with **Ride with friends** ticked and shares the **room code**.
 2. Everyone else goes to **Routes → Join a group ride** and enters the code. The host's route is downloaded automatically.
 
-Group rides pass through a **relay** — a tiny server that forwards riders' positions within a room. There's no public relay yet, so for now one of you runs one.
+Group rides pass through a **relay**, a tiny server that forwards riders' positions within a room. There's no public relay yet, so for now one of you runs one.
 
 ## Running a relay
 
@@ -17,7 +17,7 @@ Then everyone sets **Settings → Group rides → Relay address** to `ws://your-
 
 - It keeps nothing on disk and holds rooms only while riders are in them (up to 1,000 rooms of 50 riders).
 - To reach it from the internet, forward the port on your router, or run it on a small cloud server.
-- For a secure `wss://` address, put it behind a reverse proxy that handles TLS, such as Caddy (`reverse_proxy localhost:47800`) — the app accepts `wss://` relay addresses.
+- For a secure `wss://` address, put it behind a reverse proxy that handles TLS, such as Caddy (`reverse_proxy localhost:47800`). The app accepts `wss://` relay addresses.
 
 ## Coming later
 
