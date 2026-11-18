@@ -371,16 +371,20 @@ impl Session {
                 eprintln!("Landmark at {:.0} m ({}): {} {} {}", m.distance, if m.side > 0.0 { "+" } else { "-" }, m.kind, m.name, m.detail);
             }
         }
-        let group = req.group_room.as_ref().filter(|r| !r.trim().is_empty()).map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
         // OpenBikeNet and a group-ride room are alternatives on a shared track, so a room is
-        // ignored while it is on. The track's length is what OpenBikeNet publishes.
+        // ignored while it is on: decide that first, so the room is never joined at all. The
+        // track's length is what OpenBikeNet publishes.
         let obn = if settings.open_bike_net.enabled && !settings.open_bike_net.server.trim().is_empty() {
             velopopuli_core::obn::shared_route(route_id)
                 .map(|shared| OBNLink::join(&settings.open_bike_net.server, shared, track.map_or(0.0, |(t, _)| t.length), &settings.rider.name, settings.open_bike_net.share_power))
         } else {
             None
         };
-        let group = group.filter(|_| obn.is_none());
+        let group = req
+            .group_room
+            .as_ref()
+            .filter(|r| obn.is_none() && !r.trim().is_empty())
+            .map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
         crate::diag::event(
             "ride",
             format!(
@@ -734,10 +738,13 @@ fn run(
                 smart.update(engine.speed * 3.6, tel.power, tel.hr, rider_ftp);
             }
         }
+        // Paused, finished or not pedalling, the engine keeps its last speed (it stops ticking),
+        // but to everyone else the rider is standing still.
+        let shared_speed = if engine.moving { engine.speed } else { 0.0 };
         if let Some(g) = &group {
             if now - shared >= Duration::from_millis(500) {
                 shared = now;
-                g.send(engine.distance, engine.speed, tel.power);
+                g.send(engine.distance, shared_speed, tel.power);
             }
             for update in g.take_updates() {
                 match update {
@@ -750,14 +757,15 @@ fn run(
             // OpenBikeNet asks for about one update a second (spec 9 recommends at most 4 Hz).
             if now - obn_shared >= Duration::from_secs(1) {
                 obn_shared = now;
-                o.send(engine.distance, velopopuli_core::obn::lap(engine.lap), engine.speed, tel.power, tel.cadence);
+                o.send(engine.distance, velopopuli_core::obn::lap(engine.lap), shared_speed, tel.power, tel.cadence);
             }
             for update in o.take_updates() {
                 match update {
+                    // Prefixed, so a remote id can never match one of our own rivals.
                     crate::obn::Update::Rider { id, name, app, distance, speed } => {
-                        engine.set_remote(&id, &format!("{name} · {app}"), crate::obn::app_color(&app), distance, speed);
+                        engine.set_remote(&format!("{}{id}", crate::obn::ID_PREFIX), &format!("{name} · {app}"), crate::obn::app_color(&app), distance, speed);
                     }
-                    crate::obn::Update::Left(id) => engine.remove_remote(&id),
+                    crate::obn::Update::Left(id) => engine.remove_remote(&format!("{}{id}", crate::obn::ID_PREFIX)),
                 }
             }
         }
