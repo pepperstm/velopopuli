@@ -614,6 +614,39 @@ mod ride {
         }
         assert!((d(&engine) - 120.0).abs() < 0.5, "after 3 s: {}", d(&engine));
     }
+
+    #[test]
+    fn remote_riders_ride_on_while_this_rider_stands_still() {
+        let mut engine = lap_engine(ring(1000.0), Some(0), None);
+        engine.set_remote("r1", "Anna", 0xffffff, 100.0, 10.0);
+        let d = |e: &RideEngine| e.rivals.iter().find(|r| r.id == "r1").unwrap().distance;
+        // Not pedalling: the moving time stands still, the other rider doesn't.
+        for i in 0..10 {
+            engine.tick(0.1, RideInput { power: 0.0, cadence: None, hr: None }, i * 100);
+        }
+        assert_eq!(engine.elapsed, 0.0);
+        assert!((d(&engine) - 110.0).abs() < 0.5, "standing: {}", d(&engine));
+        engine.set_remote("r1", "Anna", 0xffffff, 110.0, 10.0);
+        engine.user_paused = true;
+        for i in 0..10 {
+            engine.tick(0.1, RideInput { power: 150.0, cadence: None, hr: None }, 1000 + i * 100);
+        }
+        assert!((d(&engine) - 120.0).abs() < 0.5, "paused: {}", d(&engine));
+    }
+
+    #[test]
+    fn remote_riders_go_round_a_loop_on_a_once_round_ride() {
+        let route = ring(1000.0);
+        assert!(route.closed);
+        let total = route.total;
+        let mut engine = lap_engine(route, None, None);
+        engine.set_remote("r1", "Anna", 0xffffff, total - 5.0, 10.0);
+        for i in 0..10 {
+            engine.tick(0.1, RideInput { power: 0.0, cadence: None, hr: None }, i * 100);
+        }
+        let d = engine.rivals.iter().find(|r| r.id == "r1").unwrap().distance;
+        assert!((d - 5.0).abs() < 0.5, "{d}");
+    }
 }
 
 mod gamify {
