@@ -193,6 +193,7 @@ mod fit {
                 power: 200.0 + i as f64,
                 hr: (i != 0).then_some(140.0),
                 cadence: Some(88.0),
+                target_power: (i % 2 == 0).then_some(250.0 + i as f64),
             })
             .collect();
         let session = FitSession {
@@ -231,6 +232,16 @@ mod fit {
         let semi = 2_147_483_648.0 / 180.0;
         assert!(close(num(r, "position_lat") / semi, 46.2006, 1e-4));
         assert!(close(num(r, "position_long") / semi, -7.6006, 1e-4));
+        // The developer field carries the trainer's target, and is absent when there was none.
+        assert_eq!(field(recs[60], "target_power").as_deref(), Some("310"));
+        assert!(field(recs[61], "target_power").is_none());
+        assert_eq!(of_kind(fitparser::profile::MesgNum::DeveloperDataId).len(), 1);
+        let desc = of_kind(fitparser::profile::MesgNum::FieldDescription);
+        assert_eq!(desc.len(), 1);
+        assert_eq!(field(desc[0], "field_name").as_deref(), Some("target_power"));
+        assert_eq!(field(desc[0], "units").as_deref(), Some("watts"));
+        let n = bytes.len();
+        assert_eq!(fit_crc(&bytes[..n - 2]), u16::from_le_bytes([bytes[n - 2], bytes[n - 1]]));
         assert!(field(recs[0], "heart_rate").is_none(), "missing HR must be encoded as invalid");
 
         let sessions = of_kind(fitparser::profile::MesgNum::Session);

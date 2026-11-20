@@ -13,6 +13,8 @@ pub struct FitSample {
     pub power: f64,
     pub hr: Option<f64>,
     pub cadence: Option<f64>,
+    /// Watts the trainer was asked to hold; None when it wasn't holding a target (sim mode).
+    pub target_power: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -79,25 +81,56 @@ pub fn fit_crc(bytes: &[u8]) -> u16 {
     crc
 }
 
+/// A field written as raw bytes (strings, byte arrays): (number, base type, bytes).
+type Raw<'a> = (u8, u8, &'a [u8]);
+/// A developer field: (field number, developer data index, bytes).
+type Dev<'a> = (u8, u8, &'a [u8]);
+/// What a definition message says: global number, field (number, base type, size)s, dev field (number, size, index)s.
+type Layout = (u16, Vec<(u8, u8, u8)>, Vec<(u8, u8, u8)>);
+
+/// Identifies VeloPopuli's developer fields (developer_data_id.application_id).
+const APP_ID: [u8; 16] = *b"VeloPopuli\0\0\0\0\0\0";
+
+/// NUL-padded fixed-size string.
+fn padded<const N: usize>(s: &str) -> [u8; N] {
+    let mut out = [0; N];
+    out[..s.len().min(N - 1)].copy_from_slice(&s.as_bytes()[..s.len().min(N - 1)]);
+    out
+}
+
 #[derive(Default)]
 struct Writer {
     bytes: Vec<u8>,
-    /// Field layout last defined for each local message type.
-    defined: [Option<(u16, Vec<(u8, u8)>)>; 8],
+    /// Layout last defined for each local message type.
+    defined: [Option<Layout>; 8],
 }
 
 impl Writer {
     fn message(&mut self, local: u8, global: u16, fields: &[Field]) {
-        let layout: Vec<(u8, u8)> = fields.iter().map(|f| (f.0, f.1.spec().0)).collect();
-        if self.defined[local as usize].as_ref() != Some(&(global, layout.clone())) {
-            self.bytes.extend_from_slice(&[0x40 | local, 0, 0]);
+        self.message_ext(local, global, fields, &[], &[]);
+    }
+
+    /// `fields` come first, then `raw`, then the developer fields `dev`.
+    fn message_ext(&mut self, local: u8, global: u16, fields: &[Field], raw: &[Raw], dev: &[Dev]) {
+        let mut layout: Vec<(u8, u8, u8)> = fields.iter().map(|f| (f.0, f.1.spec().0, f.1.spec().1 as u8)).collect();
+        layout.extend(raw.iter().map(|r| (r.0, r.1, r.2.len() as u8)));
+        let dev_layout: Vec<(u8, u8, u8)> = dev.iter().map(|d| (d.0, d.2.len() as u8, d.1)).collect();
+        let layout = (global, layout, dev_layout);
+        if self.defined[local as usize].as_ref() != Some(&layout) {
+            // Bit 0x20 of the header says the definition also lists developer fields.
+            self.bytes.extend_from_slice(&[0x40 | if dev.is_empty() { 0 } else { 0x20 } | local, 0, 0]);
             self.bytes.extend_from_slice(&global.to_le_bytes());
-            self.bytes.push(fields.len() as u8);
-            for (num, ty, _) in fields {
-                let (base, size, _) = ty.spec();
-                self.bytes.extend_from_slice(&[*num, size as u8, base]);
+            self.bytes.push(layout.1.len() as u8);
+            for (num, base, size) in &layout.1 {
+                self.bytes.extend_from_slice(&[*num, *size, *base]);
             }
-            self.defined[local as usize] = Some((global, layout));
+            if !dev.is_empty() {
+                self.bytes.push(dev.len() as u8);
+                for (num, size, index) in &layout.2 {
+                    self.bytes.extend_from_slice(&[*num, *size, *index]);
+                }
+            }
+            self.defined[local as usize] = Some(layout);
         }
         self.bytes.push(local);
         for (_, ty, value) in fields {
@@ -113,6 +146,12 @@ impl Writer {
                 _ => invalid,
             };
             self.bytes.extend_from_slice(&raw.to_le_bytes()[..size]);
+        }
+        for (_, _, b) in raw {
+            self.bytes.extend_from_slice(b);
+        }
+        for (_, _, b) in dev {
+            self.bytes.extend_from_slice(b);
         }
     }
 }
@@ -137,10 +176,22 @@ pub fn encode_fit(samples: &[FitSample], s: &FitSession) -> Vec<u8> {
 
     // file_id: type=activity, manufacturer=development
     w.message(0, 0, &[(0, T::Enum, Some(4.0)), (1, T::U16, Some(255.0)), (2, T::U16, Some(1.0)), (3, T::U32z, Some(start % 4_294_967_294.0 + 1.0)), (4, T::U32, Some(start))]);
+    // developer_data_id + field_description: declares the per-record `target_power` developer
+    // field (index 0, field 0). Readers that don't know it skip it by the sizes in the definition.
+    w.message_ext(5, 207, &[(3, T::U8, Some(0.0))], &[(1, 0x0d, &APP_ID)], &[]);
+    w.message_ext(
+        6,
+        206,
+        &[(0, T::U8, Some(0.0)), (1, T::U8, Some(0.0)), (2, T::U8, Some(0x84 as f64)), (14, T::U16, Some(20.0))],
+        &[(3, 0x07, &padded::<16>("target_power")), (8, 0x07, &padded::<8>("watts"))],
+        &[],
+    );
     // event: timer start
     w.message(1, 21, &[(253, T::U32, Some(start)), (0, T::Enum, Some(0.0)), (1, T::Enum, Some(0.0))]);
     for p in samples {
-        w.message(
+        // 0xffff marks "no target", like the invalid value of any uint16.
+        let target = p.target_power.map_or(0xffff, |v| v.round().clamp(0.0, 65534.0) as u16).to_le_bytes();
+        w.message_ext(
             2,
             20,
             &[
@@ -154,6 +205,8 @@ pub fn encode_fit(samples: &[FitSample], s: &FitSession) -> Vec<u8> {
                 (6, T::U16, cap(p.speed * 1000.0, 65534.0)),
                 (7, T::U16, cap(p.power, 65534.0)),
             ],
+            &[],
+            &[(0, 0, &target)],
         );
     }
     // event: timer stop_all

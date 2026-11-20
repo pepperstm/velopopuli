@@ -44,6 +44,8 @@ devices.json     remembered sensors
 
 **Activity files** are only uploaded or shown in the file manager if they're in `activities/` (`Store::owns_activity`), whatever path the page sends. With an export folder set, each FIT file is copied there too.
 
+Each record also carries a `target_power` developer field (watts, uint16; invalid when the trainer wasn't holding a target), declared by `developer_data_id` and `field_description` messages at the start of the file. Intervals.icu, GoldenCheetah and similar tools can chart it; Strava and Garmin ignore it.
+
 ## Secrets
 
 [`secrets.rs`](../../src-tauri/src/secrets.rs): connector credentials and the Home Assistant token.
