@@ -26,7 +26,7 @@ A full debug build plus a universal release build need about 10 GB in `target/`.
 
 ## Tests
 
-There are 154 tests: 130 for the core, 1 for the relay and 23 for the app. `cargo test --workspace` runs all but four, which need the network and run only when asked for (`cargo test -p velopopuli -- --ignored`).
+There are 156 tests: 132 for the core, 1 for the relay and 23 for the app. `cargo test --workspace` runs all but four, which need the network and run only when asked for (`cargo test -p velopopuli -- --ignored`).
 
 | Where | What it covers |
 |---|---|
