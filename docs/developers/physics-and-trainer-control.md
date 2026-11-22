@@ -12,12 +12,12 @@ The trainer's own speed reading is never used for the rider's speed. Every train
 `step_speed(v, power, grade, elevation, params, dt)` integrates in steps of at most 0.1 s:
 
 ```
-drive  = P × 0.975 / max(v, 1.5)                       drivetrain losses; the floor caps the force from a standstill
-resist = m·g·(sin θ + Crr·cos θ) + ½·ρ(h)·CdA·v²       slope, rolling, air
-v     += (drive − resist) / (m + 1.4) × dt              1.4 kg stands in for the wheels' rotating mass
-v      = clamp(v, 0, max_speed)
+resist = m·g·(sin θ + Crr·cos θ) + ½·ρ(h)·CdA·v²       slope, rolling, air, at the old speed
+(m + 1.4)·(v' − v) / dt = P × 0.975 / v' − resist      pedalling force at the new speed; 0.975 for drivetrain losses
+v'     = clamp(the positive root, 0, max_speed)         1.4 kg stands in for the wheels' rotating mass
 ```
 
+- The pedalling force is power over speed, which has no limit at a standstill. Taking it at the new speed makes each step a quadratic in `v'` with one positive root: finite from a standstill, and settling exactly where power meets resistance. So a rider (or a bot, which uses the same function at a fixed power) always crawls up a climb, however steep or slow. An earlier version divided by `max(v, 1.5)` instead, which capped the force and stopped riders dead wherever the real speed was under 1.5 m/s (#92).
 - `m` is rider plus bike (defaults 75 + 9 kg), `θ` the slope angle from the gradient, `g` 9.80665.
 - **Air density** falls with height: `ρ(h) = 1.225 × e^(−h / 8500)`. Riding at 2,000 m is noticeably faster for the same power.
 - **Defaults** (`PhysicsSettings`): CdA 0.32 m², Crr 0.004 (road tyres on tarmac), top speed 80 km/h. The top speed stands in for braking on descents, since corners aren't modelled.

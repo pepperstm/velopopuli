@@ -128,6 +128,40 @@ mod physics {
         assert!(climb > 11.0 && climb < 14.0, "climb {climb}");
     }
 
+    /// Where power meets gravity, rolling resistance and drag: the speed the model should settle at.
+    fn balance(power: f64, grade: f64) -> f64 {
+        let cos = 1.0 / (1.0 + grade * grade).sqrt();
+        let (mut lo, mut hi) = (0.0, 30.0);
+        for _ in 0..60 {
+            let v = (lo + hi) / 2.0;
+            let resist = 84.0 * 9.80665 * (grade * cos + 0.004 * cos) + 0.5 * 1.225 * 0.32 * v * v;
+            if resist * v < power * 0.975 {
+                lo = v
+            } else {
+                hi = v
+            }
+        }
+        lo * 3.6
+    }
+
+    #[test]
+    fn climbs_steep_grades_slowly_instead_of_stalling() {
+        // #92: at 140 W a floor on speed in the pedalling force stopped the rider dead from about 10.5%.
+        for grade in [0.08, 0.10, 0.11, 0.12, 0.14, 0.20, 0.30] {
+            let (got, want) = (settle(140.0, grade), balance(140.0, grade));
+            assert!(close(got, want, 0.01 * want), "{}%: {got} km/h, expected {want}", grade * 100.0);
+        }
+        // From a standstill, and from a speed already too slow for the old floor.
+        let p = PhysicsParams { mass: 84.0, crr: 0.004, cda: 0.32, max_speed: 22.0 };
+        for start in [0.0, 0.5] {
+            let mut v = start;
+            for _ in 0..6000 {
+                v = step_speed(v, 140.0, 0.11, 630.0, &p, 0.1);
+            }
+            assert!(v > 1.0, "from {start} m/s: {v}");
+        }
+    }
+
     #[test]
     fn coasts_downhill_stalls_uphill_and_respects_the_speed_cap() {
         assert!(settle(0.0, -0.05) > 40.0);
@@ -318,6 +352,19 @@ mod ride {
         run(&mut engine, 3600, 250.0, &mut clock);
         assert!(engine.finished);
         assert_eq!(engine.ridden, route.total);
+    }
+
+    #[test]
+    fn a_weak_bot_keeps_climbing_a_steep_hill() {
+        // #92: bots ride at a fixed power, so one that stalled never moved again.
+        let route = Arc::new(build_route("wall", &straight(3000.0, |d| Some(100.0 + 0.12 * d))).unwrap());
+        let weak = Settings { bots: BotSettings { enabled: true, wkg: vec![1.5] }, ..Default::default() };
+        let mut engine = RideEngine::new(route, &weak, None);
+        let mut clock = 0;
+        run(&mut engine, 600, 300.0, &mut clock);
+        let bot = engine.rivals.iter().find(|r| r.kind == RivalKind::Bot).unwrap();
+        assert!(bot.speed > 0.8, "bot speed {}", bot.speed);
+        assert!(bot.distance > 400.0, "bot only got {} m", bot.distance);
     }
 
     #[test]

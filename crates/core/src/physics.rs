@@ -22,18 +22,24 @@ pub fn air_density(elevation: f64) -> f64 {
 }
 
 /// Advances road speed (m/s) by `dt` seconds for a given pedalling power and gradient.
+///
+/// The pedalling force is power over speed, which has no limit at a standstill. Each step takes it at the
+/// new speed rather than the old one: `m (v' - v) / h = P η / v' - resist`, a quadratic with one positive
+/// root. That stays finite from a standstill, adds the energy the power puts in, and settles exactly where
+/// the power meets the resistance, however slow that is, so a rider can always crawl up a steep climb (#92).
 pub fn step_speed(mut v: f64, power: f64, grade: f64, elevation: f64, p: &PhysicsParams, dt: f64) -> f64 {
     let rho = air_density(elevation);
     let cos = 1.0 / (1.0 + grade * grade).sqrt();
     let sin = grade * cos;
+    let m = p.mass + ROTATING_MASS;
+    let drive = power.max(0.0) * DRIVETRAIN_EFFICIENCY;
     let mut remaining = dt;
     while remaining > 1e-9 {
         let h = remaining.min(0.1);
         remaining -= h;
-        // Dividing by a floor speed caps the drive force from a standstill.
-        let drive = power * DRIVETRAIN_EFFICIENCY / v.max(1.5);
         let resist = p.mass * G * (sin + p.crr * cos) + 0.5 * rho * p.cda * v * v;
-        v = (v + (drive - resist) / (p.mass + ROTATING_MASS) * h).clamp(0.0, p.max_speed);
+        let b = m * v - resist * h;
+        v = ((b + (b * b + 4.0 * m * drive * h).sqrt()) / (2.0 * m)).clamp(0.0, p.max_speed);
     }
     v
 }

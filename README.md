@@ -63,7 +63,7 @@ Be aware of what has and has not been proven:
 
 | Area | Status |
 | --- | --- |
-| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 130 core tests) |
+| GPX parsing, route building, climb detection, physics, ride recording, gamification, terrain, building and scenery generation, workouts, fitness maths, segment and ghost matching, landmarks, photo selection | Unit-tested (`cargo test`, 132 core tests) |
 | Laps on loop routes | Unit-tested in `crates/core`: lap counting, distance ridden, climbs and segments timed on every lap, bests kept from the fastest lap, ghosts off. Smoke-run on Linux with the three.js renderer: the lap HUD, and riders, road and barriers across the line. **Not yet** run with the native renderer (macOS). FIT lap messages and ending the ride on the workout are not done |
 | Group-ride relay | Tested in-process (`cargo test -p velopopuli-relay`) and with two app instances riding together through a local relay |
 | Fan and lights | Requests checked against a pretend device for Home Assistant, Shelly and a webhook; not tried with real plugs |
