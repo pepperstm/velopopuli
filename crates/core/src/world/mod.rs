@@ -230,7 +230,11 @@ impl World {
         if data.usable() && tropics::tropical_weight(self.route.lat0.abs(), 0.0) > 0.5 {
             let mut open = OpenScene::new(&self.route, data);
             let widths = self.scene.widths.clone();
-            open.keep_off_road(&self.route, |i| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0);
+            let half = |i: usize| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0;
+            open.keep_off_road(&self.route, half);
+            open.find_cycle_sides(&self.route, half);
+            let route = self.route.clone();
+            self.scene.add_cycle_lanes(&route, &open.cycle_sides, half);
             self.open = Some(open);
         }
         self
@@ -249,7 +253,10 @@ impl World {
             let widths = self.scene.widths.clone();
             let half = |i: usize| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0;
             let route = self.route.clone();
-            self.scene.add_sidewalks(&route, &plan, half);
+            let cycle_sides = self.open.as_ref().map(|o| o.cycle_sides.clone()).unwrap_or_default();
+            // On a side with a cycle lane the sidewalk starts beyond it.
+            let past_cycle_lane = |i: usize, side: f64| if cycle_sides.get(i).is_some_and(|s| s[usize::from(side < 0.0)]) { scenery::CYCLE_LANE_M + 0.1 } else { 0.0 };
+            self.scene.add_sidewalks(&route, &plan, half, past_cycle_lane);
         }
         self.roadside = Some(plan);
         self

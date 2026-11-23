@@ -68,6 +68,8 @@ pub enum RoadKind {
     Major,
     Tram,
     Rail,
+    /// A cycle lane painted green beside the route (from a route's open data).
+    Cycle,
 }
 
 impl RoadKind {
@@ -84,6 +86,7 @@ impl RoadKind {
             RoadKind::Major => 10.5,
             RoadKind::Tram => 2.6,
             RoadKind::Rail => 3.4,
+            RoadKind::Cycle => 1.6,
         }
     }
 
@@ -113,6 +116,7 @@ impl RoadKind {
             RoadKind::Minor | RoadKind::Main | RoadKind::Major => [0.24, 0.25, 0.27],
             RoadKind::Tram => [0.38, 0.38, 0.39],
             RoadKind::Rail => [0.45, 0.41, 0.37],
+            RoadKind::Cycle => [0.20, 0.55, 0.30],
         }
     }
 }
@@ -825,6 +829,8 @@ const CORNER_M: f64 = 4.0;
 /// Gauge of a railway, and the width its rails are drawn (generously, so they show).
 const GAUGE: f64 = 1.435;
 const RAIL_HEAD: f64 = 0.16;
+/// Width of a green cycle lane beside the route.
+pub(super) const CYCLE_LANE_M: f64 = 1.6;
 /// Width of the line painted along each edge of a main road.
 const EDGE_LINE: f64 = 0.18;
 
@@ -1215,7 +1221,7 @@ impl Scene {
     /// its outer side (the median is on the other), beside a town street on both. Each is a
     /// paved strip `SIDEWALK_M` wide just beyond the kerb, laid on the ground like the other
     /// roads, with a light edge on both sides that reads as the kerb.
-    pub(super) fn add_sidewalks(&mut self, route: &Route, plan: &super::roadside::RoadsidePlan, half_width: impl Fn(usize) -> f64) {
+    pub(super) fn add_sidewalks(&mut self, route: &Route, plan: &super::roadside::RoadsidePlan, half_width: impl Fn(usize) -> f64, past_cycle_lane: impl Fn(usize, f64) -> f64) {
         use super::roadside::Stretch;
         const SIDEWALK_M: f64 = 2.5;
         const KERB_GAP_M: f64 = 0.3;
@@ -1251,7 +1257,7 @@ impl Scene {
                     // The middle of the sidewalk, to the given side (+1 the rider's right, (−tz, tx)).
                     let centre = |i: usize| {
                         let (tx, tz) = tangent(i);
-                        let off = side * (half_width(i) + KERB_GAP_M + SIDEWALK_M / 2.0);
+                        let off = side * (half_width(i) + past_cycle_lane(i, side) + KERB_GAP_M + SIDEWALK_M / 2.0);
                         ((route.x[i] - tz * off, route.z[i] + tx * off), (tz, -tx))
                     };
                     let ((a, na), (b, nb)) = (centre(i0), centre(i1));
@@ -1264,6 +1270,52 @@ impl Scene {
                 }
             }
             i0 = i1;
+        }
+    }
+
+    /// Green cycle lanes along the route where `sides(i)` says (`[right, left]`): a strip from
+    /// just beyond the road's edge, `CYCLE_LANE_M` wide, with a light edge each side.
+    pub(super) fn add_cycle_lanes(&mut self, route: &Route, sides: &[[bool; 2]], half_width: impl Fn(usize) -> f64) {
+        const GAP_M: f64 = 0.1;
+        const PIECE_M: f64 = 20.0;
+        if route.n < 2 || sides.len() != route.n {
+            return;
+        }
+        let beside = Beside::new(route);
+        let per_piece = ((PIECE_M / route.step).round() as usize).max(1);
+        let tangent = |i: usize| {
+            let (a, b) = (i.saturating_sub(1), (i + 1).min(route.n - 1));
+            let (tx, tz) = (route.x[b] - route.x[a], route.z[b] - route.z[a]);
+            let len = tx.hypot(tz).max(1e-9);
+            (tx / len, tz / len)
+        };
+        for (k, side) in [(0usize, 1.0f64), (1, -1.0)] {
+            let mut i0 = 0;
+            while i0 + 1 < route.n {
+                if !sides[i0][k] || self.kinds.get(i0).is_some_and(|&kind| kind != OPEN) {
+                    i0 += 1;
+                    continue;
+                }
+                let mut i1 = i0 + 1;
+                while i1 < route.n - 1 && i1 - i0 < per_piece && sides[i1][k] && self.kinds.get(i1).is_none_or(|&kind| kind == OPEN) {
+                    i1 += 1;
+                }
+                let centre = |i: usize| {
+                    let (tx, tz) = tangent(i);
+                    let off = side * (half_width(i) + GAP_M + CYCLE_LANE_M / 2.0);
+                    ((route.x[i] - tz * off, route.z[i] + tx * off), (tz, -tx))
+                };
+                let ((a, na), (b, nb)) = (centre(i0), centre(i1));
+                for (half, casing) in [(CYCLE_LANE_M / 2.0, true), (CYCLE_LANE_M / 2.0 - EDGE_LINE, false)] {
+                    let at = |p: (f64, f64), n: (f64, f64), s: f64| (p.0 + n.0 * half * s, p.1 + n.1 * half * s);
+                    let corners = [at(a, na, -1.0), at(a, na, 1.0), at(b, nb, 1.0), at(b, nb, -1.0)];
+                    self.add_strip(
+                        &beside,
+                        RoadStrip { a, b, corners, along: (i0 as f64 * route.step, i1 as f64 * route.step), half, kind: RoadKind::Cycle, steel: false, joins: false, oneway: true, casing, cap: false },
+                    );
+                }
+                i0 = i1;
+            }
         }
     }
 

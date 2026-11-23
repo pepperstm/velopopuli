@@ -650,3 +650,49 @@ mod power_lines {
         assert!(((tower[0] as f64) - route.x[i]).abs() >= world.half_width(i) + 1.0, "moved off the road: {}", tower[0]);
     }
 }
+
+mod cycle_lanes {
+    use super::*;
+
+    /// The corridor with a cycle lane mapped along the avenue's outer (west) side, 100–900 m.
+    fn with_lane(open_road: bool) -> (Arc<Route>, World) {
+        let route = straight_at(SAMBORONDON.0, SAMBORONDON.1, 3000.0);
+        let (scenery, houses) = corridor_map(&route);
+        let od = OpenData { format: 1, cycleways: vec![geo(&route, &[(-6.0, 100.0), (-6.0, 500.0), (-6.0, 900.0)])], ..Default::default() };
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_open_data(&od).with_roadside(RoadsideStyle { open_road });
+        (route, world)
+    }
+
+    /// The laid-road vertices beside the route at 500 m, as `(metres out from the road's edge, west side?, green?)`.
+    fn beside_500(route: &Route, world: &World) -> Vec<(f64, bool, bool)> {
+        let i = at(route, 500.0);
+        let (x, z, half) = (route.x[i], route.z[i], world.half_width(i));
+        let cx = (x / CHUNK).floor() as i32;
+        (cx - 1..=cx + 1)
+            .flat_map(|c| {
+                let m = world.chunk(c, chunk_of(route, 500.0)).roads;
+                m.positions
+                    .chunks(3)
+                    .zip(m.colors.chunks(3))
+                    .filter(|(p, _)| ((p[2] as f64) - z).abs() < 15.0)
+                    .map(|(p, c)| ((p[0] as f64 - x).abs() - half, (p[0] as f64) < x, c[1] > 0.15 && c[1] > 2.0 * c[0] && c[1] > 2.0 * c[2]))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn cycle_lane_runs_beside_the_road() {
+        let (route, world) = with_lane(false);
+        let v = beside_500(&route, &world);
+        assert!(v.iter().any(|&(out, west, green)| green && west && out > 0.0 && out < 1.9), "a green lane on the west side");
+        assert!(!v.iter().any(|&(_, west, green)| green && !west), "none on the east side");
+    }
+
+    #[test]
+    fn sidewalk_moves_out_past_the_cycle_lane() {
+        let (route, world) = with_lane(true);
+        let v = beside_500(&route, &world);
+        assert!(v.iter().any(|&(out, west, green)| !green && west && out > 3.2 && out < 4.7), "the sidewalk beyond the lane");
+    }
+}

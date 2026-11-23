@@ -118,6 +118,11 @@ const POLE_WIRES: [(f64, f64); 3] = [(-1.0, 10.4), (1.0, 10.4), (0.0, 10.9)];
 const SAG: f64 = 0.03;
 const WIRE_PIECES: usize = 8;
 const WIRE_THICKNESS: f64 = 0.06;
+/// A cycle lane counts as running along the route within this of the road's edge, this nearly
+/// parallel (as a cosine), for at least this far.
+const CYCLE_REACH_M: f64 = 12.0;
+const CYCLE_PARALLEL_COS: f64 = 0.94;
+const CYCLE_MIN_M: f64 = 40.0;
 
 /// The pack in the route's local metres.
 #[derive(Debug, Clone, Default)]
@@ -132,6 +137,8 @@ pub struct OpenScene {
     /// Trees as `(x, z, height)`, by the chunk they stand in.
     pub trees: HashMap<(i32, i32), Vec<(f64, f64, f64)>>,
     pub trees_corridor_m: f64,
+    /// Per route sample, whether a cycle lane runs along its right and its left: `[right, left]`.
+    pub cycle_sides: Vec<[bool; 2]>,
 }
 
 impl OpenScene {
@@ -188,6 +195,62 @@ impl OpenScene {
                 s.at = (route.x[i] + rx * side * (half + OFF_ROAD_M), route.z[i] + rz * side * (half + OFF_ROAD_M));
             }
         }
+    }
+
+    /// Works out which side of the route the pack's cycle lanes run along, sample by sample: a
+    /// lane within `CYCLE_REACH_M` of the road's edge, nearly parallel to it, for at least
+    /// `CYCLE_MIN_M`.
+    pub(super) fn find_cycle_sides(&mut self, route: &Route, half_width: impl Fn(usize) -> f64) {
+        let mut sides = vec![[false; 2]; route.n];
+        let tangent = |i: usize| {
+            let (a, b) = (i.saturating_sub(1), (i + 1).min(route.n - 1));
+            let (tx, tz) = (route.x[b] - route.x[a], route.z[b] - route.z[a]);
+            let len = tx.hypot(tz).max(1e-9);
+            (tx / len, tz / len)
+        };
+        for line in &self.cycleways {
+            for w in line.windows(2) {
+                let (dx, dz) = (w[1].0 - w[0].0, w[1].1 - w[0].1);
+                let len = dx.hypot(dz);
+                if len < 1e-6 {
+                    continue;
+                }
+                let pieces = (len / route.step).ceil().max(1.0) as usize;
+                for k in 0..pieces {
+                    let t = (k as f64 + 0.5) / pieces as f64;
+                    let p = (w[0].0 + dx * t, w[0].1 + dz * t);
+                    let Some((i, _)) = (0..route.n).map(|i| (i, (route.x[i] - p.0).hypot(route.z[i] - p.1))).min_by(|a, b| a.1.total_cmp(&b.1)) else { continue };
+                    let (tx, tz) = tangent(i);
+                    if ((dx * tx + dz * tz) / len).abs() < CYCLE_PARALLEL_COS {
+                        continue;
+                    }
+                    let right = (p.0 - route.x[i]) * -tz + (p.1 - route.z[i]) * tx;
+                    let gap = right.abs() - half_width(i);
+                    if (-1.0..=CYCLE_REACH_M).contains(&gap) {
+                        sides[i][usize::from(right < 0.0)] = true;
+                    }
+                }
+            }
+        }
+        // Close small gaps, then keep only lanes alongside for a good stretch.
+        let (fill, min_run) = (2, (CYCLE_MIN_M / route.step).ceil() as usize);
+        for k in 0..2 {
+            let mut side: Vec<bool> = sides.iter().map(|s| s[k]).collect();
+            for (from, to, on) in super::surface::runs(&side.clone()) {
+                if !on && to - from <= fill && from > 0 && to < route.n {
+                    side[from..to].fill(true);
+                }
+            }
+            for (from, to, on) in super::surface::runs(&side.clone()) {
+                if on && to - from < min_run {
+                    side[from..to].fill(false);
+                }
+            }
+            for (s, on) in sides.iter_mut().zip(side) {
+                s[k] = on;
+            }
+        }
+        self.cycle_sides = sides;
     }
 
     /// The wires of the power lines whose pieces have their middle in chunk `(cx, cz)`, sagging
