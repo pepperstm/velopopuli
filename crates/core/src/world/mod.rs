@@ -219,7 +219,6 @@ impl World {
         self.venue.as_ref().is_some_and(|v| v.grounds.outside(x, z) < 2.0)
     }
 
-    /// Adds buildings (OpenStreetMap footprints) to the landscape.
     /// Works out the roadside (stretch kinds, medians) for the tropical roadside rules, with
     /// the rider's choices. After the buildings, which say where the route is built up.
     pub fn with_roadside(mut self, style: RoadsideStyle) -> Self {
@@ -239,6 +238,7 @@ impl World {
         self.roadside.as_ref()
     }
 
+    /// Adds buildings (OpenStreetMap footprints) to the landscape.
     pub fn with_buildings(mut self, footprints: &[Footprint]) -> Self {
         self.buildings = Buildings::new(&self.route, &self.field, &self.scene.widths, footprints);
         self

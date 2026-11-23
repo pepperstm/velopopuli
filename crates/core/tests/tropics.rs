@@ -7,7 +7,7 @@ use velopopuli_core::gpx::{build_route, RawPoint, Route, M_PER_DEG};
 use velopopuli_core::types::WorldLook;
 use velopopuli_core::world::{
     in_americas, sprite_frame, tropical_weight, Area, AreaKind, Crossing, Footprint, GridMesh, Road, RoadKind, RoadsideStyle, Scenery, Stretch, TreeClimate, TriMesh, World, BARRIER_FENCE,
-    BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
+    BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, OPEN, PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
 };
 
 const SAMBORONDON: (f64, f64) = (-2.07, -79.87);
@@ -74,10 +74,14 @@ fn corridor_at_height(lat0: f64, lon0: f64, ele: f64, style: RoadsideStyle) -> (
 
 /// The corridor with the route in a mapped tunnel from 400 to 600 m.
 fn corridor_with_tunnel(lat0: f64, lon0: f64) -> (Arc<Route>, World) {
+    corridor_with_tunnel_styled(lat0, lon0, RoadsideStyle::default())
+}
+
+fn corridor_with_tunnel_styled(lat0: f64, lon0: f64, style: RoadsideStyle) -> (Arc<Route>, World) {
     let route = straight_at(lat0, lon0, 3000.0);
     let (mut scenery, houses) = corridor_map(&route);
     scenery.crossings.push(Crossing { tunnel: true, kind: RoadKind::Main, line: geo(&route, &[(0.0, 400.0), (0.0, 600.0)]) });
-    let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_roadside(RoadsideStyle::default());
+    let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_roadside(style);
     (route, world)
 }
 
@@ -413,5 +417,115 @@ mod walls {
         let x_eu = route_eu.sample_at(500.0).x;
         let cx_eu = (x_eu / CHUNK).floor() as i32 - 1;
         assert!(!(cx_eu..=cx_eu + 1).any(|c| wall(&world_eu.chunk(c, chunk_of(&route_eu, 500.0)).buildings, x_eu)), "none outside the tropics");
+    }
+}
+
+mod sidewalk_edges {
+    use super::*;
+
+    #[test]
+    fn sidewalks_stop_before_a_tunnel() {
+        let (route, world) = corridor_with_tunnel_styled(SAMBORONDON.0, SAMBORONDON.1, RoadsideStyle { open_road: true });
+        let kinds = world.field.kinds();
+        let k = (0..route.n).find(|&i| kinds[i] != OPEN).expect("a tunnel");
+        let k_end = (k..route.n).find(|&i| kinds[i] == OPEN).unwrap_or(route.n - 1);
+        let (z_in, z_out) = (route.z[k], route.z[k_end - 1]);
+        let x = route.x[k];
+        let half = world.half_width(k);
+        let cx = (x / CHUNK).floor() as i32;
+        let inside = (cx - 1..=cx + 1).flat_map(|c| [chunk_of(&route, k as f64 * route.step), chunk_of(&route, (k_end - 1) as f64 * route.step)].map(|cz| world.chunk(c, cz))).any(|m| {
+            m.roads.positions.chunks(3).any(|p| {
+                let (px, pz) = (p[0] as f64 - x, p[2] as f64);
+                (px.abs() - half) > 0.2 && (px.abs() - half) < 3.0 && pz <= z_in + 0.5 && pz >= z_out - 0.5
+            })
+        });
+        assert!(!inside, "no sidewalk from the tunnel mouth on");
+    }
+}
+
+mod median_on_the_left {
+    use super::*;
+
+    /// The corridor mirrored: the other carriageway 14 m WEST, as in right-hand traffic.
+    fn mirrored(style: RoadsideStyle) -> (Arc<Route>, World) {
+        let route = straight_at(SAMBORONDON.0, SAMBORONDON.1, 3000.0);
+        let (mut scenery, houses) = corridor_map(&route);
+        scenery.roads[1] = Road { kind: RoadKind::Main, oneway: true, line: geo(&route, &[(-14.0, 2000.0), (-14.0, 1000.0), (-14.0, 0.0)]) };
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_roadside(style);
+        (route, world)
+    }
+
+    #[test]
+    fn lamps_go_in_the_median_on_the_left_and_the_sidewalk_on_the_right() {
+        let (route, world) = mirrored(RoadsideStyle { open_road: true });
+        let p = world.roadside().unwrap();
+        let i = at(&route, 500.0);
+        assert_eq!(p.median_side[i], -1.0);
+        let off = world.half_width(i) + p.median[i].unwrap() / 2.0;
+        let lamps: Vec<[f32; 7]> = world.barriers().into_iter().filter(|e| e[5] as usize == BARRIER_LAMP_DOUBLE && (100.0..900.0).contains(&(e[4] as f64))).collect();
+        assert!(!lamps.is_empty() && lamps.iter().all(|l| ((l[0] as f64) - (route.x[i] - off)).abs() < 0.6));
+        let x = route.x[i];
+        let cx = (x / CHUNK).floor() as i32;
+        let right = (cx..=cx + 1).any(|c| {
+            world.chunk(c, chunk_of(&route, 500.0)).roads.positions.chunks(3).any(|q| {
+                let dx = q[0] as f64 - x;
+                dx > world.half_width(i) + 0.3 && dx < world.half_width(i) + 2.8 && ((q[2] as f64) - route.z[i]).abs() < 20.0
+            })
+        });
+        assert!(right, "the sidewalk on the right");
+    }
+}
+
+mod out_and_back {
+    use super::*;
+
+    #[test]
+    fn coming_back_on_the_other_carriageway_is_a_divided_road() {
+        // North 1500 m, round a 14 m U-turn, and back south on the other carriageway, with houses
+        // either side: both legs are an avenue with the other leg as its other carriageway.
+        let (lat0, lon0) = SAMBORONDON;
+        let east = 14.0 / (M_PER_DEG * lat0.to_radians().cos());
+        let mut pts: Vec<RawPoint> = (0..=150).map(|i| RawPoint { lat: lat0 + i as f64 * 10.0 / M_PER_DEG, lon: lon0, ele: Some(5.0) }).collect();
+        pts.extend((0..=150).rev().map(|i| RawPoint { lat: lat0 + i as f64 * 10.0 / M_PER_DEG, lon: lon0 + east, ele: Some(5.0) }));
+        let route = Arc::new(build_route("out and back", &pts).unwrap());
+        let mut houses = Vec::new();
+        for along in (0..1500).step_by(30) {
+            for x in [-60.0, -40.0, 50.0, 70.0] {
+                let p = route.sample_at(along as f64);
+                let (lat, lon) = route.to_lat_lon(p.x + x, p.z);
+                let d = 5.0 / M_PER_DEG;
+                houses.push(Footprint { id: houses.len() as u64, height: 6.0, ring: vec![[lat - d, lon - d], [lat - d, lon + d], [lat + d, lon + d], [lat + d, lon - d], [lat - d, lon - d]] });
+            }
+        }
+        let world = World::with_map(route.clone(), None, 0.0, Some(&Scenery::default()), &houses).with_roadside(RoadsideStyle::default());
+        let p = world.roadside().unwrap();
+        for d in [500.0, route.total - 500.0] {
+            let i = at(&route, d);
+            assert!(p.median[i].is_some(), "the other leg is the other carriageway at {d} m");
+            assert_eq!(p.stretch[i], Stretch::Avenue, "an avenue at {d} m");
+        }
+    }
+}
+
+mod diagonal_walls {
+    use super::*;
+
+    #[test]
+    fn an_estate_edge_at_an_angle_still_gets_its_wall() {
+        // The estate's edge runs away from the road: 15 m out at 100 m, 60 m out at 250 m.
+        let route = straight_at(SAMBORONDON.0, SAMBORONDON.1, 3000.0);
+        let (mut scenery, houses) = corridor_map(&route);
+        scenery.areas.push(Area { kind: AreaKind::Residential, rings: vec![geo(&route, &[(-15.0, 100.0), (-60.0, 250.0), (-300.0, 250.0), (-300.0, 100.0)])] });
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_roadside(RoadsideStyle::default());
+        let x = route.sample_at(175.0).x;
+        let z = route.sample_at(175.0).z;
+        let cx = (x / CHUNK).floor() as i32;
+        let wall = (cx - 1..=cx).any(|c| {
+            world.chunk(c, chunk_of(&route, 175.0)).buildings.positions.chunks(3).any(|q| {
+                let dx = q[0] as f64 - x;
+                dx < -10.0 && dx > -45.0 && q[1] as f64 > 5.8 && ((q[2] as f64) - z).abs() < 15.0
+            })
+        });
+        assert!(wall, "a wall along the slanting edge");
     }
 }

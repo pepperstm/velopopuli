@@ -1211,7 +1211,6 @@ impl Scene {
         best
     }
 
-    /// The pieces of other roads that reach into chunk `(cx, cz)`, in the order to paint them.
     /// Sidewalks along the route where it is built up and the road is open: beside an avenue on
     /// its outer side (the median is on the other), beside a town street on both. Each is a
     /// paved strip `SIDEWALK_M` wide just beyond the kerb, laid on the ground like the other
@@ -1275,6 +1274,7 @@ impl Scene {
         self.road_strips.iter().filter(|s| s.oneway && !s.casing && !s.cap && !s.steel && matches!(s.kind, RoadKind::Minor | RoadKind::Main | RoadKind::Major)).map(|s| (s.a, s.b, s.half))
     }
 
+    /// The pieces of other roads that reach into chunk `(cx, cz)`, in the order to paint them.
     pub(super) fn roads_in(&self, cx: i32, cz: i32) -> impl Iterator<Item = &RoadStrip> + Clone {
         self.road_index.get(&(cx, cz)).map_or(&[][..], |v| v).iter().map(|&k| &self.road_strips[k as usize])
     }

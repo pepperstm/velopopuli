@@ -145,6 +145,28 @@ pub fn plan(route: &Route, scene: &Scene, buildings: &Buildings, style: Roadside
             }
         }
     }
+    // An out-and-back ride on a divided road comes back on the other carriageway: that is the
+    // route itself, not a road in the scene, so look among the route's own samples too, for one
+    // running the other way well along it (not the stretch either side of this sample).
+    let far_apart = (2.0 * MEDIAN_REACH.1 / route.step).ceil() as usize;
+    for i in 0..n {
+        let (tx, tz) = tangent(route, i);
+        let (bx, bz) = ((route.x[i] / BIN_M).floor() as i32, (route.z[i] / BIN_M).floor() as i32);
+        for j in (bx - 1..=bx + 1).flat_map(|x| (bz - 1..=bz + 1).map(move |z| (x, z))).filter_map(|key| bins.get(&key)).flatten().copied() {
+            if j.abs_diff(i) < far_apart {
+                continue;
+            }
+            let (ux, uz) = tangent(route, j);
+            if tx * ux + tz * uz > -PARALLEL_COS {
+                continue;
+            }
+            let right = (route.x[j] - route.x[i]) * -tz + (route.z[j] - route.z[i]) * tx;
+            let gap = right.abs() - half(i);
+            if (MEDIAN_REACH.0..=MEDIAN_REACH.1).contains(&gap) && beside[i].is_none_or(|(o, _)| right.abs() < o.abs()) {
+                beside[i] = Some((right, half(j)));
+            }
+        }
+    }
     // Only carriageways alongside for a good stretch: a slip road or junction is not a median.
     let min_divided = (DIVIDED_MIN_M / route.step).ceil() as usize;
     let alongside: Vec<bool> = beside.iter().map(Option::is_some).collect();
@@ -216,11 +238,13 @@ fn beside_route(route: &Route, d: f64, side: f64, offset: f64) -> ((f64, f64), f
     ((p.x - tz * side * offset, p.z + tx * side * offset), yaw)
 }
 
-/// The distances `start, start + spacing, …` along the route, short of its end (a whole
-/// spacing short on a loop, so nothing doubles up where it closes).
+/// The distances `start, start + spacing, …` along the route, short of its end. On a loop
+/// they carry on round past the line and wrap, stopping short of the first one again, so the
+/// spacing holds across the line and nothing doubles up there.
 fn every(route: &Route, start: f64, spacing: f64) -> impl Iterator<Item = f64> {
-    let end = if route.closed { route.total - spacing } else { route.total };
-    (0..).map(move |k| start + k as f64 * spacing).take_while(move |&d| d < end)
+    let (total, closed) = (route.total, route.closed);
+    let end = if closed { total + start } else { total };
+    (0..).map(move |k| start + k as f64 * spacing).take_while(move |&d| d < end).map(move |d| if closed && d >= total { d - total } else { d })
 }
 
 /// Whether a prop at `p` stands clear of the roads that cross or leave the route there: not
@@ -344,8 +368,11 @@ pub(super) fn median_plants(world: &super::World, plan: &RoadsidePlan, cx: i32, 
             continue;
         }
         let (p, _) = beside_route(route, d, -plan.median_side[i], world.half_width(i) + OUTER_SET_BACK_M);
+        if !in_chunk(p) {
+            continue;
+        }
         let clear = !world.buildings.near(p.0, p.1, 2.0) && world.scene.roads_in(cx, cz).all(|s| super::scenery::to_segment(p, s.a, s.b) > s.half + 1.6);
-        if in_chunk(p) && clear {
+        if clear {
             grow(p, palm_or_bush(i), d);
         }
     }
@@ -436,4 +463,33 @@ pub(super) fn walls(world: &super::World, plan: &RoadsidePlan, cx: i32, cz: i32)
         finish(&mut run);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gpx::{build_route, RawPoint, M_PER_DEG};
+
+    fn ring(length_m: f64) -> Route {
+        let r = length_m / std::f64::consts::TAU;
+        let steps = (length_m / 2.0) as usize;
+        let pts: Vec<RawPoint> = (0..=steps)
+            .map(|k| {
+                let a = k as f64 / steps as f64 * std::f64::consts::TAU;
+                RawPoint { lat: -2.07 + r * a.sin() / M_PER_DEG, lon: -79.87 + r * a.cos() / M_PER_DEG, ele: Some(5.0) }
+            })
+            .collect();
+        build_route("ring", &pts).unwrap()
+    }
+
+    #[test]
+    fn spacing_round_a_loop_leaves_no_gap_at_the_seam() {
+        let route = ring(1000.0);
+        assert!(route.closed);
+        let mut ds: Vec<f64> = every(&route, 19.0, 38.0).collect();
+        ds.sort_by(f64::total_cmp);
+        // Every gap round the loop, the one across the line included, is at most one spacing.
+        let gaps: Vec<f64> = ds.windows(2).map(|w| w[1] - w[0]).chain([route.total - ds[ds.len() - 1] + ds[0]]).collect();
+        assert!(gaps.iter().all(|&g| g > 0.0 && g <= 38.0 + 1e-6), "gaps {gaps:?}");
+    }
 }
