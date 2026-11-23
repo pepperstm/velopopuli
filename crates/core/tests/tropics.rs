@@ -721,3 +721,59 @@ mod mapped_barriers {
         assert!(world.barriers().iter().any(|e| e[5] as usize == BARRIER_WATER_TOWER && ((e[0] as f64) - (p.x + 300.0)).abs() < 0.5 && ((e[2] as f64) - p.z).abs() < 0.5));
     }
 }
+
+mod canopy_trees {
+    use super::open_lamps::corridor_with_pack;
+    use super::*;
+
+    fn pack(route: &Route) -> OpenData {
+        let at = |x: f64, along: f64, h: f64| {
+            let g = geo(route, &[(x, along)])[0];
+            [g[0], g[1], h]
+        };
+        OpenData {
+            format: 1,
+            trees: vec![at(-60.0, 500.0, 18.0), at(60.0, 520.0, 12.0), at(-120.0, 540.0, 25.0), at(0.0, 600.0, 15.0), at(-50.0, 600.0, 15.0)],
+            trees_corridor_m: 500.0,
+            ..Default::default()
+        }
+    }
+
+    fn trees_around(route: &Route, world: &World, x_off: f64, d: f64) -> Vec<f32> {
+        let x = route.sample_at(d).x + x_off;
+        let cx = (x / CHUNK).floor() as i32;
+        (cx - 1..=cx + 1).flat_map(|c| world.chunk(c, chunk_of(route, d)).trees).collect()
+    }
+
+    #[test]
+    fn canopy_trees_stand_where_measured() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, pack);
+        let trees = trees_around(&route, &world, 0.0, 520.0);
+        for (x, d) in [(-60.0, 500.0), (60.0, 520.0), (-120.0, 540.0)] {
+            let p = route.sample_at(d);
+            assert!(trees.chunks(TREE_FLOATS).any(|t| ((t[0] as f64) - (p.x + x)).abs() < 0.5 && ((t[2] as f64) - p.z).abs() < 0.5), "a tree at ({x}, {d})");
+        }
+    }
+
+    #[test]
+    fn no_canopy_tree_on_the_road_or_in_a_house() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, pack);
+        let trees = trees_around(&route, &world, 0.0, 600.0);
+        for x in [0.0, -50.0] {
+            let p = route.sample_at(600.0);
+            assert!(!trees.chunks(TREE_FLOATS).any(|t| ((t[0] as f64) - (p.x + x)).abs() < 0.5 && ((t[2] as f64) - p.z).abs() < 0.5), "no tree at ({x}, 600)");
+        }
+    }
+
+    #[test]
+    fn chunks_outside_the_corridor_keep_their_generated_trees() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, pack);
+        // In the corridor, in the country (2250 m), where the pack has no trees: none made up.
+        let d = 2250.0;
+        let near = world.chunk(((route.sample_at(d).x - 130.0) / CHUNK).floor() as i32, chunk_of(&route, d)).trees;
+        assert!(near.is_empty(), "{} made-up trees in the corridor", near.len() / TREE_FLOATS);
+        // Far out (1.5 km east), generated woods as before.
+        let far: usize = (0..4).map(|k| world.chunk(((route.sample_at(d).x + 1500.0) / CHUNK).floor() as i32 + k, chunk_of(&route, d)).trees.len()).sum();
+        assert!(far > 0, "generated trees far from the route");
+    }
+}

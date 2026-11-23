@@ -264,6 +264,12 @@ impl Climate {
     }
 }
 
+/// The height of a kind's model (metres, at scale 1), worked out once.
+pub fn model_top(kind: u8) -> f64 {
+    static TOPS: std::sync::OnceLock<Vec<f64>> = std::sync::OnceLock::new();
+    TOPS.get_or_init(|| (0..KINDS as u8).map(|k| sprite_frame(k)[2]).collect()).get(kind as usize).copied().unwrap_or(8.0)
+}
+
 /// Trees further than this from the camera (metres, along the ground) are drawn as sprites:
 /// a picture of their model, turned to face the camera, two triangles instead of a hundred.
 /// Each tree switches at its own distance, up to `SPRITE_SPREAD / 2` either side, so there is

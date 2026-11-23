@@ -708,9 +708,17 @@ impl World {
             }
         }
 
+        // Trees measured from space (a route's open data): in the corridor they cover, they stand
+        // where they are and take the place of the made-up ones.
+        let measured = self.open.as_ref().filter(|o| {
+            let centre = (x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
+            let reach = o.trees_corridor_m - CHUNK / 2.0;
+            (0..self.route.n).step_by(4).any(|i| (self.route.x[i] - centre.0).hypot(self.route.z[i] - centre.1) < reach)
+        });
+        let made_up = if measured.is_some() { 0 } else { TREES_PER_CHUNK };
         // Elsewhere: deterministic per chunk, clustered into woods by a low-frequency mask.
         // Where the map says what is forest and what is not, only a scattering is kept.
-        for k in 0..TREES_PER_CHUNK {
+        for k in 0..made_up {
             if mapped && k % 4 != 0 {
                 continue;
             }
@@ -722,6 +730,17 @@ impl World {
             }
             let Some(ty) = plant(tx, tz) else { continue };
             grow(tx, tz, ty, !mapped, (cx.wrapping_mul(4099).wrapping_add(k), cz.wrapping_mul(8191).wrapping_sub(k)));
+        }
+        if let Some(o) = measured {
+            for &(tx, tz, height) in o.trees.get(&(cx, cz)).into_iter().flatten() {
+                let Some(ty) = plant(tx, tz) else { continue };
+                let seed = ((tx * 7.0) as i32, (tz * 11.0) as i32);
+                let r = |salt: i32| hash2(seed.0.wrapping_mul(31).wrapping_add(salt), seed.1.wrapping_mul(17).wrapping_sub(salt.wrapping_mul(7)));
+                let kind = climate.kind_at((tx, tz), ty, false, r(1), r(2));
+                let tall = (height / trees::model_top(kind).max(1.0)).clamp(0.6, 1.8);
+                let width = tall * (0.9 + r(3) * 0.2);
+                planted.push((kind, [tx as f32, (ty - 0.2) as f32, tz as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, (0.82 + r(5) * 0.36) as f32]));
+            }
         }
         // The tropical roadside: palms down an avenue's median and along its side.
         if let Some(plan) = self.roadside.as_ref().filter(|p| p.tropical) {
