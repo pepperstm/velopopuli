@@ -12,7 +12,7 @@ A free, open-source indoor-cycling app: import any GPX route, ride it on a smart
 
 It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding GPX routes over winter), was rewritten the same day from Electron/TypeScript into Rust + Tauri for low overhead, renamed "Velo Populi" and then "VeloPopuli" to match the website.
 
-## 2. Where it stands (18 November 2026: v0.3.10 released, `main` ahead of it)
+## 2. Where it stands (23 November 2026: v0.4.0 in release candidates, v0.3.10 the latest full release)
 
 **Solid and tested:** route building (GPX parsing, resampling, smoothing, climb detection), physics, ride recording and FIT export, workouts (.zwo/.erg/.mrc and built-ins), fitness maths, gamification, the 3D world (terrain with roads cut into hillsides, buildings, forests of six kinds of tree with sprites in the distance, field boundaries and hedge-banked lanes, water, the surrounding road network, bridges, tunnels, overpasses, road surface/width/markings, race barriers that lean with the road and netting round hairpins, landmarks, weather), the virtual-gear maths, diagnostics, the relay. 156 automated tests (132 core, 1 relay, 23 app; four of the app tests need the network and are skipped by default), plus visual checks through the automated smoke harness (section 6).
 
@@ -37,7 +37,7 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 
 ### Work in progress (18 November 2026)
 
-Since v0.3.10 `main` has gained the route finder's routing styles, loops, drag to edit and route breakdown (#87) and AppImage update information (#88). Neither is released yet; they go out in 0.3.11.
+`main` is version 0.4.0, released as candidates (`v0.4.0-rc.N`, see `docs/developers/releasing.md`) until the [v0.4.0 milestone](https://github.com/pepperstm/velopopuli/milestone/1) is done. Since v0.3.10 it has gained the route finder's routing styles, loops, drag to edit and route breakdown (#87), AppImage update information (#88), target power in the FIT file (#95), steady crawling on steep climbs (#94), overlay mode (#102), the Glass theme (#103) and sound (#119).
 
 | Where | What | State |
 |---|---|---|
