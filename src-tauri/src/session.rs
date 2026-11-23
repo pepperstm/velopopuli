@@ -26,6 +26,7 @@ use crate::devices::sim::DemoRider;
 use crate::devices::Devices;
 use crate::group::GroupLink;
 use crate::library;
+use crate::obn::OBNLink;
 use crate::smart::SmartLink;
 use crate::store::Store;
 use crate::{mapdata, now_ms, terrain};
@@ -181,6 +182,8 @@ pub struct Session {
     settings: Arc<Mutex<Settings>>,
     stop: Arc<AtomicBool>,
     group: Option<Arc<GroupLink>>,
+    /// Riders of other apps on a shared track, when the rider turned OpenBikeNet on.
+    obn: Option<Arc<OBNLink>>,
     imported_ghosts: Vec<String>,
     thread: Mutex<Option<JoinHandle<()>>>,
 }
@@ -368,7 +371,20 @@ impl Session {
                 eprintln!("Landmark at {:.0} m ({}): {} {} {}", m.distance, if m.side > 0.0 { "+" } else { "-" }, m.kind, m.name, m.detail);
             }
         }
-        let group = req.group_room.as_ref().filter(|r| !r.trim().is_empty()).map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
+        // OpenBikeNet and a group-ride room are alternatives on a shared track, so a room is
+        // ignored while it is on: decide that first, so the room is never joined at all. The
+        // track's length is what OpenBikeNet publishes.
+        let obn = if settings.open_bike_net.enabled && !settings.open_bike_net.server.trim().is_empty() {
+            velopopuli_core::obn::shared_route(route_id)
+                .map(|shared| OBNLink::join(&settings.open_bike_net.server, shared, track.map_or(0.0, |(t, _)| t.length), &settings.rider.name, settings.open_bike_net.share_power))
+        } else {
+            None
+        };
+        let group = req
+            .group_room
+            .as_ref()
+            .filter(|r| obn.is_none() && !r.trim().is_empty())
+            .map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
         crate::diag::event(
             "ride",
             format!(
@@ -391,13 +407,14 @@ impl Session {
         crate::diag::event(
             "ride",
             format!(
-                "start route_km={:.1} ascent_m={:.0} mode={:?} virtual_power={} workout={} group={} devices={}",
+                "start route_km={:.1} ascent_m={:.0} mode={:?} virtual_power={} workout={} group={} obn={} devices={}",
                 route.total / 1000.0,
                 route.ascent,
                 settings.trainer.mode,
                 settings.trainer.virtual_power,
                 req.workout_id.as_deref().unwrap_or("-"),
                 group.is_some(),
+                obn.is_some(),
                 devices.snapshot().devices.iter().map(|d| format!("{}({:?},{:?},control={})", d.id, d.kind, d.status, d.controllable)).collect::<Vec<_>>().join(" ")
             ),
         );
@@ -410,13 +427,14 @@ impl Session {
             settings: Arc::new(Mutex::new(settings)),
             stop: Arc::new(AtomicBool::new(false)),
             group,
+            obn,
             imported_ghosts,
             thread: Mutex::new(None),
         });
         let thread = std::thread::spawn({
-            let (engine, settings, stop, app, group) = (session.engine.clone(), session.settings.clone(), session.stop.clone(), app.clone(), session.group.clone());
+            let (engine, settings, stop, app, group, obn) = (session.engine.clone(), session.settings.clone(), session.stop.clone(), app.clone(), session.group.clone(), session.obn.clone());
             let smart = SmartLink::start(store.dir(), session.settings.lock().unwrap().smart.clone());
-            move || run(engine, settings, stop, app, devices, demo, group, smart)
+            move || run(engine, settings, stop, app, devices, demo, group, obn, smart)
         });
         *session.thread.lock().unwrap() = Some(thread);
         Ok((session, init))
@@ -482,6 +500,9 @@ impl Session {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(g) = &self.group {
             g.leave();
+        }
+        if let Some(o) = &self.obn {
+            o.leave();
         }
         if let Some(thread) = self.thread.lock().unwrap().take() {
             let _ = thread.join();
@@ -629,6 +650,7 @@ fn run(
     devices: Arc<Devices>,
     demo: Arc<DemoRider>,
     group: Option<Arc<GroupLink>>,
+    obn: Option<Arc<OBNLink>>,
     smart: Option<SmartLink>,
 ) {
     let mut last = Instant::now();
@@ -638,6 +660,7 @@ fn run(
     let mut result_shown: Option<(usize, Instant)> = None;
     let mut segment_shown: Option<(String, Instant)> = None;
     let mut shared = last - Duration::from_secs(2);
+    let mut obn_shared = last - Duration::from_secs(2);
 
     while !stop.load(Ordering::SeqCst) {
         std::thread::sleep(TICK);
@@ -715,15 +738,34 @@ fn run(
                 smart.update(engine.speed * 3.6, tel.power, tel.hr, rider_ftp);
             }
         }
+        // Paused, finished or not pedalling, the engine keeps its last speed (it stops ticking),
+        // but to everyone else the rider is standing still.
+        let shared_speed = if engine.moving { engine.speed } else { 0.0 };
         if let Some(g) = &group {
             if now - shared >= Duration::from_millis(500) {
                 shared = now;
-                g.send(engine.distance, engine.speed, tel.power);
+                g.send(engine.distance, shared_speed, tel.power);
             }
             for update in g.take_updates() {
                 match update {
                     crate::group::Update::Rider { id, name, color, distance, speed } => engine.set_remote(&id, &name, color, distance, speed),
                     crate::group::Update::Left(id) => engine.remove_remote(&id),
+                }
+            }
+        }
+        if let Some(o) = &obn {
+            // OpenBikeNet asks for about one update a second (spec 9 recommends at most 4 Hz).
+            if now - obn_shared >= Duration::from_secs(1) {
+                obn_shared = now;
+                o.send(engine.distance, velopopuli_core::obn::lap(engine.lap), shared_speed, tel.power, tel.cadence);
+            }
+            for update in o.take_updates() {
+                match update {
+                    // Prefixed, so a remote id can never match one of our own rivals.
+                    crate::obn::Update::Rider { id, name, app, distance, speed } => {
+                        engine.set_remote(&format!("{}{id}", crate::obn::ID_PREFIX), &format!("{name} · {app}"), crate::obn::app_color(&app), distance, speed);
+                    }
+                    crate::obn::Update::Left(id) => engine.remove_remote(&format!("{}{id}", crate::obn::ID_PREFIX)),
                 }
             }
         }
@@ -794,7 +836,7 @@ fn run(
                 cue: engine.workout.as_ref().and_then(|w| w.cue_at(engine.workout_time)),
                 segment: engine.segment_live(),
                 segment_result: engine.last_segment_result.as_ref().filter(|_| show_segment),
-                group_status: group.as_ref().map(|g| g.status()),
+                group_status: group.as_ref().map(|g| g.status()).or_else(|| obn.as_ref().map(|o| o.status())),
             };
             let _ = app.emit("ride:state", &state);
         }

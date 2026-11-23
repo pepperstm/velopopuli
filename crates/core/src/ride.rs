@@ -38,6 +38,11 @@ pub struct Rival {
     pub color: u32,
     pub distance: f64,
     pub speed: f64,
+    /// When a remote rider's last position arrived, on the engine's wall clock
+    /// ([`RideEngine::clock`]). Used to move them on between updates, so 1 Hz updates don't
+    /// look jerky.
+    #[serde(skip)]
+    pub updated: f64,
     /// Bots hold a constant power; the ghost replays a recorded trace.
     #[serde(skip)]
     pub power: f64,
@@ -128,6 +133,9 @@ pub struct RideEngine {
     pub speed: f64,
     /// Moving time in seconds; the clock stops when the rider does.
     pub elapsed: f64,
+    /// Seconds ticked since the ride started, paused or not. Remote riders keep riding while
+    /// this rider stands still, so they move on by this clock rather than by `elapsed`.
+    pub clock: f64,
     pub moving: bool,
     pub user_paused: bool,
     pub finished: bool,
@@ -205,10 +213,32 @@ impl RideEngine {
         // A recorded trace covers one trip along the route, so there are no ghosts on a lap ride.
         if laps.is_none() && pb.as_ref().is_some_and(|p| p.trace.len() > 1) {
             let trace = Arc::new(pb.as_ref().unwrap().trace.clone());
-            rivals.push(Rival { id: "ghost".into(), name: "Your best".into(), kind: RivalKind::Ghost, color: 0xffffff, distance: 0.0, speed: 0.0, power: 0.0, mass: 0.0, trace: Some(trace) });
+            rivals.push(Rival {
+                id: "ghost".into(),
+                name: "Your best".into(),
+                kind: RivalKind::Ghost,
+                color: 0xffffff,
+                distance: 0.0,
+                speed: 0.0,
+                updated: 0.0,
+                power: 0.0,
+                mass: 0.0,
+                trace: Some(trace),
+            });
         }
         for g in options.ghosts.iter().filter(|_| laps.is_none()) {
-            rivals.push(Rival { id: g.id.clone(), name: g.name.clone(), kind: RivalKind::Ghost, color: g.color, distance: 0.0, speed: 0.0, power: 0.0, mass: 0.0, trace: Some(g.trace.clone()) });
+            rivals.push(Rival {
+                id: g.id.clone(),
+                name: g.name.clone(),
+                kind: RivalKind::Ghost,
+                color: g.color,
+                distance: 0.0,
+                speed: 0.0,
+                updated: 0.0,
+                power: 0.0,
+                mass: 0.0,
+                trace: Some(g.trace.clone()),
+            });
         }
         if settings.bots.enabled {
             for (i, wkg) in settings.bots.wkg.iter().enumerate() {
@@ -219,6 +249,7 @@ impl RideEngine {
                     color: BOT_COLORS[i % BOT_COLORS.len()],
                     distance: 0.0,
                     speed: 0.0,
+                    updated: 0.0,
                     power: wkg * 75.0,
                     mass: 75.0 + 8.5,
                     trace: None,
@@ -235,6 +266,7 @@ impl RideEngine {
             laps,
             speed: 0.0,
             elapsed: 0.0,
+            clock: 0.0,
             moving: false,
             user_paused: false,
             finished: false,
@@ -294,6 +326,10 @@ impl RideEngine {
         self.power = input.power;
         self.cadence = input.cadence;
         self.hr = input.hr;
+        // Other riders don't wait for this one: move them on before any early return.
+        let wall_dt = dt.clamp(0.0, 0.25);
+        self.clock += wall_dt;
+        self.step_remotes(wall_dt);
         if self.finished || self.user_paused {
             self.moving = false;
             return;
@@ -359,6 +395,19 @@ impl RideEngine {
         }
     }
 
+    /// Moves remote riders on at their last speed for at most two seconds, so 1 Hz updates from
+    /// other apps (and group rides) look smooth instead of jumping. On a loop they go round
+    /// even when this ride is "once round": they are riding laps of their own.
+    fn step_remotes(&mut self, dt: f64) {
+        let (total, wrap, clock) = (self.route.total, self.route.closed, self.clock);
+        for r in self.rivals.iter_mut().filter(|r| r.kind == RivalKind::Remote) {
+            if clock - r.updated <= 2.0 + 1e-9 {
+                let d = r.distance + r.speed * dt;
+                r.distance = if wrap { d.rem_euclid(total) } else { d.min(total) };
+            }
+        }
+    }
+
     fn step_rivals(&mut self, dt: f64) {
         let lap_ride = self.lap_ride();
         let params: Vec<PhysicsParams> = self.rivals.iter().map(|r| self.params_at(r.distance, r.mass)).collect();
@@ -369,6 +418,7 @@ impl RideEngine {
                     r.speed = if dt > 0.0 { (d - r.distance) / dt } else { 0.0 };
                     r.distance = d;
                 }
+                // Moved on by `step_remotes`, which runs whether or not this rider is moving.
                 RivalKind::Remote => {}
                 RivalKind::Bot if lap_ride => {
                     let p = self.route.sample_at(r.distance);
@@ -530,15 +580,16 @@ impl RideEngine {
         power_curve(&self.samples.iter().map(|s| s.power).collect::<Vec<_>>())
     }
 
-    /// Sets a group-ride partner's position (adds them if new).
+    /// Sets a group-ride partner's or another app's rider position (adds them if new).
     pub fn set_remote(&mut self, id: &str, name: &str, color: u32, distance: f64, speed: f64) {
         let distance = distance.clamp(0.0, self.route.total);
         if let Some(r) = self.rivals.iter_mut().find(|r| r.id == id) {
             r.distance = distance;
             r.speed = speed;
             r.name = name.to_string();
+            r.updated = self.clock;
         } else {
-            self.rivals.push(Rival { id: id.into(), name: name.into(), kind: RivalKind::Remote, color, distance, speed, power: 0.0, mass: 0.0, trace: None });
+            self.rivals.push(Rival { id: id.into(), name: name.into(), kind: RivalKind::Remote, color, distance, speed, updated: self.clock, power: 0.0, mass: 0.0, trace: None });
         }
     }
 
