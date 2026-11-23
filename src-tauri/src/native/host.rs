@@ -49,6 +49,12 @@ impl HostView {
         self.view.window().is_some_and(|w| w.occlusionState().contains(NSWindowOcclusionState::Visible))
     }
 
+    /// Hides or shows the drawing, e.g. while the window is a see-through overlay. Must run on
+    /// the main thread.
+    pub fn set_hidden(&self, hidden: bool) {
+        self.view.setHidden(hidden);
+    }
+
     /// Must run on the main thread.
     pub fn remove(self) {
         self.view.removeFromSuperview();
@@ -72,6 +78,8 @@ impl HostView {
     pub fn visible(&self) -> bool {
         true
     }
+
+    pub fn set_hidden(&self, _: bool) {}
 
     pub fn remove(self) {}
 }

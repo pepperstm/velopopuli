@@ -207,6 +207,8 @@ struct Control {
     size: (u32, u32),
     /// False while the window can't be seen; drawing pauses.
     hidden: bool,
+    /// Paused on purpose (the window is an overlay): nothing is drawn and the view is hidden.
+    paused: bool,
     error: Option<String>,
 }
 
@@ -277,6 +279,17 @@ impl Native {
 
     pub fn set_camera(&self, i: usize) {
         self.control.lock().unwrap().camera = i % CAMERAS.len();
+    }
+
+    /// Stops drawing and hides the picture, or carries on, while the window is an overlay.
+    pub fn set_paused(&self, paused: bool) {
+        self.control.lock().unwrap().paused = paused;
+        let host = self.host.clone();
+        let _ = self.app.run_on_main_thread(move || {
+            if let Some(h) = host.lock().unwrap().as_ref() {
+                h.set_hidden(paused);
+            }
+        });
     }
 
     pub fn set_look(&self, look: Look) {
@@ -845,7 +858,7 @@ impl Renderer {
             let (size, cam_mode, new_look, capture, hidden) = {
                 let mut c = control.lock().unwrap();
                 let capture = c.capture.take();
-                let hidden = c.hidden && capture.is_none();
+                let hidden = (c.hidden || c.paused) && capture.is_none();
                 (c.size, c.camera, c.look.take(), capture, hidden)
             };
             // Nobody can see it: don't spend the power (a pending capture still gets its frame).

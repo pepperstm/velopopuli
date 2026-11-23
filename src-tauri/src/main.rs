@@ -11,6 +11,7 @@ mod issues;
 mod library;
 mod mapdata;
 mod native;
+mod overlay;
 mod photos;
 mod secrets;
 mod session;
@@ -46,6 +47,8 @@ pub struct AppState {
     pub session: Mutex<Option<Arc<Session>>>,
     /// The native renderer, while a ride uses it.
     pub native: Mutex<Option<native::Native>>,
+    /// The ordinary window, while the ride is shown as a floating overlay.
+    pub overlay: Mutex<Option<overlay::Normal>>,
     pub http: reqwest::Client,
     /// Held while the ride list is read, changed and written back by an upload, so two connectors
     /// finishing at once don't overwrite each other's record.
@@ -85,6 +88,7 @@ fn main() {
                 demo: Arc::new(DemoRider::default()),
                 session: Mutex::new(None),
                 native: Mutex::new(None),
+                overlay: Mutex::new(None),
                 http,
                 rides_lock: Mutex::new(()),
             });
@@ -174,6 +178,8 @@ fn main() {
             commands::native_capture,
             commands::native_saving,
             commands::native_available,
+            commands::native_pause,
+            commands::overlay_set,
             commands::ride_finish,
             commands::ride_abort,
             commands::connectors_list,
