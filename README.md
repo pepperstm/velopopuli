@@ -123,6 +123,22 @@ Group rides: run `cargo run --release -p velopopuli-relay` on a machine everyone
 
 To inspect a recorded ride: `cargo run -p velopopuli-core --example fitinfo -- path/to/ride.fit`.
 
+## Tropical routes
+
+In the lowland tropics (within about 23.5° of the equator and below about 1,200 m) a route looks like the real place rather than a European lane: palms and rain trees instead of spruce and birch, and on main roads a planted median with palms and double-arm street lamps, concrete median barriers on open divided roads, cream walls along housing estates, and yellow road paint in the Americas. What kind of road each stretch is (a built-up avenue, an open divided road, a country road, a town street) is worked out from the map. **Settings → Virtual world → Open road** takes the race barriers away and lays kerbs and sidewalks where the road is built up. Routes elsewhere are unchanged.
+
+### Open data for a route
+
+For more of the real things along a tropical route, in their real places, prepare its open-data pack once with the script in `tools/opendata` (needs [uv](https://docs.astral.sh/uv/)):
+
+```bash
+cd tools/opendata
+uv run opendata --list            # the routes in your library, with their ids
+uv run opendata --route <id>      # writes data/opendata-<id>.json next to the route
+```
+
+On a Mac, double-click `tools/opendata/preparar_datos.command` instead. The script fetches only the route's corridor (500 m either side) from open sources: power lines with their towers and poles, street lamps, cycle lanes, median barriers and water towers from OpenStreetMap; the buildings OpenStreetMap lacks from Overture Maps (Google Open Buildings and Microsoft ML Buildings); one tree per crown from Meta and WRI's 1 m canopy height maps; water and wetland from ESA WorldCover; and, with a Mapillary token in the settings, street lamps and poles detected in Mapillary's photos. A source that is down is left out and named; run it again later to fill it in. The next ride on the route uses the pack.
+
 ## Connecting hardware
 
 <img src="docs/images/screen-devices.jpg" alt="The Devices page, looking for a heart-rate strap remembered from last time, with the demo rider connected" width="680">
@@ -253,6 +269,7 @@ The logs themselves live in the app's data folder under `logs/` (**Settings → 
 
 - Map tiles, building and scenery data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL), via the OSM tile servers, the public [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) instances and [vector.openstreetmap.org](https://vector.openstreetmap.org). Heavy users should configure their own servers, per the OSM usage policies.
 - Place search by [Nominatim](https://nominatim.org) and route planning by [BRouter](https://brouter.de) (both OpenStreetMap-based); waymarked mountain-bike routes from OpenStreetMap through the [Overpass API](https://overpass-api.de); weather from [Open-Meteo](https://open-meteo.com); street-level photos from [Mapillary](https://www.mapillary.com) (CC BY-SA).
+- In a route's open-data pack (`tools/opendata`): buildings from [Overture Maps](https://overturemaps.org) (ODbL), including [Google Open Buildings](https://sites.research.google/open-buildings/) (CC BY 4.0) and Microsoft ML Buildings (ODbL); trees from Meta and World Resources Institute's [High Resolution Canopy Height Maps](https://registry.opendata.aws/dataforgood-fb-forests/) (CC BY 4.0, from Maxar imagery); water and wetland from [ESA WorldCover](https://esa-worldcover.org) 10 m 2021 v200 (CC BY 4.0); lamps and poles from [Mapillary](https://www.mapillary.com) map features.
 - Typefaces [DM Sans](https://github.com/googlefonts/dm-fonts) and [Manrope](https://github.com/googlefonts/manrope), bundled under the SIL Open Font Licence (`web/src/fonts/`).
 - Terrain from the [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) open dataset (Tilezen/Mapzen; sources include SRTM, USGS 3DEP, EU-DEM and others).
 - ANT+ access uses the ANT+ managed network key, which is issued to ANT+ adopters. If you distribute builds, register as an adopter (free) at [thisisant.com](https://www.thisisant.com).
