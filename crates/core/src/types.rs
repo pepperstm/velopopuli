@@ -257,6 +257,39 @@ pub struct Settings {
     pub diagnostics: bool,
     /// Real or virtual gears.
     pub gears: GearSettings,
+    /// How the app's screens look.
+    pub theme: Theme,
+    /// Beeps, chimes and fanfares during a ride.
+    pub sound: SoundSettings,
+}
+
+/// Sounds during a ride (made by the page).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SoundSettings {
+    /// Overall volume, 0 to 1.
+    pub volume: f64,
+    /// Countdown beeps before a workout step changes.
+    pub workout: bool,
+    /// Fanfares and chimes: summits, bests, laps, the finish.
+    pub moments: bool,
+}
+
+impl Default for SoundSettings {
+    fn default() -> Self {
+        Self { volume: 0.6, workout: true, moments: true }
+    }
+}
+
+/// How the app's screens look (not the 3D world).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    /// Frosted glass over a softly lit background, as on velopopuli.com.
+    #[default]
+    Glass,
+    /// Flat, solid panels: the look before Glass.
+    Simple,
 }
 
 impl Default for Settings {
@@ -279,6 +312,8 @@ impl Default for Settings {
             native_renderer: false,
             diagnostics: true,
             gears: Default::default(),
+            theme: Theme::Glass,
+            sound: Default::default(),
         }
     }
 }

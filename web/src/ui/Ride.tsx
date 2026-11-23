@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorText } from '../bridge'
-import { distUnit, distValue, fmtDist, fmtEle, fmtTime, gradeColor, speedUnit, speedValue, zoneColor } from '../core/fmt'
+import { distUnit, distValue, fmtDist, fmtEle, fmtTime, gradeColor, powerZone, speedUnit, speedValue, zoneColor } from '../core/fmt'
 import { wrapDist, wrapGap, type Route } from '../core/gpx'
 import { api, smokeHooks, useSettings } from '../state'
 import type { RideInit, RideRequest, RideState, RideSummary } from '../types'
@@ -8,7 +8,10 @@ import { WorkoutShape } from './Workouts'
 import { World } from '../world/scene'
 import { look, timeFromHour, weatherFromCode } from '../world/weather'
 import { MiniMap } from './MiniMap'
+import { OverlayPanel } from './OverlayPanel'
 import { StreetPhoto } from './StreetPhoto'
+import { RideSounds } from './rideSounds'
+import * as sound from '../core/sound'
 import { ProfileChart } from './ProfileChart'
 
 interface Props {
@@ -26,12 +29,6 @@ const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`
 function fmtGap(seconds: number): string {
   const s = Math.abs(seconds)
   return `${seconds <= 0 ? '−' : '+'}${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-}
-
-/** Coggan zone number for a power. */
-function zone(power: number, ftp: number): number {
-  const r = ftp > 0 ? power / ftp : 0
-  return [0.55, 0.75, 0.9, 1.05, 1.2, 1.5].filter((l) => r >= l).length + 1
 }
 
 export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX.Element {
@@ -163,6 +160,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         }
         smokeHooks.native = nativeRef.current
         const smoke = await api.smoke.config()
+        // Automated check: float as an overlay from 3 s in.
+        if (smoke?.overlay) setTimeout(() => void toggleOverlay(), 3000)
         for (let i = 0; i < (smoke?.camera ?? 0); i++) cycleCamera()
         // Automated check: shift this many gears (negative: easier), one every 0.4 s from 3 s in.
         const shifts = smoke?.shift ?? 0
@@ -170,8 +169,10 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
 
         let latest: { s: RideState; at: number } | null = null
         let received = 0
+        const sounds = new RideSounds(() => settingsRef.current.sound)
         offState = api.ride.onState((s) => {
           latest = { s, at: performance.now() }
+          sounds.update(s)
           smokeHooks.state = s
           // The simulation reports 20 times a second; the HUD only needs 5.
           if (received++ % 4 === 0) setHud(s)
@@ -190,7 +191,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           raf = requestAnimationFrame(loop)
           const dt = Math.min(0.1, (now - last) / 1000)
           last = now
-          if (!latest || nativeRef.current) return
+          // In overlay mode nothing of the 3D view is shown: don't spend the GPU on it.
+          if (!latest || nativeRef.current || overlayRef.current) return
           const s = latest.s
           // Glide between state updates so motion is smooth at any display refresh rate.
           const ahead = s.moving ? Math.min(0.25, (now - latest.at) / 1000) : 0
@@ -238,6 +240,12 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
       observer?.disconnect()
       offState?.()
       offLoading()
+      if (overlayRef.current) {
+        overlayRef.current = false
+        document.body.classList.remove('overlay')
+        // The ride's end puts the window back too; this covers leaving without one.
+        void api.overlay(false)
+      }
       smokeHooks.capture = null
       smokeHooks.native = false
       if (nativeRef.current) {
@@ -255,6 +263,23 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   }, [routeId, finish])
 
   const nativeRef = useRef(false)
+  /** Overlay mode: the window is a small see-through panel floating over other apps. */
+  const [overlay, setOverlay] = useState(false)
+  const overlayRef = useRef(false)
+  const toggleOverlay = async (): Promise<void> => {
+    const on = !overlayRef.current
+    try {
+      if (nativeRef.current) await api.native.pause(on)
+      await api.overlay(on)
+    } catch (err) {
+      void api.log(`overlay: ${errorText(err)}`)
+      if (nativeRef.current) void api.native.pause(false)
+      return
+    }
+    overlayRef.current = on
+    document.body.classList.toggle('overlay', on)
+    setOverlay(on)
+  }
   const workoutRef = useRef(false)
   workoutRef.current = Boolean(init?.workout)
   const pausedRef = useRef(false)
@@ -280,6 +305,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
       else if (gears.mode === 'virtual' && gears.keysEasier.includes(e.key)) void api.ride.shift(-1)
       else if (e.key === ' ') togglePause()
       else if (e.key === 'c' || e.key === 'C') cycleCamera()
+      else if (e.key === 'o' || e.key === 'O') void toggleOverlay()
       else if (e.key === 'ArrowUp') nudge(10)
       else if (e.key === 'ArrowDown') nudge(-10)
       else return
@@ -294,6 +320,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   useEffect(
     () =>
       api.ride.onControllerAction((action) => {
+        // A click, so the rider knows the press arrived without looking.
+        if (settingsRef.current.sound.moments && settingsRef.current.sound.volume > 0) sound.tick()
         if (action === 'shiftHarder') void api.ride.shift(1)
         else if (action === 'shiftEasier') void api.ride.shift(-1)
         else if (action === 'harder') nudge(10)
@@ -356,7 +384,11 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         </div>
       )}
 
-      {ready && (
+      {ready && overlay && (
+        <OverlayPanel route={route} init={init} hud={hud} settings={settings} lapRide={lapRide} onLeave={() => void toggleOverlay()} onPause={togglePause} />
+      )}
+
+      {ready && !overlay && (
         <>
           <div className="hud top">
             <div className="hud-title">
@@ -390,7 +422,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                 {Math.round(hud.power)}
               </div>
               <div className="tile-label">
-                watts · {(hud.power / settings.rider.weightKg).toFixed(1)} W/kg · Z{zone(hud.power, settings.rider.ftp)}
+                watts · {(hud.power / settings.rider.weightKg).toFixed(1)} W/kg · Z{powerZone(hud.power, settings.rider.ftp)}
               </div>
             </div>
             <div className="tile">
@@ -654,6 +686,9 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             <div className="controls">
               <button onClick={togglePause}>{hud.paused ? 'Resume' : 'Pause'}</button>
               <button onClick={() => cycleCamera()}>Camera</button>
+              <button onClick={() => void toggleOverlay()} title="Float the numbers and map over another app, such as a video (O)">
+                Overlay
+              </button>
               {init.workout && hud.workout ? null : (
                 <div className="seg">
                   <button className={mode === 'sim' ? 'on' : ''} onClick={() => setTrainer({ mode: 'sim' })} title="Trainer resistance follows the gradient">

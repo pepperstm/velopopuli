@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { levelFor } from './core/fmt'
-import { api, mergeSettings, refreshDevices, SettingsContext, smokeHooks, useDevices } from './state'
+import { api, applyTheme, mergeSettings, refreshDevices, SettingsContext, smokeHooks, useDevices } from './state'
 import { EMPTY_PROFILE, type Profile, type RideRequest, type RideSummary, type RouteMeta, type Settings } from './types'
 import { Devices } from './ui/Devices'
 import { Explore } from './ui/Explore'
@@ -107,6 +107,12 @@ export function App(): React.JSX.Element | null {
       void runSmoke(setScreen)
     })
   }, [])
+
+  // The theme: on the page itself, and remembered so the next launch starts in it (see main.tsx).
+  const theme = settings?.theme
+  useEffect(() => {
+    if (theme) applyTheme(theme)
+  }, [theme])
 
   // The profile changes when a ride is saved, so refresh it whenever a screen opens.
   useEffect(() => {
