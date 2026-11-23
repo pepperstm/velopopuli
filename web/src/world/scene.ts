@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { Barriers } from './barriers'
+import { createRenderer } from './gl'
 import { SURFACES, surfaceRuns, surfaceTexture } from './surfaces'
 import { api } from '../bridge'
 import { bankAt, halfWidthAt, leanAt, sampleAt, wrapDist, wrapGap, type Route, type RoutePos } from '../core/gpx'
@@ -223,7 +224,7 @@ export class World {
     /** A velodrome's track, with its own finish line painted on it: no arches. */
     private venue = false
   ) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
+    this.renderer = createRenderer(canvas)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     // Long-range haze: nearby hills stay crisp, far ranges fade into the sky.
     this.scene.fog = new THREE.Fog(HORIZON, 300, 8500)
