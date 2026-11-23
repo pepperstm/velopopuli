@@ -101,6 +101,13 @@ def fetch(c: Corridor) -> dict:
     jersey = overpass(f'[out:json][timeout:{TIMEOUT_S}];way["barrier"="jersey_barrier"](around:60,{line});out geom;')
     out["jersey"] = [[[g["lat"], g["lon"]] for g in e["geometry"]] for e in jersey["elements"] if len(e.get("geometry", [])) >= 2]
 
+    # The other roads in the corridor, so water from the land-cover map keeps off them.
+    try:
+        roads = overpass(f'[out:json][timeout:{TIMEOUT_S}];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|track|living_street)"](around:500,{line});out geom;')
+        out["_roads"] = [[(g["lat"], g["lon"]) for g in e["geometry"]] for e in roads["elements"] if len(e.get("geometry", [])) >= 2]
+    except OSError as why:
+        log.info("roads for clearing water left out: %s", why)
+
     towers = overpass(f'[out:json][timeout:{TIMEOUT_S}];(node["man_made"="water_tower"](around:2000,{line});way["man_made"="water_tower"](around:2000,{line}););out center;')
     out["water_towers"] = [[e.get("lat", e.get("center", {}).get("lat")), e.get("lon", e.get("center", {}).get("lon"))] for e in towers["elements"]]
     out["water_towers"] = [p for p in out["water_towers"] if None not in p]

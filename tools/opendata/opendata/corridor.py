@@ -2,8 +2,9 @@
 
 import math
 
+import numpy as np
+import shapely
 from shapely.geometry import LineString, Point, Polygon, box
-from shapely.ops import transform
 
 M_PER_DEG = 111_320.0
 
@@ -35,11 +36,11 @@ class Corridor:
 
     def local_geometry(self, geom):
         """A shapely geometry in (lon, lat) moved into local metres."""
-        return transform(lambda lon, lat, z=None: ((lon - self.lon0) * self._kx, (lat - self.lat0) * M_PER_DEG), geom)
+        return shapely.transform(geom, lambda a: np.column_stack(((a[:, 0] - self.lon0) * self._kx, (a[:, 1] - self.lat0) * M_PER_DEG)))
 
     def lonlat_geometry(self, geom):
         """A shapely geometry in local metres moved back into (lon, lat)."""
-        return transform(lambda x, y, z=None: (self.lon0 + x / self._kx, self.lat0 + y / M_PER_DEG), geom)
+        return shapely.transform(geom, lambda a: np.column_stack((self.lon0 + a[:, 0] / self._kx, self.lat0 + a[:, 1] / M_PER_DEG)))
 
     def contains(self, lat: float, lon: float) -> bool:
         return self.area.contains(Point(self.to_local(lat, lon)))

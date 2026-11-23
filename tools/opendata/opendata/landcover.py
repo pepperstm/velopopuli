@@ -9,7 +9,7 @@ import rasterio
 from rasterio.features import shapes
 from rasterio.windows import from_bounds
 from shapely.geometry import shape
-from shapely.ops import transform as shp_transform
+from shapely.ops import unary_union
 
 from .corridor import Corridor
 
@@ -28,24 +28,29 @@ def tile_name(lat: float, lon: float) -> str:
     return f"{'N' if south >= 0 else 'S'}{abs(south):02d}{'E' if west >= 0 else 'W'}{abs(west):03d}"
 
 
+PIECE_M = 3000.0
+
+
 def fetch(c: Corridor) -> dict:
-    s, w, n, e = c.bbox()
-    names = {tile_name(lat, lon) for lat in (s, n) for lon in (w, e)}
+    """Water and wetland in the corridor, read a piece of route at a time."""
     keep = c.area.difference(c.line.buffer(CLEAR_OF_ROUTE_M))
+    found = []
+    for s, w, n, e in c.pieces(PIECE_M):
+        piece = c.local_box(s, w, n, e).intersection(keep)
+        for name in sorted({tile_name(lat, lon) for lat in (s, n) for lon in (w, e)}):
+            with rasterio.open(f"/vsicurl/{BASE}/ESA_WorldCover_10m_2021_v200_{name}_Map.tif") as src:
+                window = from_bounds(w, s, e, n, transform=src.transform).round_offsets().round_lengths()
+                classes = src.read(1, window=window, boundless=True, fill_value=0)
+                wet = np.isin(classes, (WATER, WETLAND)).astype(np.uint8)
+                for geom, value in shapes(wet, mask=wet.astype(bool), transform=src.window_transform(window)):
+                    if value == 1:
+                        found.append(c.local_geometry(shape(geom)).intersection(piece))
+    merged = unary_union([g for g in found if not g.is_empty]).simplify(SIMPLIFY_M) if found else None
     areas = []
-    for name in sorted(names):
-        with rasterio.open(f"/vsicurl/{BASE}/ESA_WorldCover_10m_2021_v200_{name}_Map.tif") as src:
-            window = from_bounds(w, s, e, n, transform=src.transform).round_offsets().round_lengths()
-            classes = src.read(1, window=window, boundless=True, fill_value=0)
-            wet = np.isin(classes, (WATER, WETLAND)).astype(np.uint8)
-            for geom, value in shapes(wet, mask=wet.astype(bool), transform=src.window_transform(window)):
-                if value != 1:
-                    continue
-                local = c.local_geometry(shape(geom)).intersection(keep).simplify(SIMPLIFY_M)
-                for part in getattr(local, "geoms", [local]):
-                    if part.geom_type != "Polygon" or part.area < MIN_AREA_M2:
-                        continue
-                    back = shp_transform(lambda x, y, z=None: c.to_latlon(x, y), part)
-                    areas.append([[[lat, lon] for lat, lon in ring.coords] for ring in [back.exterior, *back.interiors]])
+    for part in getattr(merged, "geoms", [merged] if merged is not None else []):
+        if part.geom_type != "Polygon" or part.area < MIN_AREA_M2:
+            continue
+        back = c.lonlat_geometry(part)
+        areas.append([[[lat, lon] for lon, lat in ring.coords] for ring in [back.exterior, *back.interiors]])
     log.info("WorldCover: %d areas of water and wetland", len(areas))
     return {"water": areas}

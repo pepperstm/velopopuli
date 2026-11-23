@@ -42,10 +42,18 @@ def fetch(c: Corridor, token: str) -> dict:
         raise OSError(f"the route covers {len(tiles)} Mapillary tiles, more than {MAX_TILES}")
     lamps, poles = [], []
     for tx, ty in tiles:
-        reply = requests.get(TILES.format(x=tx, y=ty, token=token), headers={"User-Agent": USER_AGENT}, timeout=30)
+        try:
+            reply = requests.get(TILES.format(x=tx, y=ty, token=token), headers={"User-Agent": USER_AGENT}, timeout=30)
+        except requests.RequestException as why:
+            log.info("Mapillary tile %d/%d: %s", tx, ty, str(why).replace(token, "…"))
+            continue
         if reply.status_code == 404:
             continue
-        reply.raise_for_status()
+        if reply.status_code in (401, 403):
+            raise OSError(f"Mapillary refused the token (HTTP {reply.status_code})")
+        if not reply.ok:
+            log.info("Mapillary tile %d/%d: HTTP %d", tx, ty, reply.status_code)
+            continue
         for layer in mapbox_vector_tile.decode(reply.content).values():
             extent = layer.get("extent", 4096)
             for f in layer.get("features", []):

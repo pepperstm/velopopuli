@@ -13,7 +13,7 @@ from rasterio.features import geometry_mask
 from rasterio.warp import transform, transform_bounds
 from rasterio.windows import Window, from_bounds
 from shapely.geometry import box, mapping, shape
-from shapely.ops import transform as shp_transform
+import shapely
 
 from . import USER_AGENT
 from .corridor import Corridor
@@ -70,7 +70,7 @@ def fetch(c: Corridor, cache: Path) -> dict:
                     continue
                 win_transform = src.window_transform(window)
                 # Only the crowns within the corridor.
-                strip = shp_transform(partial(_to_crs, src.crs), c.lonlat_geometry(c.area.intersection(c.local_box(s, w, n, e))))
+                strip = shapely.transform(c.lonlat_geometry(c.area.intersection(c.local_box(s, w, n, e))), partial(_to_crs, src.crs))
                 outside = geometry_mask([mapping(strip)], out_shape=canopy.shape, transform=win_transform)
                 canopy = np.where(outside, 0, canopy)
                 tops = crown_tops(canopy, MIN_HEIGHT_M, NEIGHBOURHOOD_PX)
@@ -86,7 +86,7 @@ def fetch(c: Corridor, cache: Path) -> dict:
 
 
 
-def _to_crs(crs, x, y, z=None):
-    """For shapely's transform: (lon, lat) arrays into `crs`."""
-    xs, ys = transform("EPSG:4326", crs, list(np.atleast_1d(x)), list(np.atleast_1d(y)))
-    return np.array(xs), np.array(ys)
+def _to_crs(crs, coords: np.ndarray) -> np.ndarray:
+    """For shapely.transform: (lon, lat) coordinates into `crs`."""
+    xs, ys = transform("EPSG:4326", crs, list(coords[:, 0]), list(coords[:, 1]))
+    return np.column_stack((xs, ys))

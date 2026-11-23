@@ -30,18 +30,25 @@ def height_of(height: float | None, floors: int | None) -> float:
     return DEFAULT_HEIGHT_M
 
 
+PIECE_M = 2000.0
+
+
+def piece_filter(pieces: list[tuple[float, float, float, float]]) -> tuple[str, list[float]]:
+    """A WHERE clause asking only for the boxes along the route (south, west, north, east each),
+    not the whole route's bounding box, and its parameters."""
+    clause = " OR ".join("(bbox.xmin > ? AND bbox.xmax < ? AND bbox.ymin > ? AND bbox.ymax < ?)" for _ in pieces)
+    params = [v for s, w, n, e in pieces for v in (w, e, s, n)]
+    return f"({clause})", params
+
+
 def fetch(c: Corridor) -> dict:
-    s, w, n, e = c.bbox()
+    where, params = piece_filter(c.pieces(PIECE_M))
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';")
-    rows = con.execute(
-        f"""SELECT sources[1].dataset, height, num_floors, geometry FROM read_parquet('{SOURCE}', hive_partitioning=1)
-            WHERE bbox.xmin > ? AND bbox.xmax < ? AND bbox.ymin > ? AND bbox.ymax < ?""",
-        [w, e, s, n],
-    ).fetchall()
-    log.info("Overture: %d buildings in the route's box", len(rows))
+    rows = con.execute(f"SELECT DISTINCT id, sources[1].dataset, height, num_floors, geometry FROM read_parquet('{SOURCE}', hive_partitioning=1) WHERE {where}", params).fetchall()
+    log.info("Overture: %d buildings along the route", len(rows))
     out = []
-    for source, height, floors, geometry in rows:
+    for _id, source, height, floors, geometry in rows:
         if not wanted(source):
             continue
         shape = wkb.loads(bytes(geometry))

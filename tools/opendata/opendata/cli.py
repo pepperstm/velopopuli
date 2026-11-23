@@ -71,7 +71,18 @@ def main(argv: list[str] | None = None) -> int:
     for s in args.skip:
         sources.pop(skip[s], None)
     log.info("route %s: %.1f km, corridor %.0f m either side", args.route, c.line.length / 1000, CORRIDOR_M)
-    contents = pack.assemble(sources, trees_corridor_m=CORRIDOR_M)
+    previous_path = data_dir / "data" / f"opendata-{args.route}.json"
+    try:
+        previous = json.loads(previous_path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        previous = None
+    contents = pack.assemble(sources, trees_corridor_m=CORRIDOR_M, previous=previous)
+    contents["water"] = pack.clear_water(contents["water"], contents["buildings"], contents.pop("_roads", []), c)
+    if not pack.worth_writing(contents):
+        log.error("every source failed; the pack on disk is left as it was")
+        for failure in contents["failed"]:
+            log.warning("left out: %s", failure)
+        return 1
     path = pack.write(data_dir, args.route, contents)
     log.info("wrote %s (%d buildings, %d trees, %d lamps, %d power lines)", path, len(contents["buildings"]), len(contents["trees"]), len(contents["lamps"]), len(contents["power_lines"]))
     for failure in contents["failed"]:
