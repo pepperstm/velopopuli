@@ -1,6 +1,13 @@
 // No console window alongside the app on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+/// The version riders see in reports: the release tag CI builds from (0.4.0-rc.1, say), or the
+/// crate version for any other build. Installers can't carry a suffix like -rc.1, so it's kept here.
+pub const VERSION: &str = match option_env!("VP_RELEASE_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 mod commands;
 mod connectors;
 mod devices;

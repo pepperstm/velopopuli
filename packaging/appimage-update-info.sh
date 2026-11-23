@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Embeds update information in the AppImage and writes its .zsync file next to it, so
-# AppImageUpdate and similar tools can update it from the latest GitHub release.
+# AppImageUpdate and similar tools can update it from GitHub releases.
 #
 #   packaging/appimage-update-info.sh target/release/bundle/appimage/VeloPopuli_X.Y.Z_amd64.AppImage
 #
@@ -10,8 +10,12 @@ set -euo pipefail
 
 appimage=$(realpath "$1")
 tool=${APPIMAGETOOL:-appimagetool}
-# Only full releases: "latest" skips pre-releases such as 0.4.0-beta.1.
-info="gh-releases-zsync|pepperstm|velopopuli|latest|VeloPopuli_*_amd64.AppImage.zsync"
+# A full release updates only to full releases ("latest" skips pre-releases). A release
+# candidate (VP_RELEASE_VERSION=0.4.0-rc.1) updates to the newest release of any kind, so a
+# tester moves on to the next candidate, then the full release, never back to the last one.
+channel=latest
+if [[ "${VP_RELEASE_VERSION:-}" == *-* ]]; then channel=latest-all; fi
+info="gh-releases-zsync|pepperstm|velopopuli|$channel|VeloPopuli_*_amd64.AppImage.zsync"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
