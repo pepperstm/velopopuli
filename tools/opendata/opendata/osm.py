@@ -26,7 +26,13 @@ def overpass(query: str) -> dict:
             try:
                 reply = requests.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT_S + 15)
                 reply.raise_for_status()
-                return reply.json()
+                body = reply.json()
+                # A server that ran out of time or memory still answers 200, with a remark and
+                # whatever it had found so far: that is a failure, not an empty answer.
+                remark = str(body.get("remark", ""))
+                if "error" in remark.lower() or "timed out" in remark.lower():
+                    raise ValueError(f"incomplete answer: {remark[:120]}")
+                return body
             except (requests.RequestException, ValueError) as why:
                 last = why
                 log.info("Overpass %s: %s", server, why)

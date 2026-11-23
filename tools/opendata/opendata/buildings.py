@@ -30,7 +30,7 @@ def height_of(height: float | None, floors: int | None) -> float:
     return DEFAULT_HEIGHT_M
 
 
-PIECE_M = 2000.0
+PIECE_M = 10_000.0
 
 
 def piece_filter(pieces: list[tuple[float, float, float, float]]) -> tuple[str, list[float]]:
@@ -41,11 +41,25 @@ def piece_filter(pieces: list[tuple[float, float, float, float]]) -> tuple[str, 
     return f"({clause})", params
 
 
+def boxes(c: Corridor) -> list[tuple[float, float, float, float]]:
+    """The boxes the buildings are asked for in: one per 10 km of route. A box per query lets the
+    reader skip every file that misses it (one query OR-ing many boxes can't, and reads them all);
+    long pieces keep the queries few, as each costs half a minute whatever its size."""
+    return c.pieces(PIECE_M)
+
+
 def fetch(c: Corridor) -> dict:
-    where, params = piece_filter(c.pieces(PIECE_M))
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';")
-    rows = con.execute(f"SELECT DISTINCT id, sources[1].dataset, height, num_floors, geometry FROM read_parquet('{SOURCE}', hive_partitioning=1) WHERE {where}", params).fetchall()
+    seen: set[str] = set()
+    rows = []
+    for box in boxes(c):
+        where, params = piece_filter([box])
+        for row in con.execute(f"SELECT id, sources[1].dataset, height, num_floors, geometry FROM read_parquet('{SOURCE}', hive_partitioning=1) WHERE {where}", params).fetchall():
+            if row[0] not in seen:
+                seen.add(row[0])
+                rows.append(row)
+        log.info("Overture: %d buildings so far", len(rows))
     log.info("Overture: %d buildings along the route", len(rows))
     out = []
     for _id, source, height, floors, geometry in rows:

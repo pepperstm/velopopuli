@@ -72,3 +72,30 @@ def test_the_mapillary_token_never_reaches_the_log_or_the_pack():
 def test_buildings_are_asked_for_piece_by_piece():
     sql, params = buildings.piece_filter([(-2.1, -79.9, -2.09, -79.88), (-2.09, -79.88, -2.08, -79.87)])
     assert sql.count("bbox.xmin") == 2 and len(params) == 8
+
+
+class FakeReply:
+    def __init__(self, body: dict, status: int = 200) -> None:
+        self.body, self.status_code = body, status
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise __import__("requests").HTTPError(f"HTTP {self.status_code}")
+
+    def json(self) -> dict:
+        return self.body
+
+
+def test_an_overpass_timeout_reported_in_a_good_reply_is_a_failure(monkeypatch):
+    from opendata import osm
+
+    replies = [FakeReply({"remark": "runtime error: Query timed out in \"query\" at line 1 after 60 seconds.", "elements": []}), FakeReply({"elements": [{"type": "node", "id": 1, "lat": 0, "lon": 0}]})]
+    monkeypatch.setattr(osm.requests, "post", lambda *a, **k: replies.pop(0))
+    monkeypatch.setattr(osm.time, "sleep", lambda s: None)
+    assert osm.overpass("q")["elements"][0]["id"] == 1, "the next server's real answer, not the empty one"
+
+
+def test_buildings_come_in_a_few_long_pieces():
+    c = corridor.Corridor([(-2.10 + k * 0.01, -79.87) for k in range(30)], 500.0)  # about 32 km
+    boxes = buildings.boxes(c)
+    assert 3 <= len(boxes) <= 5
