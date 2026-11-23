@@ -257,6 +257,8 @@ pub struct Settings {
     pub diagnostics: bool,
     /// Real or virtual gears.
     pub gears: GearSettings,
+    /// How the app's screens look.
+    pub theme: Theme,
     /// Beeps, chimes and fanfares during a ride.
     pub sound: SoundSettings,
 }
@@ -279,6 +281,17 @@ impl Default for SoundSettings {
     }
 }
 
+/// How the app's screens look (not the 3D world).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    /// Frosted glass over a softly lit background, as on velopopuli.com.
+    #[default]
+    Glass,
+    /// Flat, solid panels: the look before Glass.
+    Simple,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -299,6 +312,7 @@ impl Default for Settings {
             native_renderer: false,
             diagnostics: true,
             gears: Default::default(),
+            theme: Theme::Glass,
             sound: Default::default(),
         }
     }

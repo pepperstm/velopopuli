@@ -513,6 +513,13 @@ export function SettingsScreen(): React.JSX.Element {
               <option value="imperial">Imperial (mi, ft)</option>
             </select>
           </label>
+          <label className="field">
+            <span>Theme</span>
+            <select value={settings.theme} onChange={(e) => update((s) => ({ ...s, theme: e.target.value as Settings['theme'] }))}>
+              <option value="glass">Glass</option>
+              <option value="simple">Simple</option>
+            </select>
+          </label>
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react'
 import { api } from './bridge'
-import { DEFAULT_SETTINGS, type Badge, type DevicesSnapshot, type Settings } from './types'
+import { DEFAULT_SETTINGS, type Badge, type DevicesSnapshot, type Settings, type Theme } from './types'
 
 export { api }
 
@@ -93,4 +93,25 @@ export const smokeHooks: { capture: (() => string) | null; state: unknown; world
   state: null,
   world: null,
   native: false
+}
+
+const THEME_KEY = 'vp-theme'
+
+/** Shows the app in `theme` (see glass.css), and remembers it for the next launch. */
+export function applyTheme(theme: Theme): void {
+  document.documentElement.dataset.theme = theme
+  try {
+    localStorage.setItem(THEME_KEY, theme)
+  } catch {
+    // Remembering it only saves a flash of the other theme at start-up.
+  }
+}
+
+/** The theme the app last used, to start in before the settings have loaded. */
+export function rememberedTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'simple' ? 'simple' : 'glass'
+  } catch {
+    return 'glass'
+  }
 }

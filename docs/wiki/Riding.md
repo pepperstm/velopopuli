@@ -29,11 +29,22 @@ Then press **Start riding**.
 |---|---|
 | `Space` | Pause and resume |
 | `C` | Change camera: behind, high behind, alongside, overhead |
+| `O` | Overlay mode on or off |
 | `↑` / `↓` | Raise or lower the ERG target, the workout's intensity, or the demo rider's effort |
 
 The same controls are on screen, along the bottom. A [handlebar controller](Virtual-gears#controllers) can do them too.
 
 ![Overhead camera](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-hairpins.jpg)
+
+### Overlay mode: ride while watching something
+
+Press **Overlay** (or `O`) to shrink the ride to a small see-through panel that floats above every other window. It shows your power, speed, heart rate, cadence, gear, the gradient, distance to go, your workout step and the map, so you can watch YouTube, a race or a film in another app while you ride.
+
+- Drag the panel by its top bar and resize it from its edges. It comes back in the same place next time.
+- **◐** changes how see-through it is. **⤢** (or `O`) goes back to the full window.
+- The 3D view stops drawing while the panel is up, leaving the graphics card to the video.
+- A [handlebar controller](Virtual-gears#controllers) keeps working while the video has the keyboard.
+- On macOS the panel floats over a normal or maximised browser window, but not over the browser's own full-screen mode. On Linux, the see-through look needs a compositing desktop.
 
 ## How hard it feels
 
