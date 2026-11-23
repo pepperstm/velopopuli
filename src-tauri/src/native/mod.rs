@@ -20,7 +20,8 @@ use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use velopopuli_core::ride::{RideEngine, RivalKind};
 use velopopuli_core::world::{
-    barrier_model, sprite_frame, surface_runs, tree_model, GridMesh, Surface, World, BARRIER_LOOKS, FORD, LAYOUT, SINGLETRACK, SPRITES_FROM, TIMBER, TRACK, TREE_FLOATS, TREE_KINDS, UNMARKED,
+    barrier_model, sprite_frame, surface_runs, tree_model, GridMesh, Surface, World, BARRIER_LOOKS, DOUBLE_YELLOW, FORD, LAYOUT, ONEWAY_AMERICAS, SINGLETRACK, SPRITES_FROM, TIMBER, TRACK,
+    TREE_FLOATS, TREE_KINDS, UNMARKED, YELLOW,
 };
 use wgpu::util::DeviceExt;
 
@@ -1454,6 +1455,9 @@ impl SceneMeshes {
                     _ if look == SINGLETRACK => "road_singletrack",
                     _ if look == TRACK => "road_track",
                     _ if look == FORD => "road_ford",
+                    _ if look == YELLOW => "road_yellow",
+                    _ if look == DOUBLE_YELLOW => "road_double-yellow",
+                    _ if look == ONEWAY_AMERICAS => "road_oneway-americas",
                     Some(Surface::Concrete) => "road_concrete",
                     Some(Surface::Cobbles) => "road_cobbles",
                     Some(Surface::Gravel) => "road_gravel",

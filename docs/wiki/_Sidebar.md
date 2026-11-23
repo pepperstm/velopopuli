@@ -7,6 +7,7 @@
 
 **Using the app**
 - [[Routes and the map]]
+- [[Tropical routes]]
 - [[Riding]]
 - [[Workouts]]
 - [[Virtual gears]]
