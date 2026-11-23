@@ -8,12 +8,20 @@ Press **Ride** on a route. Before you start you can choose:
 
 - **Direction** (Herne Hill only): anticlockwise, as raced, or clockwise.
 - **Laps**, on a route that ends where it starts (see [below](#laps)).
+- **The road:** a closed race or a road ride (see [below](#closed-race-or-road-ride)).
 - **Workout:** ride a structured session on the route (see [[Workouts]]).
 - **Ghosts to race:** your best ride on the route, and others you add (see [Racing](#racing)).
 - **Segments:** with [[Strava]] connected, find the Strava segments along the route to be timed on.
 - **Group ride:** ride with friends (see [[Group rides and self-hosting]]).
 
 Then press **Start riding**.
+
+## Closed race or road ride
+
+- **Closed race:** the road closed to traffic, as on a race day: crowd barriers line both sides, with netting round the outside of tight hairpins.
+- **Road ride:** the road as it is on an ordinary day. There are no crowd barriers or netting, and kerbs and pavements line the road where it is built up: along both sides of a town street, and along the outer side of a divided road through town.
+
+More of the real road will come to road rides: junctions that join up, the road's own markings and street furniture.
 
 ## The screen
 

@@ -13,13 +13,18 @@ mod landmarks;
 mod mesh;
 mod mvt;
 mod roads;
+mod roadside;
 mod scenery;
 mod structures;
 mod surface;
 mod trees;
+mod tropics;
 mod venue;
 
-pub use barriers::{barrier_model, BANNER_COLOURS, FENCE as BARRIER_FENCE, LOOKS as BARRIER_LOOKS, SECTION_M as BARRIER_SECTION_M};
+pub use barriers::{
+    barrier_model, BANNER_COLOURS, FENCE as BARRIER_FENCE, JERSEY as BARRIER_JERSEY, LAMP_DOUBLE as BARRIER_LAMP_DOUBLE, LAMP_SINGLE as BARRIER_LAMP_SINGLE, LOOKS as BARRIER_LOOKS,
+    SECTION_M as BARRIER_SECTION_M,
+};
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
 pub use fields::{parse_boundaries, Boundary, MappedBoundary};
@@ -28,13 +33,17 @@ pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
 pub use landmarks::{landmarks, Landmark};
 pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
+pub use roadside::{RoadsidePlan, Stretch};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
 pub use surface::{
-    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, FORD, SINGLETRACK,
-    SINGLETRACK_WIDTH, TIMBER, TRACK, UNMARKED, WAY_TAGS,
+    highway_marked, highway_width, hiking_grade, is_trail, mtb_grade, parse_ways, runs as surface_runs, smooth_widths, tagged_width, way_query, MappedWay, Surface, Trail, DOUBLE_YELLOW, FORD,
+    ONEWAY_AMERICAS, SINGLETRACK, SINGLETRACK_WIDTH, TIMBER, TRACK, UNMARKED, WAY_TAGS, YELLOW,
 };
-pub use trees::{sprite_frame, tree_model, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, KINDS as TREE_KINDS, PINE, SPRITES_FROM, SPRITE_SPREAD, SPRUCE, TREE_FLOATS};
+pub use trees::{
+    sprite_frame, tree_model, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, FAN_PALM, KINDS as TREE_KINDS, PALM, PINE, RAIN_TREE, SPRITES_FROM, SPRITE_SPREAD, SPRUCE, TREE_FLOATS,
+};
+pub use tropics::{in_americas, tropical_weight};
 pub use venue::Venue;
 
 use std::sync::Arc;
@@ -42,6 +51,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::gpx::Route;
+use crate::types::Course;
 use height::{fbm, hash2, smoothstep, BLEND};
 
 /// Side of a square terrain chunk in metres, and cells along each side.
@@ -122,6 +132,8 @@ pub struct World {
     tree_line: f64,
     /// A velodrome round the route, when the route is a built-in track.
     pub venue: Option<Venue>,
+    /// The tropical roadside rules' plan of the route, once asked for (`with_roadside`).
+    roadside: Option<RoadsidePlan>,
 }
 
 /// Made-up field boundaries are drawn in chunks whose middle is this close to the route.
@@ -174,7 +186,7 @@ impl World {
         // Rough alpine tree line, falling with latitude.
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::new(route.clone(), dem, dem_offset);
-        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line, venue: None }
+        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line, venue: None, roadside: None }
     }
 
     /// A world with OpenStreetMap scenery (forests, water, bridges, tunnels) and buildings.
@@ -184,7 +196,7 @@ impl World {
         let scene = Scene::new(&route, scenery);
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::with_kinds(route.clone(), dem, dem_offset, scene.kinds.clone());
-        Self { route, field, buildings: Buildings::default(), scene, tree_line, venue: None }.with_buildings(footprints)
+        Self { route, field, buildings: Buildings::default(), scene, tree_line, venue: None, roadside: None }.with_buildings(footprints)
     }
 
     /// Makes the route a velodrome's track: banked, painted and as wide as the track, with its
@@ -206,6 +218,26 @@ impl World {
     /// Whether `(x, z)` is on a velodrome's grounds, where nothing grows or is made up.
     fn on_grounds(&self, x: f64, z: f64) -> bool {
         self.venue.as_ref().is_some_and(|v| v.grounds.outside(x, z) < 2.0)
+    }
+
+    /// Works out the roadside (stretch kinds, medians) for the kind of ride chosen and for the
+    /// tropical roadside rules: a road ride has pavements where it is built up, and no crowd
+    /// barriers. After the buildings, which say where the route is built up.
+    pub fn with_roadside(mut self, course: Course) -> Self {
+        let plan = roadside::plan(&self.route, &self.scene, &self.buildings, course);
+        if course == Course::Road {
+            let widths = self.scene.widths.clone();
+            let half = |i: usize| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0;
+            let route = self.route.clone();
+            self.scene.add_pavements(&route, &plan, half);
+        }
+        self.roadside = Some(plan);
+        self
+    }
+
+    /// The roadside plan, if `with_roadside` was called.
+    pub fn roadside(&self) -> Option<&RoadsidePlan> {
+        self.roadside.as_ref()
     }
 
     /// Adds buildings (OpenStreetMap footprints) to the landscape.
@@ -505,7 +537,14 @@ impl World {
         for (n, run) in scene.boundaries.get(&(cx, cz)).into_iter().flatten().enumerate() {
             for points in fields::runs(&run.points, |p, q| clear(p, q, false)) {
                 let ys: Vec<f64> = points.iter().map(ground_at).collect();
-                fields::draw(&mut mesh.buildings, run.kind, &points, &ys, cx.wrapping_mul(7919) ^ cz.wrapping_mul(104_729) ^ n as i32, countryside.warm());
+                fields::draw(&mut mesh.buildings, run.kind, &points, &ys, cx.wrapping_mul(7919) ^ cz.wrapping_mul(104_729) ^ n as i32, fields::Stone::of(countryside.warm()));
+            }
+        }
+        // The tropical roadside: cream walls along housing estates that face the road.
+        if let Some(plan) = self.roadside.as_ref().filter(|p| p.tropical) {
+            for (n, points) in roadside::walls(self, plan, cx, cz).iter().enumerate() {
+                let ys: Vec<f64> = points.iter().map(ground_at).collect();
+                fields::draw(&mut mesh.buildings, fields::Boundary::Wall, points, &ys, cx.wrapping_mul(4421) ^ cz.wrapping_mul(7177) ^ n as i32, fields::Stone::Plaster);
             }
         }
         if farmed {
@@ -515,7 +554,7 @@ impl World {
                 let seed = ((edge.middle.0 * 3.0) as i32).wrapping_mul(92_821) ^ (edge.middle.1 * 3.0) as i32;
                 for points in fields::runs(&edge.points, |p, q| clear(p, q, true)) {
                     let ys: Vec<f64> = points.iter().map(ground_at).collect();
-                    fields::draw(&mut mesh.buildings, kind, &points, &ys, seed, countryside.warm());
+                    fields::draw(&mut mesh.buildings, kind, &points, &ys, seed, fields::Stone::of(countryside.warm()));
                     // Now and then a tree grows out of a hedge.
                     if kind == fields::Boundary::Hedge && hedgerow_trees {
                         for (k, p) in points.iter().enumerate() {
@@ -555,7 +594,7 @@ impl World {
             let gateway = |p: (f64, f64)| hash2((p.0 * 2.0) as i32, (p.1 * 2.0) as i32) < GATEWAYS;
             let mut bank = |points: &[(f64, f64)], seed: i32| {
                 let ys: Vec<f64> = points.iter().map(ground_at).collect();
-                fields::draw(&mut mesh.buildings, fields::Boundary::HedgeBank, points, &ys, seed, false);
+                fields::draw(&mut mesh.buildings, fields::Boundary::HedgeBank, points, &ys, seed, fields::Stone::Grey);
             };
             // Along the route, where it is a narrow lane on open ground.
             let r = &self.route;
@@ -653,6 +692,10 @@ impl World {
             let Some(ty) = plant(tx, tz) else { continue };
             grow(tx, tz, ty, !mapped, (cx.wrapping_mul(4099).wrapping_add(k), cz.wrapping_mul(8191).wrapping_sub(k)));
         }
+        // The tropical roadside: palms down an avenue's median and along its side.
+        if let Some(plan) = self.roadside.as_ref().filter(|p| p.tropical) {
+            planted.extend(roadside::median_plants(self, plan, cx, cz));
+        }
         planted.sort_by_key(|t| t.0);
         mesh.trees = planted.iter().flat_map(|t| t.1).collect();
         mesh
@@ -725,6 +768,21 @@ impl World {
                 Some(Surface::Asphalt) if !self.scene.marked.get(i).copied().unwrap_or(true) => UNMARKED,
                 Some(s) => *s as u8,
                 None => 0,
+            })
+            .enumerate()
+            .map(|(i, look)| match self.roadside.as_ref() {
+                // In the Americas the centre line is yellow: a divided road's carriageway has it
+                // along its left edge, a country road a double line, any other a broken one.
+                Some(p) if p.americas && look == Surface::Asphalt as u8 => {
+                    if p.median.get(i).is_some_and(Option::is_some) {
+                        ONEWAY_AMERICAS
+                    } else if p.stretch.get(i) == Some(&Stretch::Rural) {
+                        DOUBLE_YELLOW
+                    } else {
+                        YELLOW
+                    }
+                }
+                _ => look,
             })
             .collect::<Vec<_>>();
         // A closed loop gets one more section, a copy of the first, so the road runs on across the line.

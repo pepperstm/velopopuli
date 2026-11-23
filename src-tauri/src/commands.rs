@@ -1077,6 +1077,8 @@ pub struct SmokeConfig {
     route: Option<String>,
     /// On the Explore screen, plan `lat,lon;lat,lon;…` or make `loop:lat,lon,km` (VP_SMOKE_PLAN).
     plan: Option<String>,
+    /// `race` or `road`: a closed race or a road ride (VP_SMOKE_COURSE).
+    course: Option<String>,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -1109,6 +1111,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         laps: std::env::var("VP_SMOKE_LAPS").ok().and_then(|v| v.parse().ok()),
         route: std::env::var("VP_SMOKE_ROUTE").ok(),
         plan: std::env::var("VP_SMOKE_PLAN").ok(),
+        course: std::env::var("VP_SMOKE_COURSE").ok(),
     })
 }
 

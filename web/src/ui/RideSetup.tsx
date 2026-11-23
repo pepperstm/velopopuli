@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { fmtDist, fmtTime } from '../core/fmt'
 import { api, useSettings } from '../state'
-import type { ConnectorEntry, GhostMeta, RemoteRide, RideRequest, RideSearch, RouteMeta, Segment, WorkoutMeta } from '../types'
+import type { ConnectorEntry, Course, GhostMeta, RemoteRide, RideRequest, RideSearch, RouteMeta, Segment, WorkoutMeta } from '../types'
 import { WorkoutShape } from './Workouts'
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`
@@ -25,6 +25,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   const [error, setError] = useState('')
   const [isLoop, setIsLoop] = useState(false)
   const [laps, setLaps] = useState('')
+  const [course, setCourse] = useState<Course>('race')
   const [connectors, setConnectors] = useState<ConnectorEntry[]>([])
   const isDemo = route.id === 'demo'
   // A built-in velodrome (its card is the anticlockwise route): which way round to ride it.
@@ -110,6 +111,16 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
               <option value="0">Until I stop</option>
             </select>
             {laps !== '' && <p className="muted small">Ghosts are off on a lap ride, and it won't set the route's best time.</p>}
+          </>
+        )}
+
+        {!isTrack && (
+          <>
+            <h3>The road</h3>
+            <select value={course} onChange={(e) => setCourse(e.target.value as Course)}>
+              <option value="race">Closed race: crowd barriers, the road to yourself</option>
+              <option value="road">Road ride: the open road, kerbs and pavements in towns</option>
+            </select>
           </>
         )}
 
@@ -267,7 +278,8 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
                 workoutId: workoutId || null,
                 ghostIds: lapRide ? [] : ghostIds,
                 groupRoom: group ? room : null,
-                laps: lapRide ? Number(laps) : null
+                laps: lapRide ? Number(laps) : null,
+                course: isTrack ? 'race' : course
               })
             }
           >

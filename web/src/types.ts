@@ -301,7 +301,11 @@ export interface RideRequest {
   groupRoom?: string | null
   /** Laps on a closed route: absent or null = none, 0 = until I stop, n = n laps. Ghosts are off on lap rides. */
   laps?: number | null
+  /** A closed race (crowd barriers, the road to yourself) or a road ride (the open road). Absent = a closed race. */
+  course?: Course
 }
+
+export type Course = 'race' | 'road'
 
 export interface Profile {
   xp: number

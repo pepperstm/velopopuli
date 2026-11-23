@@ -65,6 +65,8 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
                     barriers.rs: race barriers; landmarks.rs: signs, summits, POIs; trees.rs: the six tree models,
                     which kind grows where, and where trees turn into sprites
                     fields.rs: hedges, walls and fences, mapped and made up by region
+                    tropics.rs: where the lowland tropics and the Americas are; roadside.rs: stretch kinds (avenue,
+                    periurban, rural, town), tropical props, median palms, estate walls, and what a road ride changes
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
 src-tauri/          The app (Tauri 2)
   main.rs           App state, command registration, data dir (VP_DATA_DIR override), diag init
@@ -96,7 +98,7 @@ How a ride flows end to end, and how each part works, is in the [developer pages
 
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
 - `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
-- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (4, since field boundaries in #58) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
+- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (5, since housing and commercial land use) in `mapdata.rs` (an older scenery cache's Overpass road tags are carried into the refetched one, and used offline); road tags `WAY_TAGS` (4, since field boundaries in #58) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
 - **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space, kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux. Each connector's credentials are one entry named after its id (`strava`, …); the Home Assistant token is `homeassistant`.
 - **Uploads:** a ride records where it went in `RideSummary.uploads` by connector id. Rides from before v0.3.10 carry `stravaActivityId` instead; `RideSummary::upload()` (Rust) and `uploadOf()` (page) read both, and `connector_upload` copies it into `uploads` when it next writes the list. The old field is kept alongside for a release or two so 0.3.9 still sees the ride as uploaded. The old `stravaAutoUpload` setting becomes `autoUpload: ["strava"]` in `mergeSettings`.
 - **FIT files:** each record carries a `target_power` developer field (watts, invalid when the trainer wasn't holding a target), declared at the start of the file under VeloPopuli's application UUID `d15c7f0c-de7b-4272-8c63-37ff17f724f6` (`APP_ID` in `fit.rs`). Never change the UUID: readers use it to tell our fields from other apps'. More per-second values (gradient, gear) can be added the same way with `Writer::message_ext`.

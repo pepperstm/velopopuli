@@ -4,10 +4,25 @@ import * as THREE from 'three'
  * Textures for the route's road, one per look (`Surface as u8` in Rust: asphalt, concrete,
  * cobbles, gravel, dirt; then 5, tarmac without a centre line, for anything below a main road;
  * then 6, the planks of a log bridge on a trail; 7, singletrack, a narrow earth trail; 8, the stones of a ford's bed; 9, a velodrome's
- * track, its inside at the right). Across: the gravel shoulder on the outer 20/256ths
+ * track, its inside at the right; then, in the Americas, 10, a broken yellow centre line; 11, a double
+ * yellow one; 12, a divided road's carriageway, yellow along its left edge, which is the texture's right). Across: the gravel shoulder on the outer 20/256ths
  * each side (stretched down the embankment), the surface between. Along: 12 m per repeat.
  */
-export const SURFACES = ['asphalt', 'concrete', 'cobbles', 'gravel', 'dirt', 'lane', 'timber', 'singletrack', 'ford', 'track'] as const
+export const SURFACES = [
+  'asphalt',
+  'concrete',
+  'cobbles',
+  'gravel',
+  'dirt',
+  'lane',
+  'timber',
+  'singletrack',
+  'ford',
+  'track',
+  'yellow',
+  'double-yellow',
+  'oneway-americas'
+] as const
 
 /** Deterministic noise, so both renderers get the same picture. */
 function random(seed: number): () => number {
@@ -50,9 +65,20 @@ function shoulders(ctx: CanvasRenderingContext2D, w: number, h: number, colour: 
   ctx.fillRect(0, 0, w, h)
 }
 
+/** Bare tarmac between gravel shoulders, speckled so the surface visibly moves at speed. */
+function tarmac(rnd: () => number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const [c, ctx] = canvas(256, 256)
+  shoulders(ctx, 256, 256, '#6d6552')
+  ctx.fillStyle = '#3d3f45'
+  ctx.fillRect(20, 0, 216, 256)
+  speckle(ctx, 256, 256, rnd, 2600, [70, 70, 74], 40, 0.5, 2)
+  return [c, ctx]
+}
+
 function draw(surface: number): HTMLCanvasElement {
   // The same grain on tarmac with and without a centre line, so the change shows only in the paint.
-  const rnd = random(17 + (SURFACES[surface] === 'lane' ? 0 : surface) * 101)
+  const plainTarmac = ['lane', 'yellow', 'double-yellow', 'oneway-americas'].includes(SURFACES[surface])
+  const rnd = random(17 + (plainTarmac ? 0 : surface) * 101)
   switch (SURFACES[surface] ?? 'asphalt') {
     case 'track': {
       // A velodrome's track, 7.4 m across 216 px, its inside edge at the right: the light blue
@@ -239,14 +265,36 @@ function draw(surface: number): HTMLCanvasElement {
       }
       return c
     }
+    case 'yellow':
+    case 'double-yellow':
+    case 'oneway-americas': {
+      // Tarmac painted the way the Americas paint it: yellow down the middle of a two-way
+      // road (broken, or double in the country), yellow along the left edge of a divided road.
+      const [c, ctx] = tarmac(rnd)
+      const yellow = '#e3b324'
+      const white = '#e8e8e2'
+      const name = SURFACES[surface]
+      // The texture's right edge is the rider's left, where a divided road's median is.
+      ctx.fillStyle = white
+      ctx.fillRect(25, 0, 4, 256)
+      ctx.fillStyle = name === 'oneway-americas' ? yellow : white
+      ctx.fillRect(227, 0, 4, 256)
+      if (name === 'yellow') {
+        ctx.fillStyle = yellow
+        ctx.fillRect(126, 0, 4, 128)
+      } else if (name === 'double-yellow') {
+        ctx.fillStyle = yellow
+        ctx.fillRect(121, 0, 4, 256)
+        ctx.fillRect(131, 0, 4, 256)
+      } else {
+        ctx.fillStyle = white
+        ctx.fillRect(126, 0, 4, 128)
+      }
+      return c
+    }
     default: {
       // Tarmac with an edge line each side and, on a main road, a broken line down the middle.
-      const [c, ctx] = canvas(256, 256)
-      shoulders(ctx, 256, 256, '#6d6552')
-      ctx.fillStyle = '#3d3f45'
-      ctx.fillRect(20, 0, 216, 256)
-      // Speckle so the surface visibly moves at speed.
-      speckle(ctx, 256, 256, rnd, 2600, [70, 70, 74], 40, 0.5, 2)
+      const [c, ctx] = tarmac(rnd)
       ctx.fillStyle = '#e8e8e2'
       ctx.fillRect(25, 0, 4, 256)
       ctx.fillRect(227, 0, 4, 256)

@@ -157,6 +157,19 @@ impl Default for Goal {
     }
 }
 
+/// What kind of ride the road is set up for, chosen when setting up a ride.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Course {
+    /// A closed race: the road closed to traffic, with crowd barriers and netting on the
+    /// hairpins.
+    #[default]
+    Race,
+    /// A road ride: the road open as on an ordinary day, with no crowd barriers, and kerbs and
+    /// pavements where it is built up.
+    Road,
+}
+
 /// How the world looks: time of day and weather.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]

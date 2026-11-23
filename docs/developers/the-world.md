@@ -150,3 +150,17 @@ Nothing grows on the grounds, and no fields are made up there.
 - If the new thing comes from map data, bump `SCENERY_FORMAT` (or `FORMAT`, or `WAY_TAGS`) so saved routes fetch it.
 - Anything per route sample (like `widths`, `surfaces`, `banks`) lives on `Scene`, and goes to the page in `ride_route_data`. If you add one, add it there and read it in `web/src/world/scene.ts`.
 - Check it with the smoke harness on a route that has it (see [Good test routes](building-and-testing.md#good-test-routes)).
+
+## Closed race or road ride
+
+The rider chooses when setting up a ride (`RideRequest::course`, a `types::Course`: `Race` by default, or `Road`). `session.rs` hands it to `World::with_roadside`, which keeps it in the `RoadsidePlan`. On a road ride `World::barriers` leaves out the crowd barriers and the hairpin netting, and `Scene::add_pavements` lays a pavement beside a town street (both sides) and along an avenue's outer side, as a road strip on the ground like the map's other roads, so both renderers draw it. A velodrome has neither choice nor barriers.
+
+## The tropical roadside
+
+In the lowland tropics the world follows its own rules, all switched by [`tropics.rs`](../../crates/core/src/world/tropics.rs) (`tropical_weight`: 1 within about 21° of the equator and below 900 m, blending out by 25° and 1,500 m; `in_americas` for yellow paint). Outside them every output is as before: the tree weight is exactly 0, and the roadside rules look at `RoadsidePlan::tropical` first.
+
+- **Trees** ([`trees.rs`](../../crates/core/src/world/trees.rs)): three more kinds, `PALM`, `FAN_PALM` and `RAIN_TREE`. `Climate::kind_at` picks among them with the tropical weight and passes the rest of `roll` on to the temperate mix, so a weight of 0 changes nothing.
+- **The plan** ([`roadside.rs`](../../crates/core/src/world/roadside.rs), `plan`, once per ride from `World::with_roadside`): per route sample, whether the route is one carriageway of a divided road (another one-way street or main road alongside, nearly parallel, its centre 1–40 m beyond the route's edge for at least 60 m; on an out-and-back ride, the route's own return leg), the median's width and side, and whether it is built up (six buildings within 150 m, or housing or commercial land use within 120 m). From those, each stretch is an `Avenue`, `Periurban`, `Rural` or `Town`, smoothed over 200 m. A route as a whole is tropical by its latitude and its median height, so a highland route in the tropics keeps the temperate roadside.
+- **Props** (`roadside::props`, drawn by the barrier instancing as more `look`s, so both renderers have them): double lamps down an avenue's median every 38 m, single lamps along a town street, New Jersey sections down an open divided road, never on a bridge, in a tunnel, on a trail or in a side street. Palms and bushes down the median and along an avenue's outer side go in the chunk's tree list (`median_plants`). Cream walls along the edge of housing land use that faces the road (`walls`, drawn by `fields::draw` with `Stone::Plaster`).
+- **Paint** (`World::road`): in the Americas a marked asphalt look becomes `YELLOW`, `DOUBLE_YELLOW` (rural) or `ONEWAY_AMERICAS` (a divided road's carriageway). The textures are drawn by the page's `surfaces.ts` and handed to the native renderer with the others.
+- **Land use:** the vector tiles' `residential`, `commercial` and `retail` land become `AreaKind::Residential` and `AreaKind::Commercial`, which is why `SCENERY_FORMAT` is 5.

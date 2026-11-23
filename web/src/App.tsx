@@ -40,7 +40,8 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
         workoutId: smoke.workout,
         groupRoom: smoke.room,
         ghostIds: smoke.ghosts ?? [],
-        laps: smoke.laps ?? null
+        laps: smoke.laps ?? null,
+        course: smoke.course ?? 'race'
       }
     })
   } else if (

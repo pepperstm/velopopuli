@@ -20,7 +20,13 @@ pub const BIRCH: u8 = 3;
 pub const COLUMN: u8 = 4;
 /// A bush: no trunk, low and round.
 pub const BUSH: u8 = 5;
-pub const KINDS: usize = 6;
+/// A tall palm (coconut or royal palm): a slender leaning trunk and a crown of drooping fronds.
+pub const PALM: u8 = 6;
+/// A low palm, as planted in gardens and along roads: a short trunk and a wide spray of fronds.
+pub const FAN_PALM: u8 = 7;
+/// A rain tree (samán) or fig: a short thick trunk under a very wide, flat crown.
+pub const RAIN_TREE: u8 = 8;
+pub const KINDS: usize = 9;
 
 /// Numbers per tree in a chunk's list: x, y, z, yaw, width scale, height scale, kind, shade.
 pub const TREE_FLOATS: usize = 8;
@@ -104,6 +110,28 @@ fn clump(m: &mut TriMesh, centre: [f64; 3], radii: [f64; 3], colour: [f32; 3], s
     }
 }
 
+/// A palm frond from `base`, heading out at `yaw` (radians about y): a leaf `length` long that
+/// rises by `rise` and falls by `droop` along a parabola, widest (`width`) in the middle. Both
+/// faces are drawn, since a frond is seen from above and below.
+fn frond(m: &mut TriMesh, base: [f64; 3], yaw: f64, (length, rise, droop, width): (f64, f64, f64, f64), colour: [f32; 3]) {
+    const SEGMENTS: usize = 4;
+    let (dx, dz) = (yaw.sin(), yaw.cos());
+    let at = |t: f64, side: f64| {
+        let half = width / 2.0 * (std::f64::consts::PI * t).sin().max(0.05);
+        [base[0] + dx * length * t + dz * half * side, base[1] + rise * t - droop * t * t, base[2] + dz * length * t - dx * half * side]
+    };
+    for k in 0..SEGMENTS {
+        let (t0, t1) = (k as f64 / SEGMENTS as f64, (k + 1) as f64 / SEGMENTS as f64);
+        let (l0, r0, l1, r1) = (at(t0, -1.0), at(t0, 1.0), at(t1, -1.0), at(t1, 1.0));
+        for tri in [[l0, r0, r1], [l0, r1, l1]] {
+            let (u, v) = ([0, 1, 2].map(|a| tri[1][a] - tri[0][a]), [0, 1, 2].map(|a| tri[2][a] - tri[0][a]));
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            m.triangle(tri, n, [colour; 3], [[0.5; 2]; 3]);
+            m.triangle([tri[0], tri[2], tri[1]], n.map(|c| -c), [colour; 3], [[0.5; 2]; 3]);
+        }
+    }
+}
+
 /// One kind of tree in its own frame, standing on y = 0, about life size (instances scale it
 /// by roughly 0.75–1.3). Colours are linear; each instance's shade multiplies them.
 pub fn tree_model(kind: u8) -> TriMesh {
@@ -142,6 +170,35 @@ pub fn tree_model(kind: u8) -> TriMesh {
             frustum(&mut m, 0.8, 3.0, (0.7, 1.25), 8, dark);
             frustum(&mut m, 3.8, 8.0, (1.25, 0.0), 8, dark);
         }
+        PALM => {
+            let trunk = linear([0.52, 0.45, 0.36]);
+            frustum(&mut m, 0.0, 2.6, (0.24, 0.21), 6, trunk);
+            frustum(&mut m, 2.5, 2.6, (0.21, 0.19), 6, linear([0.48, 0.42, 0.34]));
+            frustum(&mut m, 5.0, 2.4, (0.19, 0.17), 6, trunk);
+            frustum(&mut m, 7.3, 2.3, (0.17, 0.15), 6, linear([0.48, 0.42, 0.34]));
+            let leaf = [linear([0.30, 0.50, 0.18]), linear([0.26, 0.45, 0.16])];
+            for k in 0..8 {
+                let yaw = k as f64 / 8.0 * std::f64::consts::TAU + 0.2 * (k % 2) as f64;
+                frond(&mut m, [0.0, 9.5, 0.0], yaw, (3.5, 0.7, 2.6, 0.9), leaf[k % 2]);
+            }
+            clump(&mut m, [0.0, 9.3, 0.0], [0.5, 0.4, 0.5], linear([0.36, 0.33, 0.16]), 12);
+        }
+        FAN_PALM => {
+            frustum(&mut m, 0.0, 2.2, (0.26, 0.22), 6, linear([0.50, 0.43, 0.34]));
+            let leaf = [linear([0.32, 0.52, 0.2]), linear([0.27, 0.47, 0.17])];
+            for k in 0..10 {
+                let yaw = k as f64 / 10.0 * std::f64::consts::TAU;
+                frond(&mut m, [0.0, 2.2, 0.0], yaw, (2.4, 2.4, 1.4, 0.75), leaf[k % 2]);
+            }
+        }
+        RAIN_TREE => {
+            frustum(&mut m, 0.0, 3.4, (0.55, 0.4), 7, linear([0.38, 0.31, 0.24]));
+            let (leaf, light) = (linear([0.20, 0.42, 0.16]), linear([0.25, 0.48, 0.18]));
+            clump(&mut m, [0.0, 5.6, 0.0], [6.0, 1.6, 6.0], leaf, 13);
+            clump(&mut m, [2.5, 6.4, 1.0], [3.5, 1.2, 3.5], light, 14);
+            clump(&mut m, [-2.6, 6.2, -1.2], [3.8, 1.3, 3.8], leaf, 15);
+            clump(&mut m, [0.5, 6.9, -0.4], [3.0, 1.0, 3.0], light, 16);
+        }
         _ => {
             let leaf = linear([0.3, 0.44, 0.2]);
             clump(&mut m, [0.0, 0.85, 0.0], [1.5, 1.05, 1.5], leaf, 10);
@@ -165,6 +222,21 @@ impl Climate {
     /// (`wood`) or standing on its own; `roll` and `pick` are the tree's own random numbers
     /// in [0, 1).
     pub fn kind_at(self, (x, z): (f64, f64), height: f64, wood: bool, roll: f64, pick: f64) -> u8 {
+        // In the lowland tropics, rain trees, palms and broadleaf evergreens. Outside them the
+        // weight is 0 and `roll` passes through unchanged, so nothing below changes.
+        let tropic = super::tropics::tropical_weight(self.lat, height);
+        if roll < tropic {
+            let mix: &[(u8, f64)] = if wood { &[(BROADLEAF, 0.45), (RAIN_TREE, 0.25), (PALM, 0.15)] } else { &[(RAIN_TREE, 0.35), (PALM, 0.25), (FAN_PALM, 0.15)] };
+            let mut upto = 0.0;
+            for &(kind, share) in mix {
+                upto += share;
+                if pick < upto {
+                    return kind;
+                }
+            }
+            return BUSH;
+        }
+        let roll = if tropic > 0.0 { (roll - tropic) / (1.0 - tropic) } else { roll };
         // How far towards the tree line (0 in the valley, 1 just below it).
         let alpine = smoothstep(self.tree_line - 1300.0, self.tree_line - 350.0, height);
         let boreal = smoothstep(52.0, 62.0, self.lat);
