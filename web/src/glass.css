@@ -1,0 +1,399 @@
+/* The website's glass look (velopopuli.com), laid over the app's own styles: a deep green-black
+   lit by slow lime and teal glows, frosted translucent panels, lime pill buttons. Layout lives in
+   styles.css; this file only changes how things look. */
+
+:root {
+  --bg: #080c08;
+  /* Solid fills for anything that must not show through (code, swatches, rails). */
+  --panel: #10160f;
+  --panel-2: #182016;
+  --line: rgba(255, 255, 255, 0.11);
+  --text: #eef2e6;
+  --muted: #a3ad98;
+  --faint: #76806c;
+  --accent-ink: #0d1208;
+  --lime-2: #c8f03c;
+  --teal: #46d6b4;
+  /* The glass itself. */
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-2: rgba(255, 255, 255, 0.085);
+  --stroke: rgba(255, 255, 255, 0.11);
+  --stroke-2: rgba(255, 255, 255, 0.2);
+  --blur: blur(22px) saturate(170%);
+  --glass-fill: linear-gradient(160deg, var(--glass-2), var(--glass));
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 24px 48px -28px rgba(0, 0, 0, 0.7);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Light behind the glass: slow-moving glows and a fine grain, as on the site. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -25%;
+  z-index: -2;
+  pointer-events: none;
+  background: radial-gradient(34% 30% at 18% 12%, rgba(233, 255, 96, 0.16), transparent 70%),
+    radial-gradient(30% 28% at 84% 22%, rgba(70, 214, 180, 0.13), transparent 70%),
+    radial-gradient(40% 36% at 62% 78%, rgba(110, 170, 40, 0.12), transparent 70%),
+    radial-gradient(30% 26% at 10% 85%, rgba(70, 214, 180, 0.08), transparent 70%);
+  animation: drift 38s ease-in-out infinite alternate;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@keyframes drift {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0);
+  }
+  50% {
+    transform: translate3d(3%, -2%, 0) rotate(4deg);
+  }
+  100% {
+    transform: translate3d(-3%, 3%, 0) rotate(-3deg);
+  }
+}
+/* During a ride the 3D world is the background: no glows over it, and nothing to animate. */
+body:has(.ride)::before,
+body:has(.ride)::after {
+  display: none;
+}
+#root {
+  position: relative;
+  z-index: 0;
+}
+
+::selection {
+  background: var(--accent);
+  color: #111;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(233, 255, 96, 0.4);
+}
+a:hover {
+  color: #fff;
+}
+
+/* Type: the site's tight Manrope headings, the big ones in a soft light gradient. */
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+h1 {
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #fff 30%, #bfcab2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glass panels. */
+.topbar,
+.card,
+.modal,
+.empty,
+.notice,
+.picker,
+.stat,
+.badge,
+.street-photo,
+.profile-next,
+.profile-all {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--glass-edge);
+}
+.card {
+  border-radius: 18px;
+  transition:
+    border-color 0.3s ease,
+    transform 0.4s var(--ease);
+}
+.card:hover {
+  border-color: var(--stroke-2);
+}
+.modal {
+  border-radius: 22px;
+  background: linear-gradient(160deg, rgba(30, 40, 27, 0.86), rgba(14, 19, 13, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 40px 80px -30px rgba(0, 0, 0, 0.8);
+}
+.modal-backdrop,
+.setup-backdrop {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.empty {
+  border-style: dashed;
+  border-color: var(--stroke-2);
+}
+.notice {
+  border-color: rgba(233, 255, 96, 0.3);
+  color: #e3f08c;
+}
+.error {
+  background: rgba(120, 30, 24, 0.25);
+  border-color: rgba(255, 120, 100, 0.3);
+}
+
+/* The top bar floats as a glass strip, as the site's header does. */
+.topbar {
+  margin: 10px 12px 0;
+  border-radius: 18px;
+  padding: 8px 12px 8px 18px;
+}
+.brand {
+  letter-spacing: -0.03em;
+}
+.brand-mark {
+  filter: drop-shadow(0 0 10px rgba(233, 255, 96, 0.45));
+}
+.tab {
+  border-radius: 999px;
+  transition:
+    color 0.25s ease,
+    background 0.25s ease;
+}
+.tab:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: transparent;
+}
+.tab.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--stroke);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.chip {
+  background: var(--glass-fill);
+  border: 1px solid var(--stroke);
+}
+.bar {
+  background: rgba(255, 255, 255, 0.1);
+}
+.bar > div {
+  background: linear-gradient(90deg, var(--accent), var(--teal));
+}
+
+/* Buttons: glass pills, and the primary one the site's lime pill with its shine. */
+button {
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: var(--glass-fill);
+  border-color: var(--stroke);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition:
+    transform 0.25s var(--ease),
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.25s ease;
+}
+button:hover:not(:disabled) {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.07));
+  border-color: var(--stroke-2);
+}
+button.ghost {
+  background: transparent;
+  box-shadow: none;
+}
+button.primary {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f2ff8a, var(--accent) 45%, var(--lime-2));
+  border-color: transparent;
+  color: var(--accent-ink);
+  box-shadow:
+    0 0 0 1px rgba(233, 255, 96, 0.5),
+    0 8px 24px -10px rgba(233, 255, 96, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f6ffa6, #eeff7a 45%, #d2f550);
+  border-color: transparent;
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(233, 255, 96, 0.7),
+    0 12px 30px -10px rgba(233, 255, 96, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+button.primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.6) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 0.8s ease;
+  pointer-events: none;
+}
+button.primary:hover:not(:disabled)::after {
+  transform: translateX(120%);
+}
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+button.danger {
+  border-color: rgba(255, 120, 100, 0.35);
+}
+button.danger:hover:not(:disabled) {
+  background: rgba(150, 40, 32, 0.3);
+  border-color: rgba(255, 120, 100, 0.55);
+}
+button.strava,
+button.dreeve {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+button.strava:hover:not(:disabled) {
+  background: #ff5e17;
+  border-color: #ff5e17;
+}
+button.dreeve:hover:not(:disabled) {
+  background: #4ca390;
+  border-color: #4ca390;
+}
+
+/* Fields: frosted, with a lime ring when in use. */
+input,
+select,
+textarea {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: var(--stroke);
+  border-radius: 12px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--stroke-2);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(233, 255, 96, 0.6);
+  box-shadow: 0 0 0 3px rgba(233, 255, 96, 0.15);
+}
+/* A select's open list is drawn by the system: give it a solid background. */
+select option {
+  background: #10160f;
+  color: var(--text);
+}
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  accent-color: var(--accent);
+  box-shadow: none;
+}
+.route-preview {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+}
+.tag {
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.tag.dim {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Ride screen: the same glass, lighter (it sits over the moving 3D world, where blur costs frames). */
+.tile,
+.standings,
+.banner,
+.hud.workout-panel,
+.group-chip,
+.gap {
+  background: linear-gradient(160deg, rgba(22, 28, 20, 0.72), rgba(12, 16, 11, 0.66));
+  border-color: var(--stroke);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 14px 30px -18px rgba(0, 0, 0, 0.8);
+}
+.tile {
+  border-radius: 14px;
+}
+.banner {
+  border-radius: 16px;
+}
+.minimap {
+  border-radius: 14px;
+  border-color: var(--stroke);
+  box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.8);
+}
+.profile-next,
+.profile-all {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-radius: 14px;
+}
+.controls button {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.seg button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+/* Segmented buttons keep their joined shape, with pill ends. */
+.seg button:first-child {
+  border-radius: 999px 0 0 999px;
+}
+.seg button:last-child {
+  border-radius: 0 999px 999px 0;
+}
+
+/* Tabs are plain text until hovered or chosen. */
+.tab {
+  box-shadow: none;
+}
+.tab.active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Selects drawn like the other fields, with the site's chevron. */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a3ad98' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+/* Some people would rather nothing moved. */
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+  }
+  button,
+  .card,
+  .tab,
+  button.primary::after {
+    transition: none;
+  }
+  button.primary:hover:not(:disabled) {
+    transform: none;
+  }
+}

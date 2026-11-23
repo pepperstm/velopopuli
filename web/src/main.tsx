@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { api } from './bridge'
 import './styles.css'
+import './glass.css'
 
 // Surface UI errors in the terminal the app was started from.
 window.addEventListener('error', (e) => void api.log(`${e.message} (${e.filename}:${e.lineno})`))
