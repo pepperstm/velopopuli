@@ -2189,3 +2189,12 @@ fn hillside_roads_sit_in_cuttings_and_on_embankments() {
         assert!((g - hill(d)).abs() < 1.5, "at {d:.0} m: {g:.1}, hillside {:.1}", hill(d));
     }
 }
+
+#[test]
+fn settings_saved_before_themes_open_in_glass() {
+    use velopopuli_core::types::{Settings, Theme};
+    let old: Settings = serde_json::from_str(r#"{"units":"imperial"}"#).unwrap();
+    assert_eq!(old.theme, Theme::Glass);
+    let simple: Settings = serde_json::from_str(r#"{"theme":"simple"}"#).unwrap();
+    assert_eq!(simple.theme, Theme::Simple);
+}

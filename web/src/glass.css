@@ -1,8 +1,10 @@
-/* The website's glass look (velopopuli.com), laid over the app's own styles: a deep green-black
+/* The Glass theme (the default; Settings → Theme): the website's look (velopopuli.com), laid over
+   the app's own styles, which on their own are the Simple theme. Every rule is scoped with
+   :where([data-theme='glass']), which adds nothing to its specificity. The look: a deep green-black
    lit by slow lime and teal glows, frosted translucent panels, lime pill buttons. Layout lives in
    styles.css; this file only changes how things look. */
 
-:root {
+:root:where([data-theme='glass']) {
   --bg: #080c08;
   /* Solid fills for anything that must not show through (code, swatches, rails). */
   --panel: #10160f;
@@ -26,7 +28,7 @@
 }
 
 /* Light behind the glass: slow-moving glows and a fine grain, as on the site. */
-body::before {
+:where([data-theme='glass']) body::before {
   content: '';
   position: fixed;
   inset: -25%;
@@ -38,7 +40,7 @@ body::before {
     radial-gradient(30% 26% at 10% 85%, rgba(70, 214, 180, 0.08), transparent 70%);
   animation: drift 38s ease-in-out infinite alternate;
 }
-body::after {
+:where([data-theme='glass']) body::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -60,40 +62,40 @@ body::after {
   }
 }
 /* During a ride the 3D world is the background: no glows over it, and nothing to animate. */
-body:has(.ride)::before,
-body:has(.ride)::after {
+:where([data-theme='glass']) body:has(.ride)::before,
+:where([data-theme='glass']) body:has(.ride)::after {
   display: none;
 }
-#root {
+:where([data-theme='glass']) #root {
   position: relative;
   z-index: 0;
 }
 
-::selection {
+:where([data-theme='glass']) ::selection {
   background: var(--accent);
   color: #111;
 }
-:focus-visible {
+:where([data-theme='glass']) :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-a {
+:where([data-theme='glass']) a {
   color: var(--accent);
   text-underline-offset: 3px;
   text-decoration-color: rgba(233, 255, 96, 0.4);
 }
-a:hover {
+:where([data-theme='glass']) a:hover {
   color: #fff;
 }
 
 /* Type: the site's tight Manrope headings, the big ones in a soft light gradient. */
-h1,
-h2,
-h3 {
+:where([data-theme='glass']) h1,
+:where([data-theme='glass']) h2,
+:where([data-theme='glass']) h3 {
   font-weight: 800;
   letter-spacing: -0.02em;
 }
-h1 {
+:where([data-theme='glass']) h1 {
   letter-spacing: -0.03em;
   background: linear-gradient(180deg, #fff 30%, #bfcab2);
   -webkit-background-clip: text;
@@ -102,99 +104,99 @@ h1 {
 }
 
 /* Glass panels. */
-.topbar,
-.card,
-.modal,
-.empty,
-.notice,
-.picker,
-.stat,
-.badge,
-.street-photo,
-.profile-next,
-.profile-all {
+:where([data-theme='glass']) .topbar,
+:where([data-theme='glass']) .card,
+:where([data-theme='glass']) .modal,
+:where([data-theme='glass']) .empty,
+:where([data-theme='glass']) .notice,
+:where([data-theme='glass']) .picker,
+:where([data-theme='glass']) .stat,
+:where([data-theme='glass']) .badge,
+:where([data-theme='glass']) .street-photo,
+:where([data-theme='glass']) .profile-next,
+:where([data-theme='glass']) .profile-all {
   background: var(--glass-fill);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
   border: 1px solid var(--stroke);
   box-shadow: var(--glass-edge);
 }
-.card {
+:where([data-theme='glass']) .card {
   border-radius: 18px;
   transition:
     border-color 0.3s ease,
     transform 0.4s var(--ease);
 }
-.card:hover {
+:where([data-theme='glass']) .card:hover {
   border-color: var(--stroke-2);
 }
-.modal {
+:where([data-theme='glass']) .modal {
   border-radius: 22px;
   background: linear-gradient(160deg, rgba(30, 40, 27, 0.86), rgba(14, 19, 13, 0.9));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 40px 80px -30px rgba(0, 0, 0, 0.8);
 }
-.modal-backdrop,
-.setup-backdrop {
+:where([data-theme='glass']) .modal-backdrop,
+:where([data-theme='glass']) .setup-backdrop {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
-.empty {
+:where([data-theme='glass']) .empty {
   border-style: dashed;
   border-color: var(--stroke-2);
 }
-.notice {
+:where([data-theme='glass']) .notice {
   border-color: rgba(233, 255, 96, 0.3);
   color: #e3f08c;
 }
-.error {
+:where([data-theme='glass']) .error {
   background: rgba(120, 30, 24, 0.25);
   border-color: rgba(255, 120, 100, 0.3);
 }
 
 /* The top bar floats as a glass strip, as the site's header does. */
-.topbar {
+:where([data-theme='glass']) .topbar {
   margin: 10px 12px 0;
   border-radius: 18px;
   padding: 8px 12px 8px 18px;
 }
-.brand {
+:where([data-theme='glass']) .brand {
   letter-spacing: -0.03em;
 }
-.brand-mark {
+:where([data-theme='glass']) .brand-mark {
   filter: drop-shadow(0 0 10px rgba(233, 255, 96, 0.45));
 }
-.tab {
+:where([data-theme='glass']) .tab {
   border-radius: 999px;
   transition:
     color 0.25s ease,
     background 0.25s ease;
 }
-.tab:hover:not(:disabled) {
+:where([data-theme='glass']) .tab:hover:not(:disabled) {
   color: #fff;
   background: rgba(255, 255, 255, 0.05);
   border-color: transparent;
 }
-.tab.active {
+:where([data-theme='glass']) .tab.active {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--stroke);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
-.chip {
+:where([data-theme='glass']) .chip {
   background: var(--glass-fill);
   border: 1px solid var(--stroke);
 }
-.bar {
+:where([data-theme='glass']) .bar {
   background: rgba(255, 255, 255, 0.1);
 }
-.bar > div {
+:where([data-theme='glass']) .bar > div {
   background: linear-gradient(90deg, var(--accent), var(--teal));
 }
 
 /* Buttons: glass pills, and the primary one the site's lime pill with its shine. */
-button {
+:where([data-theme='glass']) button {
   border-radius: 999px;
   padding: 7px 16px;
   background: var(--glass-fill);
@@ -206,15 +208,15 @@ button {
     background 0.25s ease,
     box-shadow 0.25s ease;
 }
-button:hover:not(:disabled) {
+:where([data-theme='glass']) button:hover:not(:disabled) {
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.07));
   border-color: var(--stroke-2);
 }
-button.ghost {
+:where([data-theme='glass']) button.ghost {
   background: transparent;
   box-shadow: none;
 }
-button.primary {
+:where([data-theme='glass']) button.primary {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, #f2ff8a, var(--accent) 45%, var(--lime-2));
@@ -225,7 +227,7 @@ button.primary {
     0 8px 24px -10px rgba(233, 255, 96, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
-button.primary:hover:not(:disabled) {
+:where([data-theme='glass']) button.primary:hover:not(:disabled) {
   background: linear-gradient(180deg, #f6ffa6, #eeff7a 45%, #d2f550);
   border-color: transparent;
   transform: translateY(-1px);
@@ -234,7 +236,7 @@ button.primary:hover:not(:disabled) {
     0 12px 30px -10px rgba(233, 255, 96, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
-button.primary::after {
+:where([data-theme='glass']) button.primary::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -243,36 +245,36 @@ button.primary::after {
   transition: transform 0.8s ease;
   pointer-events: none;
 }
-button.primary:hover:not(:disabled)::after {
+:where([data-theme='glass']) button.primary:hover:not(:disabled)::after {
   transform: translateX(120%);
 }
-button:active:not(:disabled) {
+:where([data-theme='glass']) button:active:not(:disabled) {
   transform: translateY(0);
 }
-button.danger {
+:where([data-theme='glass']) button.danger {
   border-color: rgba(255, 120, 100, 0.35);
 }
-button.danger:hover:not(:disabled) {
+:where([data-theme='glass']) button.danger:hover:not(:disabled) {
   background: rgba(150, 40, 32, 0.3);
   border-color: rgba(255, 120, 100, 0.55);
 }
-button.strava,
-button.dreeve {
+:where([data-theme='glass']) button.strava,
+:where([data-theme='glass']) button.dreeve {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
-button.strava:hover:not(:disabled) {
+:where([data-theme='glass']) button.strava:hover:not(:disabled) {
   background: #ff5e17;
   border-color: #ff5e17;
 }
-button.dreeve:hover:not(:disabled) {
+:where([data-theme='glass']) button.dreeve:hover:not(:disabled) {
   background: #4ca390;
   border-color: #4ca390;
 }
 
 /* Fields: frosted, with a lime ring when in use. */
-input,
-select,
-textarea {
+:where([data-theme='glass']) input,
+:where([data-theme='glass']) select,
+:where([data-theme='glass']) textarea {
   background: rgba(255, 255, 255, 0.045);
   border-color: var(--stroke);
   border-radius: 12px;
@@ -280,99 +282,99 @@ textarea {
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
-input:hover,
-select:hover,
-textarea:hover {
+:where([data-theme='glass']) input:hover,
+:where([data-theme='glass']) select:hover,
+:where([data-theme='glass']) textarea:hover {
   border-color: var(--stroke-2);
 }
-input:focus,
-select:focus,
-textarea:focus {
+:where([data-theme='glass']) input:focus,
+:where([data-theme='glass']) select:focus,
+:where([data-theme='glass']) textarea:focus {
   outline: none;
   border-color: rgba(233, 255, 96, 0.6);
   box-shadow: 0 0 0 3px rgba(233, 255, 96, 0.15);
 }
 /* A select's open list is drawn by the system: give it a solid background. */
-select option {
+:where([data-theme='glass']) select option {
   background: #10160f;
   color: var(--text);
 }
-input[type='checkbox'],
-input[type='radio'],
-input[type='range'] {
+:where([data-theme='glass']) input[type='checkbox'],
+:where([data-theme='glass']) input[type='radio'],
+:where([data-theme='glass']) input[type='range'] {
   accent-color: var(--accent);
   box-shadow: none;
 }
-.route-preview {
+:where([data-theme='glass']) .route-preview {
   background: rgba(0, 0, 0, 0.25);
   border-radius: 12px;
 }
-.tag {
+:where([data-theme='glass']) .tag {
   border-radius: 999px;
   padding: 1px 8px;
 }
-.tag.dim {
+:where([data-theme='glass']) .tag.dim {
   background: rgba(255, 255, 255, 0.1);
 }
 
 /* Ride screen: the same glass, lighter (it sits over the moving 3D world, where blur costs frames). */
-.tile,
-.standings,
-.banner,
-.hud.workout-panel,
-.group-chip,
-.gap {
+:where([data-theme='glass']) .tile,
+:where([data-theme='glass']) .standings,
+:where([data-theme='glass']) .banner,
+:where([data-theme='glass']) .hud.workout-panel,
+:where([data-theme='glass']) .group-chip,
+:where([data-theme='glass']) .gap {
   background: linear-gradient(160deg, rgba(22, 28, 20, 0.72), rgba(12, 16, 11, 0.66));
   border-color: var(--stroke);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     0 14px 30px -18px rgba(0, 0, 0, 0.8);
 }
-.tile {
+:where([data-theme='glass']) .tile {
   border-radius: 14px;
 }
-.banner {
+:where([data-theme='glass']) .banner {
   border-radius: 16px;
 }
-.minimap {
+:where([data-theme='glass']) .minimap {
   border-radius: 14px;
   border-color: var(--stroke);
   box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.8);
 }
-.profile-next,
-.profile-all {
+:where([data-theme='glass']) .profile-next,
+:where([data-theme='glass']) .profile-all {
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border-radius: 14px;
 }
-.controls button {
+:where([data-theme='glass']) .controls button {
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
-.seg button.on {
+:where([data-theme='glass']) .seg button.on {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: transparent;
 }
 
 /* Segmented buttons keep their joined shape, with pill ends. */
-.seg button:first-child {
+:where([data-theme='glass']) .seg button:first-child {
   border-radius: 999px 0 0 999px;
 }
-.seg button:last-child {
+:where([data-theme='glass']) .seg button:last-child {
   border-radius: 0 999px 999px 0;
 }
 
 /* Tabs are plain text until hovered or chosen. */
-.tab {
+:where([data-theme='glass']) .tab {
   box-shadow: none;
 }
-.tab.active {
+:where([data-theme='glass']) .tab.active {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* Selects drawn like the other fields, with the site's chevron. */
-select {
+:where([data-theme='glass']) select {
   -webkit-appearance: none;
   appearance: none;
   padding-right: 32px;
@@ -384,16 +386,16 @@ select {
 
 /* Some people would rather nothing moved. */
 @media (prefers-reduced-motion: reduce) {
-  body::before {
+  :where([data-theme='glass']) body::before {
     animation: none;
   }
-  button,
-  .card,
-  .tab,
-  button.primary::after {
+  :where([data-theme='glass']) button,
+  :where([data-theme='glass']) .card,
+  :where([data-theme='glass']) .tab,
+  :where([data-theme='glass']) button.primary::after {
     transition: none;
   }
-  button.primary:hover:not(:disabled) {
+  :where([data-theme='glass']) button.primary:hover:not(:disabled) {
     transform: none;
   }
 }

@@ -31,7 +31,11 @@ export interface Settings {
   nativeRenderer: boolean
   diagnostics: boolean
   gears: GearSettings
+  /** How the app's screens look: frosted glass (the default) or the flat, solid look from before. */
+  theme: Theme
 }
+
+export type Theme = 'glass' | 'simple'
 
 /** Real gears (shift the bike as normal) or virtual gears (the bike stays in one gear). */
 export interface GearSettings {
@@ -91,7 +95,8 @@ export const DEFAULT_SETTINGS: Settings = {
     startGear: 0,
     keysHarder: [']', '=', 'PageDown', 'ArrowRight'],
     keysEasier: ['[', '-', 'PageUp', 'ArrowLeft']
-  }
+  },
+  theme: 'glass'
 }
 
 export type SurfaceClass = 'paved' | 'cobbles' | 'gravel' | 'dirt' | 'unknown'
