@@ -65,6 +65,8 @@ crates/core/        Pure Rust, no I/O, fully unit-tested (tests in crates/core/t
                     barriers.rs: race barriers; landmarks.rs: signs, summits, POIs; trees.rs: the six tree models,
                     which kind grows where, and where trees turn into sprites
                     fields.rs: hedges, walls and fences, mapped and made up by region
+                    tropics.rs: where the lowland tropics and the Americas are; roadside.rs: stretch kinds (avenue,
+                    periurban, rural, town), tropical props, median palms, estate walls; opendata.rs: a route's open-data pack
 crates/relay/       Group-ride relay (lib + bin `velopopuli-relay`, WebSocket, port 47800, stateless)
 src-tauri/          The app (Tauri 2)
   main.rs           App state, command registration, data dir (VP_DATA_DIR override), diag init
@@ -84,6 +86,7 @@ web/                React + three.js (Vite). ui/ screens, world/ the 3D scene (s
                     barriers.ts, surfaces.ts, weather.ts, native.ts = assets handed to the native renderer)
 docs/images/        README screenshots; docs/wiki/ wiki source (the user's manual)
 docs/developers/    How the app is built, chapter by chapter
+tools/opendata/     Python (uv) script that prepares a route's open-data pack (OSM, Overture, Meta/WRI canopy, WorldCover, Mapillary)
 packaging/          arch/PKGBUILD, RELEASE_NOTES.md (body of every GitHub Release)
 .github/workflows/build.yml   CI: all tests, installers for every platform, Arch package, releases
 .github/ISSUE_TEMPLATE, PULL_REQUEST_TEMPLATE.md   Bug, hardware-report and feature forms; the pull-request checklist
@@ -95,8 +98,8 @@ How a ride flows end to end, and how each part works, is in the [developer pages
 ## 4. Data and formats
 
 - **App data folder:** macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`, Windows `%APPDATA%\org.velopopuli.VeloPopuli`, Linux `~/.local/share/org.velopopuli.VeloPopuli`. Override with `VP_DATA_DIR`.
-- `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, workouts, segments.
-- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (4) in `mapdata.rs`; road tags `WAY_TAGS` (4, since field boundaries in #58) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
+- `data/*.json` (store keys): `settings`, `routes` (library list) + `route-<id>` (name + GPX), `rides`, `profile`, `ghosts-<route>`, `scenery-<route>`, `buildings-<route>`, `opendata-<route>` (written by `tools/opendata`, format `OPEN_DATA_FORMAT` 1), workouts, segments.
+- **Caches have versions:** buildings `FORMAT` (2) and `SCENERY_FORMAT` (5, since housing and commercial land use) in `mapdata.rs` (an older scenery cache's Overpass road tags are carried into the refetched one); road tags `WAY_TAGS` (4, since field boundaries in #58) in `world/surface.rs`. Bump the relevant one when the cached shape changes, or old caches will be read wrongly.
 - **Secrets** (Strava, Home Assistant, GitHub none): OS keychain on macOS/Windows under the service name **"Velo Populi"** (with the space, kept on purpose so saved logins survive the rename), files with 0600 permissions on Linux. Each connector's credentials are one entry named after its id (`strava`, …); the Home Assistant token is `homeassistant`.
 - **Uploads:** a ride records where it went in `RideSummary.uploads` by connector id. Rides from before v0.3.10 carry `stravaActivityId` instead; `RideSummary::upload()` (Rust) and `uploadOf()` (page) read both, and `connector_upload` copies it into `uploads` when it next writes the list. The old field is kept alongside for a release or two so 0.3.9 still sees the ride as uploaded. The old `stravaAutoUpload` setting becomes `autoUpload: ["strava"]` in `mergeSettings`.
 - **Logs:** `logs/diagnostics-<time>.log`, last 12 runs kept.
