@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
+import * as sound from '../core/sound'
 import { api, useSettings } from '../state'
 import type { ConnectorEntry, ConnectorInfo, ConnectorStatus, GearPreview, GearSettings, Settings } from '../types'
 import { ReportButton } from './Diagnostics'
@@ -477,6 +478,7 @@ export function SettingsScreen(): React.JSX.Element {
   const physics = (patch: Partial<Settings['physics']>): void => update((s) => ({ ...s, physics: { ...s.physics, ...patch } }))
   const trainer = (patch: Partial<Settings['trainer']>): void => update((s) => ({ ...s, trainer: { ...s.trainer, ...patch } }))
   const look = (patch: Partial<Settings['look']>): void => update((s) => ({ ...s, look: { ...s.look, ...patch } }))
+  const soundSet = (patch: Partial<Settings['sound']>): void => update((s) => ({ ...s, sound: { ...s.sound, ...patch } }))
   const goal = (patch: Partial<Settings['goal']>): void => update((s) => ({ ...s, goal: { ...s.goal, ...patch } }))
 
   return (
@@ -687,6 +689,58 @@ export function SettingsScreen(): React.JSX.Element {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="card">
+        <h2>Sound</h2>
+        <p className="muted">
+          Beeps before each workout step changes, a fanfare at every summit, bells for a best or a lap, and a warning if a sensor drops out.
+        </p>
+        <label className="field">
+          <span>Volume · {Math.round(settings.sound.volume * 100)}%</span>
+          <input type="range" min={0} max={1} step={0.05} value={settings.sound.volume} onChange={(e) => soundSet({ volume: Number(e.target.value) })} />
+        </label>
+        <Toggle
+          label="Workout countdown"
+          hint="Three beeps before a step changes, and a tone as the next one starts."
+          value={settings.sound.workout}
+          onChange={(v) => soundSet({ workout: v })}
+        />
+        <Toggle
+          label="Summits, bests, laps and the finish"
+          hint="A fanfare at the top of each climb, bells for a personal best or a lap, a warning if a sensor drops out."
+          value={settings.sound.moments}
+          onChange={(v) => soundSet({ moments: v })}
+        />
+        <div className="row wrap">
+          <button
+            onClick={() => {
+              sound.setVolume(settings.sound.volume)
+              sound.fanfare()
+            }}
+          >
+            Play the summit fanfare
+          </button>
+          <button
+            onClick={() => {
+              sound.setVolume(settings.sound.volume)
+              sound.countdown()
+              setTimeout(sound.countdown, 1000)
+              setTimeout(sound.countdown, 2000)
+              setTimeout(sound.stepStart, 3000)
+            }}
+          >
+            Play a countdown
+          </button>
+          <button
+            onClick={() => {
+              sound.setVolume(settings.sound.volume)
+              sound.personalBest()
+            }}
+          >
+            Play a best
+          </button>
+        </div>
       </section>
 
       <section className="card">

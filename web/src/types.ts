@@ -31,6 +31,8 @@ export interface Settings {
   nativeRenderer: boolean
   diagnostics: boolean
   gears: GearSettings
+  /** Beeps, chimes and fanfares during a ride. */
+  sound: { volume: number; workout: boolean; moments: boolean }
 }
 
 /** Real gears (shift the bike as normal) or virtual gears (the bike stays in one gear). */
@@ -91,7 +93,8 @@ export const DEFAULT_SETTINGS: Settings = {
     startGear: 0,
     keysHarder: [']', '=', 'PageDown', 'ArrowRight'],
     keysEasier: ['[', '-', 'PageUp', 'ArrowLeft']
-  }
+  },
+  sound: { volume: 0.6, workout: true, moments: true }
 }
 
 export type SurfaceClass = 'paved' | 'cobbles' | 'gravel' | 'dirt' | 'unknown'

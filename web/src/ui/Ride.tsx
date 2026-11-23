@@ -9,6 +9,8 @@ import { World } from '../world/scene'
 import { look, timeFromHour, weatherFromCode } from '../world/weather'
 import { MiniMap } from './MiniMap'
 import { StreetPhoto } from './StreetPhoto'
+import { RideSounds } from './rideSounds'
+import * as sound from '../core/sound'
 import { ProfileChart } from './ProfileChart'
 
 interface Props {
@@ -170,8 +172,10 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
 
         let latest: { s: RideState; at: number } | null = null
         let received = 0
+        const sounds = new RideSounds(() => settingsRef.current.sound)
         offState = api.ride.onState((s) => {
           latest = { s, at: performance.now() }
+          sounds.update(s)
           smokeHooks.state = s
           // The simulation reports 20 times a second; the HUD only needs 5.
           if (received++ % 4 === 0) setHud(s)
@@ -294,6 +298,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   useEffect(
     () =>
       api.ride.onControllerAction((action) => {
+        // A click, so the rider knows the press arrived without looking.
+        if (settingsRef.current.sound.moments && settingsRef.current.sound.volume > 0) sound.tick()
         if (action === 'shiftHarder') void api.ride.shift(1)
         else if (action === 'shiftEasier') void api.ride.shift(-1)
         else if (action === 'harder') nudge(10)
