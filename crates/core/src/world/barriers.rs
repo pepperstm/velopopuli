@@ -31,7 +31,12 @@ pub const FENCE: usize = 1 + BANNER_COLOURS.len();
 pub const LAMP_DOUBLE: usize = FENCE + 1;
 pub const LAMP_SINGLE: usize = FENCE + 2;
 pub const JERSEY: usize = FENCE + 3;
-pub const LOOKS: usize = FENCE + 4;
+/// From a route's open data: a lattice tower of a high-voltage line, a concrete pole of a minor
+/// line (or one seen by Mapillary), and a water tower.
+pub const TOWER: usize = FENCE + 4;
+pub const POLE: usize = FENCE + 5;
+pub const WATER_TOWER: usize = FENCE + 6;
+pub const LOOKS: usize = FENCE + 7;
 
 /// A bend tighter than this radius (metres, at the centre line) gets a fence, not barriers.
 const TIGHT_RADIUS_M: f64 = 30.0;
@@ -79,6 +84,9 @@ pub fn barrier_model(look: usize) -> TriMesh {
         LAMP_DOUBLE => return lamp_model(true),
         LAMP_SINGLE => return lamp_model(false),
         JERSEY => return jersey_model(),
+        TOWER => return tower_model(),
+        POLE => return pole_model(),
+        WATER_TOWER => return water_tower_model(),
         _ => {}
     }
     let mut m = TriMesh::default();
@@ -146,6 +154,58 @@ fn jersey_model() -> TriMesh {
     cuboid(&mut m, [-0.09, 0.55, -half], [0.09, 0.80, half], concrete);
     cuboid(&mut m, [-0.305, 0.02, -half], [-0.295, 0.23, 0.0], linear([0.90, 0.72, 0.10]));
     cuboid(&mut m, [-0.305, 0.02, 0.0], [-0.295, 0.23, half], linear([0.08, 0.08, 0.08]));
+    m
+}
+
+/// A lattice tower of a high-voltage line, about 30 m tall, standing on the origin with the line
+/// along z: four legs leaning in, cross-bracing, and three arms across (x) to hang the wires on.
+fn tower_model() -> TriMesh {
+    let mut m = TriMesh::default();
+    let steel = linear([0.62, 0.64, 0.66]);
+    let (base, top, height) = (2.4, 0.6, 30.0);
+    let corners = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+    let at = |h: f64, (cx, cz): (f64, f64)| {
+        let r = base + (top - base) * h / height;
+        (cx * r, cz * r)
+    };
+    // The legs, in five straight stretches each, and a ring of bracing at every joint.
+    for k in 0..5 {
+        let (h0, h1) = (k as f64 * 6.0, (k + 1) as f64 * 6.0);
+        for c in corners {
+            let (p, q) = (at(h0, c), at(h1, c));
+            let (x0, z0) = ((p.0 + q.0) / 2.0, (p.1 + q.1) / 2.0);
+            cuboid(&mut m, [x0 - 0.12, h0, z0 - 0.12], [x0 + 0.12, h1, z0 + 0.12], steel);
+        }
+        let r = at(h1, (1.0, 1.0)).0;
+        cuboid(&mut m, [-r, h1 - 0.1, -r], [r, h1, -r + 0.1], steel);
+        cuboid(&mut m, [-r, h1 - 0.1, r - 0.1], [r, h1, r], steel);
+        cuboid(&mut m, [-r, h1 - 0.1, -r], [-r + 0.1, h1, r], steel);
+        cuboid(&mut m, [r - 0.1, h1 - 0.1, -r], [r, h1, r], steel);
+    }
+    for (y, reach) in [(26.0, 6.4), (29.5, 1.2)] {
+        cuboid(&mut m, [-reach, y - 0.3, -0.25], [reach, y, 0.25], steel);
+    }
+    m
+}
+
+/// A concrete pole of a minor power line, 11 m, with a cross-arm along x near the top.
+fn pole_model() -> TriMesh {
+    let mut m = TriMesh::default();
+    let (concrete, steel) = (linear([0.68, 0.67, 0.64]), linear([0.40, 0.41, 0.42]));
+    cuboid(&mut m, [-0.14, 0.0, -0.14], [0.14, 11.0, 0.14], concrete);
+    cuboid(&mut m, [-1.2, 10.2, -0.06], [1.2, 10.35, 0.06], steel);
+    m
+}
+
+/// A water tower: four legs and a tank, about 22 m tall.
+fn water_tower_model() -> TriMesh {
+    let mut m = TriMesh::default();
+    let (concrete, tank) = (linear([0.70, 0.69, 0.66]), linear([0.78, 0.80, 0.82]));
+    for (x, z) in [(-2.5, -2.5), (2.5, -2.5), (2.5, 2.5), (-2.5, 2.5)] {
+        cuboid(&mut m, [x - 0.3, 0.0, z - 0.3], [x + 0.3, 15.0, z + 0.3], concrete);
+    }
+    cuboid(&mut m, [-3.6, 15.0, -3.6], [3.6, 21.0, 3.6], tank);
+    cuboid(&mut m, [-2.4, 21.0, -2.4], [2.4, 22.2, 2.4], tank);
     m
 }
 

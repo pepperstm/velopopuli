@@ -6,8 +6,9 @@ use std::sync::Arc;
 use velopopuli_core::gpx::{build_route, RawPoint, Route, M_PER_DEG};
 use velopopuli_core::types::WorldLook;
 use velopopuli_core::world::{
-    in_americas, sprite_frame, tropical_weight, Area, AreaKind, Crossing, Footprint, GridMesh, OpenData, Road, RoadKind, RoadsideStyle, Scenery, Stretch, TreeClimate, TriMesh, World, BARRIER_FENCE,
-    BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BARRIER_LAMP_SINGLE, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, OPEN, PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
+    in_americas, sprite_frame, tropical_weight, Area, AreaKind, Crossing, Footprint, GridMesh, OpenData, PowerLine, Road, RoadKind, RoadsideStyle, Scenery, Stretch, TreeClimate, TriMesh, World,
+    BARRIER_FENCE, BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BARRIER_LAMP_SINGLE, BARRIER_POLE, BARRIER_TOWER, BARRIER_WATER_TOWER, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, OPEN,
+    PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
 };
 
 const SAMBORONDON: (f64, f64) = (-2.07, -79.87);
@@ -603,5 +604,49 @@ mod open_lamps {
     fn rule_lamps_leave_room_for_real_ones() {
         let (_, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, three_lamps);
         assert!(world.barriers().iter().all(|e| !(e[5] as usize == BARRIER_LAMP_DOUBLE && (241.0..279.0).contains(&(e[4] as f64)))));
+    }
+}
+
+mod power_lines {
+    use super::open_lamps::corridor_with_pack;
+    use super::*;
+
+    fn a_line(route: &Route) -> OpenData {
+        let pts = [(40.0, 100.0), (40.0, 400.0), (40.0, 700.0), (0.0, 1500.0)];
+        OpenData {
+            format: 1,
+            power_lines: vec![PowerLine { voltage_kind: "line".into(), points: geo(route, &pts), supports: vec!["tower".into(); 4] }],
+            poles: geo(route, &[(9.0, 2200.0)]),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn towers_stand_on_their_mapped_spots() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, a_line);
+        let towers: Vec<[f32; 7]> = world.barriers().into_iter().filter(|e| e[5] as usize == BARRIER_TOWER).collect();
+        for d in [100.0, 400.0, 700.0] {
+            let p = route.sample_at(d);
+            assert!(towers.iter().any(|t| ((t[0] as f64) - (p.x + 40.0)).abs() < 0.5 && ((t[2] as f64) - p.z).abs() < 0.5), "a tower at {d} m");
+        }
+        assert!(world.barriers().iter().any(|e| e[5] as usize == BARRIER_POLE), "the pole seen by Mapillary");
+    }
+
+    #[test]
+    fn cables_hang_between_towers() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, a_line);
+        let (x, z0, z1) = (route.sample_at(250.0).x + 40.0, route.sample_at(400.0).z, route.sample_at(100.0).z);
+        let cx = (x / CHUNK).floor() as i32;
+        let high = (cx - 1..=cx + 1)
+            .any(|c| world.chunk(c, chunk_of(&route, 250.0)).buildings.positions.chunks(3).any(|q| ((q[0] as f64) - x).abs() < 8.0 && q[1] as f64 > 20.0 && (q[2] as f64) > z0 && (q[2] as f64) < z1));
+        assert!(high, "wires overhead between the towers");
+    }
+
+    #[test]
+    fn no_tower_in_the_road() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, a_line);
+        let i = at(&route, 1500.0);
+        let tower = world.barriers().into_iter().filter(|e| e[5] as usize == BARRIER_TOWER).min_by(|a, b| ((a[2] as f64) - route.z[i]).abs().total_cmp(&((b[2] as f64) - route.z[i]).abs())).unwrap();
+        assert!(((tower[0] as f64) - route.x[i]).abs() >= world.half_width(i) + 1.0, "moved off the road: {}", tower[0]);
     }
 }

@@ -24,7 +24,7 @@ mod venue;
 
 pub use barriers::{
     barrier_model, BANNER_COLOURS, FENCE as BARRIER_FENCE, JERSEY as BARRIER_JERSEY, LAMP_DOUBLE as BARRIER_LAMP_DOUBLE, LAMP_SINGLE as BARRIER_LAMP_SINGLE, LOOKS as BARRIER_LOOKS,
-    SECTION_M as BARRIER_SECTION_M,
+    POLE as BARRIER_POLE, SECTION_M as BARRIER_SECTION_M, TOWER as BARRIER_TOWER, WATER_TOWER as BARRIER_WATER_TOWER,
 };
 pub use buildings::{overpass_query, parse_overpass, BuildingMesh, Buildings, Footprint};
 pub use dem::{align_dem, align_dem_with, Dem, TILE};
@@ -228,7 +228,10 @@ impl World {
     /// this app can't read, nothing changes. Before `with_roadside`, which leaves room for them.
     pub fn with_open_data(mut self, data: &OpenData) -> Self {
         if data.usable() && tropics::tropical_weight(self.route.lat0.abs(), 0.0) > 0.5 {
-            self.open = Some(OpenScene::new(&self.route, data));
+            let mut open = OpenScene::new(&self.route, data);
+            let widths = self.scene.widths.clone();
+            open.keep_off_road(&self.route, |i| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0);
+            self.open = Some(open);
         }
         self
     }
@@ -556,6 +559,10 @@ impl World {
                 let ys: Vec<f64> = points.iter().map(ground_at).collect();
                 fields::draw(&mut mesh.buildings, run.kind, &points, &ys, cx.wrapping_mul(7919) ^ cz.wrapping_mul(104_729) ^ n as i32, fields::Stone::of(countryside.warm()));
             }
+        }
+        // Power lines from the open data: the wires between the towers and poles.
+        if let Some(open) = &self.open {
+            open.wires(cx, cz, |x, z| self.field.surface(x, z).0, &mut mesh.buildings);
         }
         // The tropical roadside: cream walls along housing estates that face the road.
         if let Some(plan) = self.roadside.as_ref().filter(|p| p.tropical) {

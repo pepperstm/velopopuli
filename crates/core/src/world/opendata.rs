@@ -88,20 +88,36 @@ impl OpenData {
     }
 }
 
-/// A power line's support in local metres: a lattice tower or a pole.
+/// A power line's support in local metres: a lattice tower or a pole, turned to the line.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Support {
     pub at: (f64, f64),
     pub tower: bool,
+    /// The line's direction here (radians, as a model's yaw: its z axis along the line).
+    pub heading: f64,
+    /// Close enough to the route to be drawn.
+    pub near: bool,
 }
 
-/// The wires between two neighbouring supports of one line.
+/// The wires between two neighbouring supports of one line, as indices into `supports`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
-    pub a: (f64, f64),
-    pub b: (f64, f64),
+    pub a: usize,
+    pub b: usize,
     pub tower: bool,
 }
+
+/// Supports are drawn within this of the route.
+pub const SUPPORT_REACH_M: f64 = 300.0;
+/// A support mapped on the road is moved this far beyond its edge.
+const OFF_ROAD_M: f64 = 2.0;
+/// Where the wires hang on a tower and on a pole: `(across the line, height)`.
+const TOWER_WIRES: [(f64, f64); 3] = [(-6.0, 26.0), (6.0, 26.0), (0.0, 29.5)];
+const POLE_WIRES: [(f64, f64); 3] = [(-1.0, 10.4), (1.0, 10.4), (0.0, 10.9)];
+/// How far the wires sag at mid-span, as a share of the span, and how many pieces draw one.
+const SAG: f64 = 0.03;
+const WIRE_PIECES: usize = 8;
+const WIRE_THICKNESS: f64 = 0.06;
 
 /// The pack in the route's local metres.
 #[derive(Debug, Clone, Default)]
@@ -135,15 +151,83 @@ impl OpenScene {
             let tower = power.voltage_kind != "minor_line";
             let held: Vec<(f64, f64)> =
                 power.points.iter().zip(power.supports.iter().chain(std::iter::repeat(&String::new()))).filter(|(_, s)| s.as_str() == "tower" || s.as_str() == "pole").map(|(p, _)| local(p)).collect();
-            for w in held.windows(2) {
-                scene.spans.push(Span { a: w[0], b: w[1], tower });
+            let first = scene.supports.len();
+            for (k, &at) in held.iter().enumerate() {
+                let (prev, next) = (held[k.saturating_sub(1)], held[(k + 1).min(held.len() - 1)]);
+                let heading = (next.0 - prev.0).atan2(next.1 - prev.1);
+                scene.supports.push(Support { at, tower, heading, near: true });
             }
-            scene.supports.extend(held.into_iter().map(|at| Support { at, tower }));
+            for k in 1..held.len() {
+                scene.spans.push(Span { a: first + k - 1, b: first + k, tower });
+            }
         }
         for t in &data.trees {
             let (x, z) = route.to_local(t[0], t[1]);
             scene.trees.entry(((x / CHUNK).floor() as i32, (z / CHUNK).floor() as i32)).or_default().push((x, z, t[2]));
         }
         scene
+    }
+}
+
+impl OpenScene {
+    /// Marks the supports near enough to the route to draw, and moves any mapped on the road
+    /// itself (or within a metre of it) off to its side, `half_width(i)` being the road's half
+    /// width at route sample `i`.
+    pub(super) fn keep_off_road(&mut self, route: &Route, half_width: impl Fn(usize) -> f64) {
+        for s in &mut self.supports {
+            let Some((i, dist)) = (0..route.n).map(|i| (i, (route.x[i] - s.at.0).hypot(route.z[i] - s.at.1))).min_by(|a, b| a.1.total_cmp(&b.1)) else { continue };
+            s.near = dist <= SUPPORT_REACH_M;
+            let half = half_width(i);
+            if dist < half + 1.0 {
+                let (a, b) = (i.saturating_sub(1), (i + 1).min(route.n - 1));
+                let (tx, tz) = (route.x[b] - route.x[a], route.z[b] - route.z[a]);
+                let len = tx.hypot(tz).max(1e-9);
+                let (rx, rz) = (-tz / len, tx / len);
+                let right = (s.at.0 - route.x[i]) * rx + (s.at.1 - route.z[i]) * rz;
+                let side = if right >= 0.0 { 1.0 } else { -1.0 };
+                s.at = (route.x[i] + rx * side * (half + OFF_ROAD_M), route.z[i] + rz * side * (half + OFF_ROAD_M));
+            }
+        }
+    }
+
+    /// The wires of the power lines whose pieces have their middle in chunk `(cx, cz)`, sagging
+    /// between their supports, added to `mesh`. `ground(x, z)` is the height of the ground.
+    pub(super) fn wires(&self, cx: i32, cz: i32, ground: impl Fn(f64, f64) -> f64, mesh: &mut super::mesh::TriMesh) {
+        let colour = [0.05f32, 0.05, 0.05];
+        for span in &self.spans {
+            let (a, b) = (self.supports[span.a], self.supports[span.b]);
+            if !(a.near || b.near) {
+                continue;
+            }
+            let length = (b.at.0 - a.at.0).hypot(b.at.1 - a.at.1);
+            let (ga, gb) = (ground(a.at.0, a.at.1), ground(b.at.0, b.at.1));
+            let hung = |s: &Support, g: f64, (across, up): (f64, f64)| [s.at.0 + s.heading.cos() * across, g + up, s.at.1 - s.heading.sin() * across];
+            for &wire in if span.tower { &TOWER_WIRES } else { &POLE_WIRES } {
+                let (p, q) = (hung(&a, ga, wire), hung(&b, gb, wire));
+                let at = |t: f64| [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t - 4.0 * SAG * length * t * (1.0 - t), p[2] + (q[2] - p[2]) * t];
+                for k in 0..WIRE_PIECES {
+                    let (u, v) = (at(k as f64 / WIRE_PIECES as f64), at((k + 1) as f64 / WIRE_PIECES as f64));
+                    let mid = ((u[0] + v[0]) / 2.0, (u[2] + v[2]) / 2.0);
+                    if (mid.0 / CHUNK).floor() as i32 == cx && (mid.1 / CHUNK).floor() as i32 == cz {
+                        tube(mesh, u, v, colour);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A thin square tube from `a` to `b`, for a wire.
+fn tube(mesh: &mut super::mesh::TriMesh, a: [f64; 3], b: [f64; 3], colour: [f32; 3]) {
+    let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-9);
+    let flat = (-d[2]).hypot(d[0]).max(1e-9);
+    let side = [-d[2] / flat, 0.0, d[0] / flat];
+    let up = [(side[1] * d[2] - side[2] * d[1]) / len, (side[2] * d[0] - side[0] * d[2]) / len, (side[0] * d[1] - side[1] * d[0]) / len];
+    let h = WIRE_THICKNESS / 2.0;
+    let corner = |p: [f64; 3], s: f64, u: f64| [p[0] + (side[0] * s + up[0] * u) * h, p[1] + (side[1] * s + up[1] * u) * h, p[2] + (side[2] * s + up[2] * u) * h];
+    let faces = [((1.0, 1.0), (1.0, -1.0), side), ((-1.0, -1.0), (-1.0, 1.0), side.map(|c| -c)), ((-1.0, 1.0), (1.0, 1.0), up), ((1.0, -1.0), (-1.0, -1.0), up.map(|c| -c))];
+    for ((s0, u0), (s1, u1), facing) in faces {
+        mesh.quad([corner(a, s0, u0), corner(a, s1, u1), corner(b, s1, u1), corner(b, s0, u0)], facing, [colour; 4]);
     }
 }

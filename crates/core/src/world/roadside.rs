@@ -303,6 +303,22 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
         out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, yaw as f32, d as f32, LAMP_SINGLE as f32, 0.0]);
         real_lamps.push(d);
     }
+    // Power line supports and poles from the open data, where they stand.
+    if let Some(o) = world.open() {
+        use super::barriers::{POLE, TOWER};
+        for s in o.supports.iter().filter(|s| s.near) {
+            let (i, _) = nearest_sample(route, s.at);
+            out.push([s.at.0 as f32, world.field.surface(s.at.0, s.at.1).0 as f32, s.at.1 as f32, s.heading as f32, (i as f64 * route.step) as f32, (if s.tower { TOWER } else { POLE }) as f32, 0.0]);
+        }
+        for &p in &o.poles {
+            let (i, dist) = nearest_sample(route, p);
+            if dist > REAL_LAMP_REACH_M || dist < world.half_width(i) + 1.0 {
+                continue;
+            }
+            let (tx, tz) = tangent(route, i);
+            out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, tx.atan2(tz) as f32, (i as f64 * route.step) as f32, POLE as f32, 0.0]);
+        }
+    }
     let mut put = |d: f64, side: f64, offset: f64, look: usize, pitch: f64| {
         let ((x, z), yaw) = beside_route(route, d, side, offset);
         if !clear_of_side_roads(world, sample(route, d), (x, z)) {
