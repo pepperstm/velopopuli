@@ -18,6 +18,10 @@ use crate::gpx::Route;
 pub enum AreaKind {
     Forest,
     Water,
+    /// Housing: in the tropics, the estates behind the walls along a main road.
+    Residential,
+    /// Shops, malls and offices (`landuse=commercial` or `retail`).
+    Commercial,
 }
 
 /// A mapped area as `[lat, lon]` rings. A point is in the area if an odd number
@@ -336,6 +340,10 @@ pub struct SceneryCounts {
 pub struct Scene {
     pub(super) forest: Mask,
     pub(super) water: Mask,
+    /// Where the map has housing (`landuse=residential`).
+    pub(super) residential: Mask,
+    /// Where the map has shops, malls and offices.
+    pub(super) commercial: Mask,
     pub(super) strips: HashMap<(i32, i32), Vec<Strip>>,
     road_strips: Vec<RoadStrip>,
     /// Per chunk, the road strips that reach into it, in painting order.
@@ -931,6 +939,8 @@ impl Scene {
                     scene.water.fill(&rings);
                     scene.counts.waters += 1;
                 }
+                AreaKind::Residential => scene.residential.fill(&rings),
+                AreaKind::Commercial => scene.commercial.fill(&rings),
             }
         }
 
@@ -1202,6 +1212,69 @@ impl Scene {
     }
 
     /// The pieces of other roads that reach into chunk `(cx, cz)`, in the order to paint them.
+    /// Sidewalks along the route where it is built up and the road is open: beside an avenue on
+    /// its outer side (the median is on the other), beside a town street on both. Each is a
+    /// paved strip `SIDEWALK_M` wide just beyond the kerb, laid on the ground like the other
+    /// roads, with a light edge on both sides that reads as the kerb.
+    pub(super) fn add_sidewalks(&mut self, route: &Route, plan: &super::roadside::RoadsidePlan, half_width: impl Fn(usize) -> f64) {
+        use super::roadside::Stretch;
+        const SIDEWALK_M: f64 = 2.5;
+        const KERB_GAP_M: f64 = 0.3;
+        const PIECE_M: f64 = 20.0;
+        if route.n < 2 {
+            return;
+        }
+        let beside = Beside::new(route);
+        let per_piece = ((PIECE_M / route.step).round() as usize).max(1);
+        let sides = |i: usize| -> &'static [f64] {
+            match plan.stretch.get(i) {
+                Some(Stretch::Town) => &[1.0, -1.0],
+                Some(Stretch::Avenue) if plan.median_side[i] > 0.0 => &[-1.0],
+                Some(Stretch::Avenue) if plan.median_side[i] < 0.0 => &[1.0],
+                _ => &[],
+            }
+        };
+        let tangent = |i: usize| {
+            let (a, b) = (i.saturating_sub(1), (i + 1).min(route.n - 1));
+            let (tx, tz) = (route.x[b] - route.x[a], route.z[b] - route.z[a]);
+            let len = tx.hypot(tz).max(1e-9);
+            (tx / len, tz / len)
+        };
+        let mut i0 = 0;
+        while i0 + 1 < route.n {
+            let mut i1 = (i0 + per_piece).min(route.n - 1);
+            // A piece keeps to one stretch kind, on open ground.
+            if let Some(k) = (i0 + 1..=i1).find(|&k| sides(k) != sides(i0) || self.kinds.get(k).is_some_and(|&kind| kind != OPEN)) {
+                i1 = k.max(i0 + 1);
+            }
+            if self.kinds.get(i0).is_none_or(|&kind| kind == OPEN) {
+                for &side in sides(i0) {
+                    // The middle of the sidewalk, to the given side (+1 the rider's right, (−tz, tx)).
+                    let centre = |i: usize| {
+                        let (tx, tz) = tangent(i);
+                        let off = side * (half_width(i) + KERB_GAP_M + SIDEWALK_M / 2.0);
+                        ((route.x[i] - tz * off, route.z[i] + tx * off), (tz, -tx))
+                    };
+                    let ((a, na), (b, nb)) = (centre(i0), centre(i1));
+                    let ends = (i0 as f64 * route.step, i1 as f64 * route.step);
+                    for (half, casing) in [(SIDEWALK_M / 2.0, true), (SIDEWALK_M / 2.0 - EDGE_LINE, false)] {
+                        let at = |p: (f64, f64), n: (f64, f64), s: f64| (p.0 + n.0 * half * s, p.1 + n.1 * half * s);
+                        let corners = [at(a, na, -1.0), at(a, na, 1.0), at(b, nb, 1.0), at(b, nb, -1.0)];
+                        self.add_strip(&beside, RoadStrip { a, b, corners, along: ends, half, kind: RoadKind::Pedestrian, steel: false, joins: false, oneway: true, casing, cap: false });
+                    }
+                }
+            }
+            i0 = i1;
+        }
+    }
+
+    /// The pieces of one-way carriageway laid beside the route, as `(start, end, half width)`:
+    /// where the route runs on one side of a divided road, the other side is among them. Only
+    /// streets and main roads: a one-way service lane or path is not a carriageway.
+    pub(super) fn oneway_strips(&self) -> impl Iterator<Item = ((f64, f64), (f64, f64), f64)> + '_ {
+        self.road_strips.iter().filter(|s| s.oneway && !s.casing && !s.cap && !s.steel && matches!(s.kind, RoadKind::Minor | RoadKind::Main | RoadKind::Major)).map(|s| (s.a, s.b, s.half))
+    }
+
     pub(super) fn roads_in(&self, cx: i32, cz: i32) -> impl Iterator<Item = &RoadStrip> + Clone {
         self.road_index.get(&(cx, cz)).map_or(&[][..], |v| v).iter().map(|&k| &self.road_strips[k as usize])
     }

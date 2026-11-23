@@ -617,6 +617,12 @@ export function SettingsScreen(): React.JSX.Element {
           value={settings.scenery}
           onChange={(v) => update((s) => ({ ...s, scenery: v }))}
         />
+        <Toggle
+          label="Open road (no race barriers)"
+          hint="Rides the road as it is on an ordinary day: no crowd barriers along the route, and kerbs and sidewalks where it is built up."
+          value={settings.look.openRoad}
+          onChange={(v) => look({ openRoad: v })}
+        />
         <div className="fields">
           <label className="field">
             <span>Time of day</span>

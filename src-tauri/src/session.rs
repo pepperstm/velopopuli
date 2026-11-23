@@ -236,7 +236,7 @@ impl Session {
                     .collect();
                 world.with_buildings(&footprints)
             }
-            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints),
+            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints).with_roadside(velopopuli_core::world::RoadsideStyle { open_road: settings.look.open_road }),
         };
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
         if let Some(s) = std::env::var("VP_SMOKE_SURFACE")

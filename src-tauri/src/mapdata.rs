@@ -51,7 +51,7 @@ const MAX_BUILDINGS: usize = 80_000;
 const MAX_AGE_MS: u64 = 180 * 86_400_000;
 const MAX_AGE_OUTLINES_MS: u64 = 14 * 86_400_000;
 const FORMAT: u32 = 2;
-const SCENERY_FORMAT: u32 = 4;
+const SCENERY_FORMAT: u32 = 5;
 
 #[derive(Serialize, Deserialize)]
 struct Cached {
@@ -193,12 +193,30 @@ fn fresh<T>(cached: &Option<T>, fetched_at: impl Fn(&T) -> u64, max_age: impl Fn
     cached.as_ref().is_some_and(|c| now_ms().saturating_sub(fetched_at(c)) < max_age(c))
 }
 
+/// Keeps the road tags, and the hedges, walls and fences asked for with them, of an older
+/// copy of a route's scenery in a newly fetched one that has none yet: fetching the tiles again
+/// must not lose what Overpass answered before, in case it doesn't answer this time.
+fn carry_over_road_tags(fresh: &mut Scenery, old: Option<&Scenery>) {
+    let Some(old) = old else { return };
+    if fresh.way_tags == 0 && old.way_tags != 0 {
+        fresh.ways = old.ways.clone();
+        fresh.boundaries = old.boundaries.clone();
+        fresh.way_tags = old.way_tags;
+    }
+}
+
 /// Buildings and scenery for a route: from the cache where present and fresh, otherwise
 /// downloaded. Never fails — offline simply means none (or older ones).
 pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: &Route, want_buildings: bool, want_scenery: bool) -> MapData {
     let (buildings_name, scenery_name) = (format!("buildings-{route_id}"), format!("scenery-{route_id}"));
     let cached: Option<Cached> = if want_buildings { store.get(&buildings_name).filter(|c: &Cached| c.format == FORMAT) } else { None };
-    let cached_scenery: Option<CachedScenery> = if want_scenery { store.get(&scenery_name).filter(|c: &CachedScenery| c.format == SCENERY_FORMAT) } else { None };
+    // A cache in an older format is not used as it is, but its road tags (from Overpass, which is
+    // often down) are kept when the tiles are fetched again, and offline it is better than nothing.
+    let stored: Option<CachedScenery> = if want_scenery { store.get(&scenery_name) } else { None };
+    let (cached_scenery, stale) = match stored {
+        Some(c) if c.format == SCENERY_FORMAT => (Some(c), None),
+        older => (None, older),
+    };
     let need_buildings = want_buildings && !fresh(&cached, |c| c.fetched_at, |c| if c.detailed { MAX_AGE_MS } else { MAX_AGE_OUTLINES_MS });
     let need_scenery = want_scenery && !fresh(&cached_scenery, |c| c.fetched_at, |_| MAX_AGE_MS);
     // Road tags come from Overpass, which is often down: asked again on later rides until it answers.
@@ -250,6 +268,7 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
                 scenery.add(*x, *y, tile);
             }
             tile_buildings = Some(footprints);
+            carry_over_road_tags(&mut scenery, cached_scenery.as_ref().or(stale.as_ref()).map(|c| &c.scenery));
             eprintln!(
                 "Scenery: {} areas, {} waterways, {} roads and paths, {} bridges and tunnels from {} map tiles",
                 scenery.areas.len(),
@@ -266,7 +285,7 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
         }
         Some(Err(why)) => {
             crate::diag::event("map", format!("scenery unavailable: {why}"));
-            cached_scenery.map(|c| c.scenery)
+            cached_scenery.or(stale).map(|c| c.scenery)
         }
         None => cached_scenery.map(|c| c.scenery),
     };
@@ -331,4 +350,23 @@ pub async fn load(http: &reqwest::Client, store: &Store, route_id: &str, route: 
         }
     };
     MapData { footprints, scenery }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_tiles_keep_the_road_tags_of_an_older_cache() {
+        let mut old = Scenery { way_tags: WAY_TAGS, ..Default::default() };
+        old.ways.push(velopopuli_core::world::MappedWay { highway: "primary".into(), surface: None, width: Some(7.0), mtb: None, hiking: None, line: vec![[0.0, 0.0], [0.0, 0.001]] });
+        let mut fresh = Scenery::default();
+        carry_over_road_tags(&mut fresh, Some(&old));
+        assert_eq!(fresh.ways.len(), 1);
+        assert_eq!(fresh.way_tags, WAY_TAGS);
+        // Nothing older: nothing to keep.
+        let mut alone = Scenery::default();
+        carry_over_road_tags(&mut alone, None);
+        assert!(alone.ways.is_empty() && alone.way_tags == 0);
+    }
 }
