@@ -272,6 +272,12 @@ fn nearest_sample(route: &Route, p: (f64, f64)) -> (usize, f64) {
 /// Real street lamps (from the open data) stand within this of the route's centre line…
 const REAL_LAMP_REACH_M: f64 = 30.0;
 
+/// Mapped median barriers are drawn within this of the route, water towers within this.
+const MAPPED_JERSEY_REACH_M: f64 = 60.0;
+const WATER_TOWER_REACH_M: f64 = 2000.0;
+/// The rule's median barrier gives way to a mapped one this close.
+const MAPPED_JERSEY_CLEAR_M: f64 = 5.0;
+
 /// The sample index at `d` metres along.
 fn sample(route: &Route, d: f64) -> usize {
     ((d / route.step).round() as usize).min(route.n - 1)
@@ -302,6 +308,34 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
         let d = i as f64 * route.step;
         out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, yaw as f32, d as f32, LAMP_SINGLE as f32, 0.0]);
         real_lamps.push(d);
+    }
+    // Mapped median barriers (open data) where they are, section by section; and water towers.
+    let mut mapped_jersey: Vec<(f64, f64)> = Vec::new();
+    if let Some(o) = world.open() {
+        use super::barriers::{JERSEY as MAPPED_JERSEY, WATER_TOWER};
+        for line in &o.jersey {
+            for w in line.windows(2) {
+                let (dx, dz) = (w[1].0 - w[0].0, w[1].1 - w[0].1);
+                let len = dx.hypot(dz);
+                let sections = (len / super::barriers::SECTION_M).floor() as usize;
+                for k in 0..sections {
+                    let t = (k as f64 + 0.5) * super::barriers::SECTION_M / len.max(1e-9);
+                    let p = (w[0].0 + dx * t, w[0].1 + dz * t);
+                    let (i, dist) = nearest_sample(route, p);
+                    if dist > MAPPED_JERSEY_REACH_M {
+                        continue;
+                    }
+                    out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, dx.atan2(dz) as f32, (i as f64 * route.step) as f32, MAPPED_JERSEY as f32, 0.0]);
+                    mapped_jersey.push(p);
+                }
+            }
+        }
+        for &p in &o.water_towers {
+            let (i, dist) = nearest_sample(route, p);
+            if dist <= WATER_TOWER_REACH_M {
+                out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, 0.0, (i as f64 * route.step) as f32, WATER_TOWER as f32, 0.0]);
+            }
+        }
     }
     // Power line supports and poles from the open data, where they stand.
     if let Some(o) = world.open() {
@@ -357,6 +391,10 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
         };
         let climb = (route.sample_at(d + SECTION_M / 2.0).ele - route.sample_at(d - SECTION_M / 2.0).ele).atan2(SECTION_M);
         let side = plan.median_side[i];
+        let (spot, _) = beside_route(route, d, side, offset);
+        if mapped_jersey.iter().any(|m| (m.0 - spot.0).hypot(m.1 - spot.1) < MAPPED_JERSEY_CLEAR_M) {
+            continue;
+        }
         put(d, side, offset, JERSEY, if side > 0.0 { climb } else { -climb });
     }
     out

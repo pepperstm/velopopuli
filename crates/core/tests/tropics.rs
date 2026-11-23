@@ -696,3 +696,28 @@ mod cycle_lanes {
         assert!(v.iter().any(|&(out, west, green)| !green && west && out > 3.2 && out < 4.7), "the sidewalk beyond the lane");
     }
 }
+
+mod mapped_barriers {
+    use super::open_lamps::corridor_with_pack;
+    use super::*;
+
+    fn pack(route: &Route) -> OpenData {
+        OpenData { format: 1, jersey: vec![geo(route, &[(9.0, 1200.0), (9.0, 1300.0)])], water_towers: geo(route, &[(300.0, 1500.0)]), ..Default::default() }
+    }
+
+    #[test]
+    fn mapped_jersey_replaces_the_rule() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, pack);
+        let x = route.sample_at(1250.0).x + 9.0;
+        let sections: Vec<[f32; 7]> = world.barriers().into_iter().filter(|e| e[5] as usize == BARRIER_JERSEY && (1205.0..1295.0).contains(&(e[4] as f64))).collect();
+        assert!(sections.len() >= 33 && sections.len() <= 40, "{} sections: the mapped ones, not doubled by the rule", sections.len());
+        assert!(sections.iter().all(|s| ((s[0] as f64) - x).abs() < 0.6), "all on the mapped line");
+    }
+
+    #[test]
+    fn water_tower_stands_where_mapped() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, pack);
+        let p = route.sample_at(1500.0);
+        assert!(world.barriers().iter().any(|e| e[5] as usize == BARRIER_WATER_TOWER && ((e[0] as f64) - (p.x + 300.0)).abs() < 0.5 && ((e[2] as f64) - p.z).abs() < 0.5));
+    }
+}
