@@ -2,17 +2,15 @@
 
 > This is an early release. The 3D world, physics, workouts and progress tracking are well tested; real trainers and sensors are only now being tried, and the Windows and Linux builds have had little use. If something doesn't work, the app's **Report a problem → Report on GitHub** builds a diagnostics report for you. Please send one.
 
-## What's new in 0.3.10
+## What's new in 0.4.0
 
-- **Laps.** Ride a loop route as many times as you like. The app counts laps and distance as you go and times every climb on every lap. Thanks to Rallensooo for adding it.
-- **Herne Hill Velodrome.** The outdoor track in south London where the 1948 Olympic track races were held comes built in: 450 m round, banked into the bends, with the pavilion, stands and floodlights. Ride it anticlockwise, as they race it, or the other way round.
-- **Find signposted road routes.** Find a route now shows the signposted cycle routes from OpenStreetMap on the map, alongside the mountain-bike trails and famous climbs.
-- **Your Strava routes.** With Strava connected, the routes you've saved there are listed in Find a route, ready to ride. Reconnect Strava once to see your private routes.
-- **Dreeve.** Send rides to your own [Dreeve](https://github.com/pepperstm/velopopuli/wiki/Dreeve) server, race your Dreeve rides as ghosts, and turn any of them into a route (Dreeve 5.4 or later). Thanks to Jörn for adding it, and for making services like Strava and Dreeve pluggable.
-- **Sensors are remembered.** Trainers, power meters and heart-rate straps you've paired connect by themselves when the app starts, and Devices shows which ones it's still looking for.
-- **Smoother bends.** The rider follows a smooth curve through corners instead of turning in steps, and leans into the bends.
-- **Linux Bluetooth.** Sensors that wouldn't connect on Linux (BlueZ cancelling the connection) should now connect: the app stops scanning while it connects.
-- Ending a ride too short to save now says so, and a ghost on a loop route starts from the start.
+- **Overlay mode.** Press **O** or **Overlay** during a ride and the app shrinks to a see-through panel that floats over everything: power, speed, heart rate, cadence, the workout, the map and the gear buttons, on top of a video or a stream in another window. Drag it anywhere, and change how see-through it is. Press **O** again to go back.
+- **A new look.** The app now has the glassy style of the website, called **Glass**. The flat look from before is still there as **Simple**, under **Settings → Rider → Theme**.
+- **Sound.** A fanfare at the top of every climb and a grander one at the finish, bells for a personal best or a lap, three beeps before each workout step changes, and a soft warning if a sensor drops out. All made by the app, with no sound files. Set the volume or turn them off under **Settings → Sound**.
+- **A bigger route finder.** Six routing styles (road bike, quiet roads, gravel, touring, safest, mountain bike), set for each part of the route. Drag the route to add a waypoint, undo and redo, reverse, close the loop or go out and back. **Make a loop** plans a round trip of the distance and direction you choose. A breakdown shows the surfaces and road types, the climbs, and how long the ride should take you.
+- **Target power in your rides.** In ERG and workouts, the `.FIT` file now records the power the trainer was asked to hold, so sites like Intervals.icu and GoldenCheetah can show it next to the power you rode. Thanks to david-uhlig for adding it.
+- **Steep climbs.** On a very steep climb at low power, the rider now crawls up slowly instead of stalling at 0 km/h. Thanks to david-uhlig for reporting it.
+- **AppImage updates.** On Linux, the AppImage can be updated with AppImageUpdate, which downloads only what has changed.
 
 ## Download
 
