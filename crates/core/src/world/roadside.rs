@@ -263,6 +263,15 @@ fn clear_of_side_roads(world: &super::World, i: usize, p: (f64, f64)) -> bool {
     })
 }
 
+/// The route sample nearest `p`, and how far `p` is from it. A plain search: used once per
+/// ride for the open data's points, never per frame or chunk.
+fn nearest_sample(route: &Route, p: (f64, f64)) -> (usize, f64) {
+    (0..route.n).map(|i| (i, (route.x[i] - p.0).hypot(route.z[i] - p.1))).min_by(|a, b| a.1.total_cmp(&b.1)).unwrap_or((0, f64::INFINITY))
+}
+
+/// Real street lamps (from the open data) stand within this of the route's centre line…
+const REAL_LAMP_REACH_M: f64 = 30.0;
+
 /// The sample index at `d` metres along.
 fn sample(route: &Route, d: f64) -> usize {
     ((d / route.step).round() as usize).min(route.n - 1)
@@ -279,6 +288,21 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
     // Open ground, and a road rather than a trail.
     let open = |i: usize| kinds.get(i).is_none_or(|&k| k == OPEN) && world.scene.trails.get(i).is_none_or(Option::is_none);
     let mut out = Vec::new();
+    // Real lamps where they are mapped, the arm over the road; the rule's lamps only fill the gaps.
+    let mut real_lamps: Vec<f64> = Vec::new();
+    for &p in world.open().map_or(&[][..], |o| &o.lamps[..]) {
+        let (i, dist) = nearest_sample(route, p);
+        if dist > REAL_LAMP_REACH_M || !open(i) {
+            continue;
+        }
+        let (tx, tz) = tangent(route, i);
+        let right = (p.0 - route.x[i]) * -tz + (p.1 - route.z[i]) * tx;
+        let heading = tx.atan2(tz);
+        let yaw = if right > 0.0 { heading + std::f64::consts::PI } else { heading };
+        let d = i as f64 * route.step;
+        out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, yaw as f32, d as f32, LAMP_SINGLE as f32, 0.0]);
+        real_lamps.push(d);
+    }
     let mut put = |d: f64, side: f64, offset: f64, look: usize, pitch: f64| {
         let ((x, z), yaw) = beside_route(route, d, side, offset);
         if !clear_of_side_roads(world, sample(route, d), (x, z)) {
@@ -287,9 +311,10 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
         let y = world.field.surface(x, z).0;
         out.push([x as f32, y as f32, z as f32, yaw as f32, d as f32, look as f32, pitch as f32]);
     };
+    let near_real = |d: f64| real_lamps.iter().any(|&r| (r - d).abs() < LAMP_SPACING_M / 2.0);
     for d in every(route, LAMP_START_M, LAMP_SPACING_M) {
         let i = sample(route, d);
-        if !open(i) {
+        if !open(i) || near_real(d) {
             continue;
         }
         match plan.stretch[i] {

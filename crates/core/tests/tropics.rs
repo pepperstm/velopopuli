@@ -7,7 +7,7 @@ use velopopuli_core::gpx::{build_route, RawPoint, Route, M_PER_DEG};
 use velopopuli_core::types::WorldLook;
 use velopopuli_core::world::{
     in_americas, sprite_frame, tropical_weight, Area, AreaKind, Crossing, Footprint, GridMesh, OpenData, Road, RoadKind, RoadsideStyle, Scenery, Stretch, TreeClimate, TriMesh, World, BARRIER_FENCE,
-    BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, OPEN, PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
+    BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BARRIER_LAMP_SINGLE, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, OPEN, PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
 };
 
 const SAMBORONDON: (f64, f64) = (-2.07, -79.87);
@@ -570,5 +570,38 @@ mod open_data {
         let route = straight_at(ALPS.0, ALPS.1, 3000.0);
         let od: OpenData = serde_json::from_str(&pack_json(&route, 1)).unwrap();
         assert!(World::new(route, None, 0.0).with_open_data(&od).open().is_none());
+    }
+}
+
+mod open_lamps {
+    use super::*;
+
+    /// The corridor with an open-data pack.
+    pub(super) fn corridor_with_pack(lat0: f64, lon0: f64, pack: impl Fn(&Route) -> OpenData) -> (Arc<Route>, World) {
+        let route = straight_at(lat0, lon0, 3000.0);
+        let (scenery, houses) = corridor_map(&route);
+        let od = pack(&route);
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_open_data(&od).with_roadside(RoadsideStyle::default());
+        (route, world)
+    }
+
+    fn three_lamps(route: &Route) -> OpenData {
+        OpenData { format: 1, lamps: geo(route, &[(-12.0, 200.0), (-12.0, 260.0), (-12.0, 320.0)]), ..Default::default() }
+    }
+
+    #[test]
+    fn real_lamps_stand_where_mapped() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, three_lamps);
+        let singles: Vec<[f32; 7]> = world.barriers().into_iter().filter(|e| e[5] as usize == BARRIER_LAMP_SINGLE).collect();
+        for d in [200.0, 260.0, 320.0] {
+            let p = route.sample_at(d);
+            assert!(singles.iter().any(|l| ((l[0] as f64) - (p.x - 12.0)).abs() < 0.5 && ((l[2] as f64) - p.z).abs() < 0.5), "a lamp at {d} m");
+        }
+    }
+
+    #[test]
+    fn rule_lamps_leave_room_for_real_ones() {
+        let (_, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, three_lamps);
+        assert!(world.barriers().iter().all(|e| !(e[5] as usize == BARRIER_LAMP_DOUBLE && (241.0..279.0).contains(&(e[4] as f64)))));
     }
 }
