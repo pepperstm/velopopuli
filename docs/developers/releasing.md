@@ -4,7 +4,7 @@ Releases are built by CI from a version tag. Nothing is built or uploaded by han
 
 ## Versions
 
-Versions are `MAJOR.MINOR.PATCH` (0.3.10, say). A suffix such as `0.4.0-beta.1` makes a pre-release; a plain version becomes the latest release.
+Versions are `MAJOR.MINOR.PATCH` (0.3.10, say). A tag with a suffix, such as `v0.4.0-rc.1`, makes a pre-release; a plain tag becomes the latest release.
 
 The version is written in these places, which must all agree:
 
@@ -18,9 +18,30 @@ The version is written in these places, which must all agree:
 | `packaging/arch/PKGBUILD` | `pkgver` |
 | `HANDOFF.md` | the heading of §2 |
 
+## Release candidates
+
+A new minor version (0.4.0, say) goes out first as numbered **release candidates**: `v0.4.0-rc.1`, `v0.4.0-rc.2` and so on, each a full set of installers that anyone can try. Only when everything planned for the version is in and has been tried is the plain `v0.4.0` tagged. Patch releases (0.3.11) can skip straight to the full release.
+
+- **The files keep the plain version.** Every file in the table below says `0.4.0`, from the first candidate to the full release: Windows installers can't carry a suffix like `-rc.1`. Only the tag says which candidate it is.
+- **The app knows which candidate it is.** CI builds a tagged release with `VP_RELEASE_VERSION` set from the tag, and the app reports that (`0.4.0-rc.2`) in diagnostics and bug reports. Any other build reports the crate version.
+- **The tag has to match.** CI stops a release whose tag, without its suffix, isn't the version in `tauri.conf.json`.
+- **Pre-releases stay out of the way.** GitHub marks them as pre-releases, so they're never the latest release: the website's links, the AppImage catalog and AppImage updates for riders on a full release don't see them. A candidate's notes start with a note saying it's a test build.
+- **Testers move forward.** A candidate's AppImage updates to the newest release of any kind (the `latest-all` channel), so it moves on to the next candidate and then the full release, never back to the last full release.
+- **What's in it** is tracked by the [milestone](https://github.com/pepperstm/velopopuli/milestones) for the version. When the milestone's issues are all closed, it's ready for the full release.
+
+To make a candidate, follow the steps below: the first candidate bumps the version to 0.4.0 and writes the release notes; later candidates need no new version bump, only any notes updates, and every one is tagged on `main`:
+
+```bash
+git switch main && git pull
+git tag -a v0.4.0-rc.1 -m "VeloPopuli 0.4.0, release candidate 1"
+git push origin v0.4.0-rc.1
+```
+
+The full release is then tagged `v0.4.0` on `main` once the last candidate has been tried and nothing else is needed.
+
 ## Making a release
 
-1. **Branch** `release/vX.Y.Z` from an up-to-date `main`.
+1. **Branch** `release/vX.Y.Z` from an up-to-date `main`. (Only for the first release candidate or a patch release; the version is already bumped for later candidates and the full release.)
 2. **Bump the version** everywhere above.
 3. **Write the release notes** in [`packaging/RELEASE_NOTES.md`](../../packaging/RELEASE_NOTES.md): rewrite *What's new* for this version in plain words, thanking contributors and reporters by their GitHub names. The rest (downloads, first launch on each system) changes only when that does. This file is the release's description on GitHub.
 4. **Open a pull request**, let CI pass, and squash-merge it ("Release vX.Y.Z (#N)").
@@ -51,7 +72,7 @@ The `release` job in [`build.yml`](../../.github/workflows/build.yml) collects t
 
 ### Updating the AppImage
 
-The AppImage carries update information, so [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) and tools like it can update an installed copy from the latest release, downloading only what changed. After `tauri build`, the Linux job runs [`packaging/appimage-update-info.sh`](../../packaging/appimage-update-info.sh), which unpacks the AppImage, packs it again with [appimagetool](https://github.com/AppImage/appimagetool) and `-u "gh-releases-zsync|pepperstm|velopopuli|latest|VeloPopuli_*_amd64.AppImage.zsync"`, and checks the result. The `.zsync` file it makes is published with the release. `latest` means pre-releases are never offered as updates.
+The AppImage carries update information, so [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) and tools like it can update an installed copy from the latest release, downloading only what changed. After `tauri build`, the Linux job runs [`packaging/appimage-update-info.sh`](../../packaging/appimage-update-info.sh), which unpacks the AppImage, packs it again with [appimagetool](https://github.com/AppImage/appimagetool) and `-u "gh-releases-zsync|pepperstm|velopopuli|latest|VeloPopuli_*_amd64.AppImage.zsync"`, and checks the result. The `.zsync` file it makes is published with the release. A full release uses `latest`, so pre-releases are never offered as updates to it; a release candidate uses `latest-all` instead (see [Release candidates](#release-candidates)).
 
 VeloPopuli is also listed in the [AppImage catalog](https://appimage.github.io), which reads the newest release from GitHub itself.
 

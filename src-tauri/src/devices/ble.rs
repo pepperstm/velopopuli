@@ -397,7 +397,7 @@ impl Link {
         };
         // OpenBikeControl: tell the controller which app this is and which buttons it uses.
         if let (Some(c), true) = (&obc_app_info, obc_buttons.is_some()) {
-            let info = obc::app_info("velopopuli", env!("CARGO_PKG_VERSION"));
+            let info = obc::app_info("velopopuli", crate::VERSION);
             let write_type = if c.properties.contains(CharPropFlags::WRITE) { WriteType::WithResponse } else { WriteType::WithoutResponse };
             if let Err(e) = p.write(c, &info, write_type).await {
                 diag::event("ble", format!("dev={id} OpenBikeControl app info failed: {e}"));
