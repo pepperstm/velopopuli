@@ -6,7 +6,7 @@ use std::sync::Arc;
 use velopopuli_core::gpx::{build_route, RawPoint, Route, M_PER_DEG};
 use velopopuli_core::types::WorldLook;
 use velopopuli_core::world::{
-    in_americas, sprite_frame, tropical_weight, Area, AreaKind, Crossing, Footprint, GridMesh, Road, RoadKind, RoadsideStyle, Scenery, Stretch, TreeClimate, TriMesh, World, BARRIER_FENCE,
+    in_americas, sprite_frame, tropical_weight, Area, AreaKind, Crossing, Footprint, GridMesh, OpenData, Road, RoadKind, RoadsideStyle, Scenery, Stretch, TreeClimate, TriMesh, World, BARRIER_FENCE,
     BARRIER_JERSEY, BARRIER_LAMP_DOUBLE, BIRCH, CHUNK, COLUMN, DOUBLE_YELLOW, FAN_PALM, ONEWAY_AMERICAS, OPEN, PALM, PINE, RAIN_TREE, SPRUCE, TREE_FLOATS, TREE_KINDS, YELLOW,
 };
 
@@ -527,5 +527,48 @@ mod diagonal_walls {
             })
         });
         assert!(wall, "a wall along the slanting edge");
+    }
+}
+
+mod open_data {
+    use super::*;
+
+    /// A pack for `route` with one lamp, one house and one pond, as the script would write it.
+    fn pack_json(route: &Route, format: u32) -> String {
+        let [la, lo] = geo(route, &[(-12.0, 200.0)])[0];
+        let house = geo(route, &[(-40.0, 300.0), (-30.0, 300.0), (-30.0, 310.0), (-40.0, 310.0), (-40.0, 300.0)]);
+        let pond = geo(route, &[(60.0, 400.0), (120.0, 400.0), (120.0, 460.0), (60.0, 460.0)]);
+        let ring = |r: &[[f64; 2]]| r.iter().map(|p| format!("[{},{}]", p[0], p[1])).collect::<Vec<_>>().join(",");
+        format!(r#"{{"format":{format},"sources":["test"],"lamps":[[{la},{lo}]],"buildings":[{{"ring":[{}],"height":7.0}}],"water":[[[{}]]]}}"#, ring(&house), ring(&pond))
+    }
+
+    #[test]
+    fn pack_parses_and_converts() {
+        let route = straight_at(SAMBORONDON.0, SAMBORONDON.1, 3000.0);
+        let od: OpenData = serde_json::from_str(&pack_json(&route, 1)).unwrap();
+        assert!(od.usable());
+        assert_eq!(od.footprints().len(), 1);
+        let areas = od.areas();
+        assert_eq!(areas.len(), 1);
+        assert_eq!(areas[0].kind, AreaKind::Water);
+        let (scenery, houses) = corridor_map(&route);
+        let world = World::with_map(route.clone(), None, 0.0, Some(&scenery), &houses).with_open_data(&od);
+        assert_eq!(world.open().unwrap().lamps.len(), 1);
+    }
+
+    #[test]
+    fn older_or_empty_packs_are_ignored() {
+        let route = straight_at(SAMBORONDON.0, SAMBORONDON.1, 3000.0);
+        let old: OpenData = serde_json::from_str(&pack_json(&route, 0)).unwrap();
+        assert!(!old.usable());
+        assert!(World::new(route.clone(), None, 0.0).with_open_data(&old).open().is_none());
+        assert!(World::new(route, None, 0.0).with_open_data(&OpenData::default()).open().is_none());
+    }
+
+    #[test]
+    fn packs_are_ignored_outside_the_tropics() {
+        let route = straight_at(ALPS.0, ALPS.1, 3000.0);
+        let od: OpenData = serde_json::from_str(&pack_json(&route, 1)).unwrap();
+        assert!(World::new(route, None, 0.0).with_open_data(&od).open().is_none());
     }
 }

@@ -12,6 +12,7 @@ mod height;
 mod landmarks;
 mod mesh;
 mod mvt;
+mod opendata;
 mod roads;
 mod roadside;
 mod scenery;
@@ -33,6 +34,7 @@ pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
 pub use landmarks::{landmarks, Landmark};
 pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
+pub use opendata::{OpenBuilding, OpenData, OpenScene, PowerLine, Span, Support, OPEN_DATA_FORMAT};
 pub use roadside::{RoadsidePlan, RoadsideStyle, Stretch};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
@@ -133,6 +135,8 @@ pub struct World {
     pub venue: Option<Venue>,
     /// The tropical roadside rules' plan of the route, once asked for (`with_roadside`).
     roadside: Option<RoadsidePlan>,
+    /// The route's open-data pack in local metres, once given (`with_open_data`).
+    open: Option<OpenScene>,
 }
 
 /// Made-up field boundaries are drawn in chunks whose middle is this close to the route.
@@ -185,7 +189,7 @@ impl World {
         // Rough alpine tree line, falling with latitude.
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::new(route.clone(), dem, dem_offset);
-        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line, venue: None, roadside: None }
+        Self { route, field, buildings: Buildings::default(), scene: Scene::default(), tree_line, venue: None, roadside: None, open: None }
     }
 
     /// A world with OpenStreetMap scenery (forests, water, bridges, tunnels) and buildings.
@@ -195,7 +199,7 @@ impl World {
         let scene = Scene::new(&route, scenery);
         let tree_line = (3600.0 - route.lat0.abs() * 38.0).max(600.0);
         let field = HeightField::with_kinds(route.clone(), dem, dem_offset, scene.kinds.clone());
-        Self { route, field, buildings: Buildings::default(), scene, tree_line, venue: None, roadside: None }.with_buildings(footprints)
+        Self { route, field, buildings: Buildings::default(), scene, tree_line, venue: None, roadside: None, open: None }.with_buildings(footprints)
     }
 
     /// Makes the route a velodrome's track: banked, painted and as wide as the track, with its
@@ -217,6 +221,21 @@ impl World {
     /// Whether `(x, z)` is on a velodrome's grounds, where nothing grows or is made up.
     fn on_grounds(&self, x: f64, z: f64) -> bool {
         self.venue.as_ref().is_some_and(|v| v.grounds.outside(x, z) < 2.0)
+    }
+
+    /// Takes in the route's open-data pack (real lamps, power lines, cycle lanes, median
+    /// barriers, water towers and trees), in the lowland tropics only; elsewhere, or for a pack
+    /// this app can't read, nothing changes. Before `with_roadside`, which leaves room for them.
+    pub fn with_open_data(mut self, data: &OpenData) -> Self {
+        if data.usable() && tropics::tropical_weight(self.route.lat0.abs(), 0.0) > 0.5 {
+            self.open = Some(OpenScene::new(&self.route, data));
+        }
+        self
+    }
+
+    /// The open-data pack in local metres, if one was taken in.
+    pub fn open(&self) -> Option<&OpenScene> {
+        self.open.as_ref()
     }
 
     /// Works out the roadside (stretch kinds, medians) for the tropical roadside rules, with

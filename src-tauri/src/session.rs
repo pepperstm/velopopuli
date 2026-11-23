@@ -199,7 +199,7 @@ impl Session {
             let _ = app.emit("ride:loading", "Downloading terrain and map data for this area…");
         }
         // Terrain tiles and map data come from different servers; fetch them side by side.
-        let (dem, map) = tokio::join!(
+        let (dem, mut map) = tokio::join!(
             async {
                 if want_dem {
                     terrain::load_dem(http, &route).await
@@ -209,6 +209,23 @@ impl Session {
             },
             mapdata::load(http, store, route_id, &route, want_buildings, want_scenery)
         );
+        // The route's open-data pack (made by tools/opendata), in the lowland tropics: its houses
+        // and water join the map; the rest goes to the world below.
+        let open: Option<velopopuli_core::world::OpenData> = if real_place && velopopuli_core::world::tropical_weight(route.lat0.abs(), 0.0) > 0.5 {
+            store.get::<velopopuli_core::world::OpenData>(&format!("opendata-{route_id}")).filter(|o| o.usable())
+        } else {
+            None
+        };
+        if let Some(o) = &open {
+            map.footprints.extend(o.footprints());
+            if let Some(s) = map.scenery.as_mut() {
+                s.areas.extend(o.areas());
+            }
+            crate::diag::event(
+                "map",
+                format!("open data: {} buildings, {} trees, {} lamps, {} power lines from {}", o.buildings.len(), o.trees.len(), o.lamps.len(), o.power_lines.len(), o.sources.join("; ")),
+            );
+        }
         // A route with no elevation of its own takes it from the terrain — except on bridges and in tunnels.
         let structures = map.scenery.as_ref().map(|s| route_structures(&route, s)).unwrap_or_default();
         let dem_offset = dem.as_ref().map_or(0.0, |d| align_dem_with(&mut route, d, &structures));
@@ -236,7 +253,14 @@ impl Session {
                     .collect();
                 world.with_buildings(&footprints)
             }
-            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints).with_roadside(velopopuli_core::world::RoadsideStyle { open_road: settings.look.open_road }),
+            None => {
+                let world = World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints);
+                let world = match &open {
+                    Some(o) => world.with_open_data(o),
+                    None => world,
+                };
+                world.with_roadside(velopopuli_core::world::RoadsideStyle { open_road: settings.look.open_road })
+            }
         };
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
         if let Some(s) = std::env::var("VP_SMOKE_SURFACE")
