@@ -214,6 +214,12 @@ pub const FORD: u8 = 8;
 /// …or `TRACK` for a velodrome's track: the côte d'azur, the measuring, sprinters' and stayers'
 /// lines, painted with the inside of the track at the +offset edge (mirrored when ridden clockwise).
 pub const TRACK: u8 = 9;
+/// …or, in the Americas, tarmac with a broken yellow centre line (a two-way road),
+pub const YELLOW: u8 = 10;
+/// …a double solid yellow centre line (a two-way road in the country),
+pub const DOUBLE_YELLOW: u8 = 11;
+/// …or one carriageway of a divided road: a yellow line along its left edge, a broken white lane line.
+pub const ONEWAY_AMERICAS: u8 = 12;
 /// Earth trails narrower than this are singletrack; the off-map dirt track (3 m) is wider.
 pub const SINGLETRACK_WIDTH: f64 = 2.5;
 

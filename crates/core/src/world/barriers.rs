@@ -25,7 +25,13 @@ const SET_BACK: f64 = 0.55;
 pub const BANNER_COLOURS: [[f64; 3]; 4] = [[0.914, 1.0, 0.376], [0.969, 0.969, 0.937], [0.667, 0.737, 0.314], [0.855, 0.910, 0.455]];
 /// The look of a netting fence panel, the last one.
 pub const FENCE: usize = 1 + BANNER_COLOURS.len();
-pub const LOOKS: usize = FENCE + 1;
+/// Tropical roadside props, drawn through the same instancing as the barriers: a tall lamp
+/// with two arms on an avenue's median, a lamp with one arm over a town street, and a section
+/// of concrete median barrier (a "New Jersey") down the middle of an open divided road.
+pub const LAMP_DOUBLE: usize = FENCE + 1;
+pub const LAMP_SINGLE: usize = FENCE + 2;
+pub const JERSEY: usize = FENCE + 3;
+pub const LOOKS: usize = FENCE + 4;
 
 /// A bend tighter than this radius (metres, at the centre line) gets a fence, not barriers.
 const TIGHT_RADIUS_M: f64 = 30.0;
@@ -68,8 +74,12 @@ fn cuboid(mesh: &mut TriMesh, lo: [f64; 3], hi: [f64; 3], colour: [f32; 3]) {
 /// the road, textured from the banner texture (white with the event name in grey) and tinted;
 /// `FENCE` is a panel of netting fence.
 pub fn barrier_model(look: usize) -> TriMesh {
-    if look == FENCE {
-        return fence_model();
+    match look {
+        FENCE => return fence_model(),
+        LAMP_DOUBLE => return lamp_model(true),
+        LAMP_SINGLE => return lamp_model(false),
+        JERSEY => return jersey_model(),
+        _ => {}
     }
     let mut m = TriMesh::default();
     let steel = linear([0.74, 0.76, 0.78]);
@@ -101,6 +111,41 @@ pub fn barrier_model(look: usize) -> TriMesh {
         // Back of the banner: plain colour.
         cuboid(&mut m, [x + 0.002, y0, z0], [x + 0.012, y1, z1], tint);
     }
+    m
+}
+
+/// A street lamp standing at the origin: a grey steel pole on a concrete plinth. With `double`,
+/// a 10 m pole with an arm and a lamp head out to each side (across the road, along x), as on
+/// an avenue's median; otherwise a 9 m pole with one arm reaching over the road (−x).
+fn lamp_model(double: bool) -> TriMesh {
+    let mut m = TriMesh::default();
+    let (steel, concrete, glass) = (linear([0.55, 0.57, 0.60]), linear([0.70, 0.69, 0.66]), linear([0.92, 0.90, 0.80]));
+    let top = if double { 10.0 } else { 9.0 };
+    cuboid(&mut m, [-0.25, 0.0, -0.25], [0.25, 0.5, 0.25], concrete);
+    cuboid(&mut m, [-0.09, 0.5, -0.09], [0.09, top, 0.09], steel);
+    let arms: &[f64] = if double { &[-1.0, 1.0] } else { &[-1.0] };
+    for &side in arms {
+        let end = side * 2.2;
+        // The arm, out from the pole to the lamp head.
+        cuboid(&mut m, [end.min(0.0), top - 0.3, -0.05], [end.max(0.0), top - 0.2, 0.05], steel);
+        cuboid(&mut m, [end - 0.35, top - 0.42, -0.16], [end + 0.35, top - 0.22, 0.16], steel);
+        cuboid(&mut m, [end - 0.3, top - 0.46, -0.13], [end + 0.3, top - 0.42, 0.13], glass);
+    }
+    m
+}
+
+/// A section of concrete median barrier ("New Jersey"), `SECTION_M` long along z, centred on
+/// the origin: wide at the foot and narrow on top, its road face (−x) painted with a yellow and
+/// a black band so that a row of them reads as stripes.
+fn jersey_model() -> TriMesh {
+    let mut m = TriMesh::default();
+    let concrete = linear([0.72, 0.71, 0.68]);
+    let half = LENGTH / 2.0;
+    cuboid(&mut m, [-0.30, 0.0, -half], [0.30, 0.25, half], concrete);
+    cuboid(&mut m, [-0.18, 0.25, -half], [0.18, 0.55, half], concrete);
+    cuboid(&mut m, [-0.09, 0.55, -half], [0.09, 0.80, half], concrete);
+    cuboid(&mut m, [-0.305, 0.02, -half], [-0.295, 0.23, 0.0], linear([0.90, 0.72, 0.10]));
+    cuboid(&mut m, [-0.305, 0.02, 0.0], [-0.295, 0.23, half], linear([0.08, 0.08, 0.08]));
     m
 }
 
@@ -262,6 +307,17 @@ impl World {
         if self.venue.is_some() {
             return Vec::new();
         }
+        // An open road has no crowd barriers; a tropical one has its lamps and median barriers.
+        let mut out = if self.roadside.as_ref().is_some_and(|p| p.style.open_road) { Vec::new() } else { self.crowd_barriers() };
+        if let Some(plan) = self.roadside.as_ref().filter(|p| p.tropical) {
+            out.extend(super::roadside::props(self, plan));
+        }
+        out.sort_by(|a, b| a[4].total_cmp(&b[4]));
+        out
+    }
+
+    /// The crowd barriers and bend fences alone.
+    fn crowd_barriers(&self) -> Vec<[f32; 7]> {
         let r = &self.route;
         let kinds = self.field.kinds();
         let blocked = |i: usize| kinds.get(i).is_some_and(|&kind| kind != OPEN) || self.scene.trails.get(i).is_some_and(Option::is_some);

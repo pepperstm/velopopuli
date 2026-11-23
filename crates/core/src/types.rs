@@ -170,11 +170,14 @@ pub struct WorldLook {
     /// Street-level photos from Mapillary (needs a free client token).
     pub photos: bool,
     pub mapillary_token: String,
+    /// The road as it is on an ordinary day: no race barriers, and kerbs and sidewalks where
+    /// it is built up.
+    pub open_road: bool,
 }
 
 impl Default for WorldLook {
     fn default() -> Self {
-        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new() }
+        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new(), open_road: false }
     }
 }
 

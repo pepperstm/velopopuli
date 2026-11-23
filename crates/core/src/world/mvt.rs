@@ -387,6 +387,8 @@ pub fn parse_tile(bytes: &[u8], zoom: u32, tx: u32, ty: u32) -> Option<MapTile> 
                 ("land" | "water_polygons", POLYGON) => {
                     let kind = match (layer.name, layer.text(f, "kind")) {
                         ("land", "forest") => AreaKind::Forest,
+                        ("land", "residential") => AreaKind::Residential,
+                        ("land", "commercial" | "retail") => AreaKind::Commercial,
                         ("water_polygons", _) => AreaKind::Water,
                         _ => continue,
                     };

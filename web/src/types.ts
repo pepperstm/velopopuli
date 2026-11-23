@@ -16,7 +16,7 @@ export interface Settings {
   autoUpload: string[]
   exportDir: string
   goal: { name: string; distanceKm: number; deadline: string; from: string }
-  look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string }
+  look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string; openRoad: boolean }
   smart: {
     kind: 'none' | 'homeassistant' | 'shelly' | 'tasmota' | 'webhook'
     url: string
@@ -73,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoUpload: [],
   exportDir: '',
   goal: { name: 'Winter miles', distanceKm: 1000, deadline: '', from: '' },
-  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },
+  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '', openRoad: false },
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
   nativeRenderer: false,

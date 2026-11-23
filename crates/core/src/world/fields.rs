@@ -250,6 +250,31 @@ const HEDGE: Section = Section { profile: &[(-0.85, -0.5, 0), (-0.8, 0.65, 1), (
 const WALL: Section =
     Section { profile: &[(-0.34, -0.4, 0), (-0.26, 1.0, 1), (0.26, 1.0, 2), (0.34, -0.4, 0)], tall: (1.0, 0.3), colours: &[[0.38, 0.37, 0.34], [0.52, 0.51, 0.47], [0.44, 0.43, 0.40]] };
 const WARM_WALL: Section = Section { colours: &[[0.52, 0.46, 0.37], [0.66, 0.59, 0.47], [0.58, 0.53, 0.44]], ..WALL };
+/// A rendered and painted wall, as round a housing estate in the tropics: thin, straight-sided,
+/// over two metres tall, cream.
+const PLASTER_WALL: Section =
+    Section { profile: &[(-0.12, -0.4, 0), (-0.12, 1.0, 1), (0.12, 1.0, 2), (0.12, -0.4, 0)], tall: (2.2, 0.3), colours: &[[0.80, 0.76, 0.66], [0.90, 0.86, 0.76], [0.86, 0.82, 0.72]] };
+
+/// What a wall is built of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Stone {
+    /// Grey dry stone.
+    Grey,
+    /// Warmer stone, round the Mediterranean.
+    Warm,
+    /// Rendered and painted cream, round a tropical housing estate.
+    Plaster,
+}
+
+impl Stone {
+    pub(super) fn of(warm: bool) -> Self {
+        if warm {
+            Stone::Warm
+        } else {
+            Stone::Grey
+        }
+    }
+}
 /// Steep grassy earth to about 1.2 m with a hedge on top: 2.6 to 3.4 m in all.
 const HEDGE_BANK: Section = Section {
     profile: &[(-1.4, -0.5, 3), (-1.05, 0.4, 4), (-0.8, 0.45, 1), (-0.7, 0.85, 1), (0.0, 1.0, 2), (0.7, 0.85, 1), (0.8, 0.45, 1), (1.05, 0.4, 4), (1.4, -0.5, 3)],
@@ -258,8 +283,8 @@ const HEDGE_BANK: Section = Section {
 };
 
 /// Adds a run of boundary to `mesh`, standing on the ground at `ys` (one height per point).
-/// `seed` varies its height and colour; `warm` makes a wall of warmer stone.
-pub(super) fn draw(mesh: &mut TriMesh, kind: Boundary, points: &[(f64, f64)], ys: &[f64], seed: i32, warm: bool) {
+/// `seed` varies its height and colour; `stone` says what a wall is built of.
+pub(super) fn draw(mesh: &mut TriMesh, kind: Boundary, points: &[(f64, f64)], ys: &[f64], seed: i32, stone: Stone) {
     let n = points.len();
     if n < 2 {
         return;
@@ -285,8 +310,11 @@ pub(super) fn draw(mesh: &mut TriMesh, kind: Boundary, points: &[(f64, f64)], ys
             let Section { profile, tall, colours } = match kind {
                 Boundary::Hedge => HEDGE,
                 Boundary::HedgeBank => HEDGE_BANK,
-                _ if warm => WARM_WALL,
-                _ => WALL,
+                _ => match stone {
+                    Stone::Grey => WALL,
+                    Stone::Warm => WARM_WALL,
+                    Stone::Plaster => PLASTER_WALL,
+                },
             };
             let height: Vec<f64> = (0..n).map(|k| tall.0 + tall.1 * r(k, 3)).collect();
             let shade: Vec<f64> = (0..n).map(|k| 0.85 + 0.3 * r(k, 5)).collect();
