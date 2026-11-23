@@ -777,3 +777,52 @@ mod canopy_trees {
         assert!(far > 0, "generated trees far from the route");
     }
 }
+
+mod open_data_fixes {
+    use super::open_lamps::corridor_with_pack;
+    use super::*;
+
+    #[test]
+    fn a_pack_without_trees_keeps_the_made_up_ones() {
+        // Only lamps in the pack (the canopy source was down): the corridor keeps its trees.
+        let with_pack = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, |r| OpenData { format: 1, lamps: geo(r, &[(-12.0, 200.0)]), trees_corridor_m: 500.0, ..Default::default() });
+        let (route, plain) = corridor(SAMBORONDON.0, SAMBORONDON.1, RoadsideStyle::default());
+        let d = 2250.0;
+        let cx = ((route.sample_at(d).x - 130.0) / CHUNK).floor() as i32;
+        let (a, b) = (with_pack.1.chunk(cx, chunk_of(&route, d)).trees.len(), plain.chunk(cx, chunk_of(&route, d)).trees.len());
+        assert_eq!(a, b, "the same made-up trees with and without a treeless pack");
+    }
+
+    #[test]
+    fn a_highland_route_ignores_its_pack() {
+        let route = straight_at_height(SAMBORONDON.0, SAMBORONDON.1, 3000.0, 2800.0);
+        let od = OpenData { format: 1, lamps: geo(&route, &[(-12.0, 200.0)]), ..Default::default() };
+        assert!(World::new(route, None, 0.0).with_open_data(&od).open().is_none());
+    }
+
+    #[test]
+    fn real_lamps_mapped_in_the_road_are_left_out() {
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, |r| OpenData { format: 1, lamps: geo(r, &[(1.0, 1500.0)]), ..Default::default() });
+        let p = route.sample_at(1500.0);
+        assert!(!world.barriers().iter().any(|e| e[5] as usize == BARRIER_LAMP_SINGLE && ((e[0] as f64) - (p.x + 1.0)).abs() < 0.5 && ((e[2] as f64) - p.z).abs() < 0.5));
+    }
+
+    #[test]
+    fn no_palm_grows_through_a_real_lamp() {
+        // A real lamp mapped in the avenue's median, right where a palm would go (6 m along, in the median's middle).
+        let (route0, plain) = corridor(SAMBORONDON.0, SAMBORONDON.1, RoadsideStyle::default());
+        let i = at(&route0, 498.0);
+        let off = plain.half_width(i) + plain.roadside().unwrap().median[i].unwrap() / 2.0;
+        let palm = plain
+            .chunk(0, chunk_of(&route0, 498.0))
+            .trees
+            .chunks(TREE_FLOATS)
+            .map(|t| (t[0] as f64, t[2] as f64))
+            .find(|&(x, _)| (x - (route0.x[i] + off)).abs() < 0.6)
+            .expect("a median palm or bush to stand a lamp on");
+        let (lat, lon) = route0.to_lat_lon(palm.0, palm.1);
+        let (route, world) = corridor_with_pack(SAMBORONDON.0, SAMBORONDON.1, move |_| OpenData { format: 1, lamps: vec![[lat, lon]], ..Default::default() });
+        let near = world.chunk(0, chunk_of(&route, 498.0)).trees.chunks(TREE_FLOATS).any(|t| ((t[0] as f64) - palm.0).hypot((t[2] as f64) - palm.1) < 3.0);
+        assert!(!near, "the median plant gives way to the lamp");
+    }
+}

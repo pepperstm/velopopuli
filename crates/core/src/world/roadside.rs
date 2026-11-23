@@ -198,10 +198,7 @@ pub fn plan(route: &Route, scene: &Scene, buildings: &Buildings, style: Roadside
         .collect();
     tidy(&mut stretch, (STRETCH_MIN_M / route.step).ceil() as usize);
 
-    let mut heights: Vec<f64> = route.ele.iter().map(|&e| e as f64).collect();
-    heights.sort_by(f64::total_cmp);
-    let typical = heights.get(heights.len() / 2).copied().unwrap_or(0.0);
-    RoadsidePlan { stretch, median, median_side, tropical: tropical_weight(route.lat0.abs(), typical) > 0.5, americas: in_americas(route.lon0), style }
+    RoadsidePlan { stretch, median, median_side, tropical: super::tropics::route_is_tropical(route), americas: in_americas(route.lon0), style }
 }
 
 /// Lamps stand this far apart along an avenue or a town street, the first this far in.
@@ -298,7 +295,8 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
     let mut real_lamps: Vec<f64> = Vec::new();
     for &p in world.open().map_or(&[][..], |o| &o.lamps[..]) {
         let (i, dist) = nearest_sample(route, p);
-        if dist > REAL_LAMP_REACH_M || !open(i) {
+        // Mapped (or seen) in the road itself: a position error, left out.
+        if dist > REAL_LAMP_REACH_M || dist < world.half_width(i) + 0.5 || !open(i) {
             continue;
         }
         let (tx, tz) = tangent(route, i);
@@ -322,7 +320,7 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
                     let t = (k as f64 + 0.5) * super::barriers::SECTION_M / len.max(1e-9);
                     let p = (w[0].0 + dx * t, w[0].1 + dz * t);
                     let (i, dist) = nearest_sample(route, p);
-                    if dist > MAPPED_JERSEY_REACH_M {
+                    if dist > MAPPED_JERSEY_REACH_M || dist < world.half_width(i) + 0.3 {
                         continue;
                     }
                     out.push([p.0 as f32, world.field.surface(p.0, p.1).0 as f32, p.1 as f32, dx.atan2(dz) as f32, (i as f64 * route.step) as f32, MAPPED_JERSEY as f32, 0.0]);
@@ -423,6 +421,9 @@ pub(super) fn median_plants(world: &super::World, plan: &RoadsidePlan, cx: i32, 
         let tall = width * (0.92 + r(4) * 0.2);
         out.push((kind, [x as f32, y as f32, z as f32, (r(7) * std::f64::consts::TAU) as f32, width as f32, tall as f32, kind as f32, (0.85 + r(5) * 0.3) as f32]));
     };
+    // Real lamps, supports and poles (open data) where a plant would grow through them.
+    let real: Vec<(f64, f64)> = world.open().map_or_else(Vec::new, |o| o.lamps.iter().copied().chain(o.poles.iter().copied()).chain(o.supports.iter().filter(|s| s.near).map(|s| s.at)).collect());
+    let clear_of_real = |p: (f64, f64)| real.iter().all(|r| (r.0 - p.0).hypot(r.1 - p.1) >= LAMP_CLEAR_M);
     let palm_or_bush = |i: usize| if tropical_weight(route.lat0.abs(), route.ele[i] as f64) > 0.5 { PALM } else { BUSH };
     for d in every(route, PALM_START_M, PALM_SPACING_M / 2.0) {
         let i = sample(route, d);
@@ -437,7 +438,7 @@ pub(super) fn median_plants(world: &super::World, plan: &RoadsidePlan, cx: i32, 
             continue;
         }
         let (p, _) = beside_route(route, d, plan.median_side[i], world.half_width(i) + m / 2.0);
-        if in_chunk(p) && clear_of_side_roads(world, i, p) {
+        if in_chunk(p) && clear_of_side_roads(world, i, p) && clear_of_real(p) {
             grow(p, kind, d);
         }
     }

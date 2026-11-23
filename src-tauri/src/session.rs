@@ -209,15 +209,28 @@ impl Session {
             },
             mapdata::load(http, store, route_id, &route, want_buildings, want_scenery)
         );
-        // The route's open-data pack (made by tools/opendata), in the lowland tropics: its houses
-        // and water join the map; the rest goes to the world below.
-        let open: Option<velopopuli_core::world::OpenData> = if real_place && velopopuli_core::world::tropical_weight(route.lat0.abs(), 0.0) > 0.5 {
-            store.get::<velopopuli_core::world::OpenData>(&format!("opendata-{route_id}")).filter(|o| o.usable())
+        // A route with no elevation of its own takes it from the terrain — except on bridges and in tunnels.
+        let structures = map.scenery.as_ref().map(|s| route_structures(&route, s)).unwrap_or_default();
+        let dem_offset = dem.as_ref().map_or(0.0, |d| align_dem_with(&mut route, d, &structures));
+        // The route's open-data pack (made by tools/opendata), in the lowland tropics (judged on the
+        // route's heights, now that they are known): its houses (if buildings are wanted) and water
+        // join the map; the rest goes to the world below.
+        let open: Option<velopopuli_core::world::OpenData> = if real_place && velopopuli_core::world::route_is_tropical(&route) {
+            match store.get::<velopopuli_core::world::OpenData>(&format!("opendata-{route_id}")) {
+                Some(o) if o.usable() => Some(o),
+                Some(o) => {
+                    crate::diag::event("map", format!("open data for this route is in format {}, not {}: prepare it again", o.format, velopopuli_core::world::OPEN_DATA_FORMAT));
+                    None
+                }
+                None => None,
+            }
         } else {
             None
         };
         if let Some(o) = &open {
-            map.footprints.extend(o.footprints());
+            if want_buildings {
+                map.footprints.extend(o.footprints());
+            }
             if let Some(s) = map.scenery.as_mut() {
                 s.areas.extend(o.areas());
             }
@@ -226,9 +239,6 @@ impl Session {
                 format!("open data: {} buildings, {} trees, {} lamps, {} power lines from {}", o.buildings.len(), o.trees.len(), o.lamps.len(), o.power_lines.len(), o.sources.join("; ")),
             );
         }
-        // A route with no elevation of its own takes it from the terrain — except on bridges and in tunnels.
-        let structures = map.scenery.as_ref().map(|s| route_structures(&route, s)).unwrap_or_default();
-        let dem_offset = dem.as_ref().map_or(0.0, |d| align_dem_with(&mut route, d, &structures));
         let _ = app.emit("ride:loading", "Building the world…");
 
         let pb: Option<PersonalBest> = store.get(&format!("pb-{route_id}"));

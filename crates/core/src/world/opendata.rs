@@ -154,7 +154,14 @@ impl OpenScene {
             cycleways: data.cycleways.iter().map(line).filter(|l| l.len() >= 2).collect(),
             jersey: data.jersey.iter().map(line).filter(|l| l.len() >= 2).collect(),
             water_towers: data.water_towers.iter().map(local).collect(),
-            trees_corridor_m: if data.trees_corridor_m > 0.0 { data.trees_corridor_m } else { DEFAULT_TREES_CORRIDOR_M },
+            // No trees, no corridor: a pack made while the canopy source was down keeps the made-up trees.
+            trees_corridor_m: if data.trees.is_empty() {
+                0.0
+            } else if data.trees_corridor_m > 0.0 {
+                data.trees_corridor_m
+            } else {
+                DEFAULT_TREES_CORRIDOR_M
+            },
             ..Default::default()
         };
         for power in &data.power_lines {

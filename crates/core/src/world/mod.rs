@@ -45,7 +45,7 @@ pub use surface::{
 pub use trees::{
     sprite_frame, tree_model, Climate as TreeClimate, BIRCH, BROADLEAF, BUSH, COLUMN, FAN_PALM, KINDS as TREE_KINDS, PALM, PINE, RAIN_TREE, SPRITES_FROM, SPRITE_SPREAD, SPRUCE, TREE_FLOATS,
 };
-pub use tropics::{in_americas, tropical_weight};
+pub use tropics::{in_americas, route_is_tropical, tropical_weight};
 pub use venue::Venue;
 
 use std::sync::Arc;
@@ -227,7 +227,7 @@ impl World {
     /// barriers, water towers and trees), in the lowland tropics only; elsewhere, or for a pack
     /// this app can't read, nothing changes. Before `with_roadside`, which leaves room for them.
     pub fn with_open_data(mut self, data: &OpenData) -> Self {
-        if data.usable() && tropics::tropical_weight(self.route.lat0.abs(), 0.0) > 0.5 {
+        if data.usable() && tropics::route_is_tropical(&self.route) {
             let mut open = OpenScene::new(&self.route, data);
             let widths = self.scene.widths.clone();
             let half = |i: usize| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0;
@@ -710,7 +710,7 @@ impl World {
 
         // Trees measured from space (a route's open data): in the corridor they cover, they stand
         // where they are and take the place of the made-up ones.
-        let measured = self.open.as_ref().filter(|o| {
+        let measured = self.open.as_ref().filter(|o| !o.trees.is_empty() && o.trees_corridor_m > 0.0).filter(|o| {
             let centre = (x0 + CHUNK / 2.0, z0 + CHUNK / 2.0);
             let reach = o.trees_corridor_m - CHUNK / 2.0;
             (0..self.route.n).step_by(4).any(|i| (self.route.x[i] - centre.0).hypot(self.route.z[i] - centre.1) < reach)
