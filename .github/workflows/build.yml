@@ -8,6 +8,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Jobs only read the repository. The release job asks for write access itself.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-22.04
