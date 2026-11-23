@@ -1,0 +1,29 @@
+[project]
+name = "opendata"
+version = "0.1.0"
+description = "Prepares a VeloPopuli route's open-data pack: power lines, lamps, cycle lanes, median barriers and water towers (OpenStreetMap), buildings (Overture Maps: Google Open Buildings, Microsoft), trees (Meta/WRI canopy height), lamps and poles (Mapillary) and water (ESA WorldCover)."
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.1",
+    "mapbox-vector-tile>=2.1",
+    "numpy>=1.26",
+    "rasterio>=1.4",
+    "requests>=2.32",
+    "shapely>=2.0",
+]
+
+[project.scripts]
+opendata = "opendata.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["opendata"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
