@@ -88,8 +88,10 @@ type Dev<'a> = (u8, u8, &'a [u8]);
 /// What a definition message says: global number, field (number, base type, size)s, dev field (number, size, index)s.
 type Layout = (u16, Vec<(u8, u8, u8)>, Vec<(u8, u8, u8)>);
 
-/// Identifies VeloPopuli's developer fields (developer_data_id.application_id).
-const APP_ID: [u8; 16] = *b"VeloPopuli\0\0\0\0\0\0";
+/// Identifies VeloPopuli's developer fields (developer_data_id.application_id): a random
+/// UUID, d15c7f0c-de7b-4272-8c63-37ff17f724f6, in byte order. Never change it — readers
+/// match on it to know which app's `target_power` they're looking at.
+const APP_ID: [u8; 16] = [0xd1, 0x5c, 0x7f, 0x0c, 0xde, 0x7b, 0x42, 0x72, 0x8c, 0x63, 0x37, 0xff, 0x17, 0xf7, 0x24, 0xf6];
 
 /// NUL-padded fixed-size string.
 fn padded<const N: usize>(s: &str) -> [u8; N] {
