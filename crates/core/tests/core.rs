@@ -193,6 +193,7 @@ mod fit {
                 power: 200.0 + i as f64,
                 hr: (i != 0).then_some(140.0),
                 cadence: Some(88.0),
+                target_power: (i % 2 == 0).then_some(250.0 + i as f64),
             })
             .collect();
         let session = FitSession {
@@ -231,6 +232,19 @@ mod fit {
         let semi = 2_147_483_648.0 / 180.0;
         assert!(close(num(r, "position_lat") / semi, 46.2006, 1e-4));
         assert!(close(num(r, "position_long") / semi, -7.6006, 1e-4));
+        // The developer field carries the trainer's target, and is absent when there was none.
+        assert_eq!(field(recs[60], "target_power").as_deref(), Some("310"));
+        assert!(field(recs[61], "target_power").is_none());
+        assert_eq!(of_kind(fitparser::profile::MesgNum::DeveloperDataId).len(), 1);
+        // application_id is VeloPopuli's fixed UUID d15c7f0c-de7b-4272-8c63-37ff17f724f6; changing it would orphan old files.
+        let app_id = [0xd1, 0x5c, 0x7f, 0x0c, 0xde, 0x7b, 0x42, 0x72, 0x8c, 0x63, 0x37, 0xff, 0x17, 0xf7, 0x24, 0xf6];
+        assert!(bytes.windows(16).any(|w| w == app_id), "developer_data_id must carry the VeloPopuli UUID");
+        let desc = of_kind(fitparser::profile::MesgNum::FieldDescription);
+        assert_eq!(desc.len(), 1);
+        assert_eq!(field(desc[0], "field_name").as_deref(), Some("target_power"));
+        assert_eq!(field(desc[0], "units").as_deref(), Some("watts"));
+        let n = bytes.len();
+        assert_eq!(fit_crc(&bytes[..n - 2]), u16::from_le_bytes([bytes[n - 2], bytes[n - 1]]));
         assert!(field(recs[0], "heart_rate").is_none(), "missing HR must be encoded as invalid");
 
         let sessions = of_kind(fitparser::profile::MesgNum::Session);

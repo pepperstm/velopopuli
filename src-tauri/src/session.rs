@@ -674,6 +674,10 @@ fn run(
                     TrainerCommand::Simulation { grade, crr, cw }
                 }
             };
+            engine.target_power = match cmd {
+                TrainerCommand::TargetPower(w) => Some(w),
+                _ => None,
+            };
             let gear_note = {
                 let n = gearing::gears(&settings.lock().unwrap().gears).len();
                 if n == 0 {

@@ -138,6 +138,8 @@ pub struct RideEngine {
     pub descent: f64,
     pub pos: RoutePos,
     pub rivals: Vec<Rival>,
+    /// What the trainer was last asked to hold (None in simulation mode), recorded with each sample.
+    pub target_power: Option<f64>,
     pub samples: Vec<FitSample>,
     /// Distance at each whole second of moving time — becomes the next ghost.
     pub trace: Vec<f64>,
@@ -244,6 +246,7 @@ impl RideEngine {
             pos,
             rivals,
             samples: Vec::new(),
+            target_power: None,
             trace: vec![0.0],
             climb_times: BTreeMap::new(),
             climb_index: None,
@@ -410,7 +413,18 @@ impl RideEngine {
         let time = (self.last_sample_time + 1000).max(wall_ms / 1000 * 1000);
         self.last_sample_time = time;
         let power = self.power.round();
-        self.samples.push(FitSample { time, lat: self.pos.lat, lon: self.pos.lon, ele: self.pos.ele, dist: self.ridden, speed: self.speed, power, hr: self.hr, cadence: self.cadence });
+        self.samples.push(FitSample {
+            time,
+            lat: self.pos.lat,
+            lon: self.pos.lon,
+            ele: self.pos.ele,
+            dist: self.ridden,
+            speed: self.speed,
+            power,
+            hr: self.hr,
+            cadence: self.cadence,
+            target_power: self.target_power,
+        });
         self.trace.push(self.ridden);
         self.n += 1;
         self.sum_power += power;
