@@ -8,6 +8,7 @@ import type {
   ConnectorEntry,
   ConnectorStatus,
   ControllerAction,
+  Course,
   DevicesSnapshot,
   FitnessOverview,
   GearPreview,
@@ -175,6 +176,7 @@ export const api = {
         laps: number | null
         route: string | null
         plan: string | null
+        course: Course | null
       } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })

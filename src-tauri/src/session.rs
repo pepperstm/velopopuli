@@ -18,7 +18,7 @@ use velopopuli_core::gearing;
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
 use velopopuli_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
-use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
+use velopopuli_core::types::{Course, PersonalBest, Profile, RideSummary, Settings, TrainerMode};
 use velopopuli_core::workout::{Workout, WorkoutPos};
 use velopopuli_core::world::{align_dem_with, landmarks, route_structures, Landmark, SceneryCounts, World, WorldLayout, LAYOUT};
 
@@ -54,6 +54,8 @@ pub struct RideRequest {
     pub group_room: Option<String>,
     /// Laps on a closed route: absent for none, 0 to keep going until stopped.
     pub laps: Option<u32>,
+    /// A closed race (crowd barriers) or a road ride (the open road).
+    pub course: Course,
 }
 
 /// Days since the Unix epoch in local time.
@@ -236,7 +238,7 @@ impl Session {
                     .collect();
                 world.with_buildings(&footprints)
             }
-            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints).with_roadside(velopopuli_core::world::RoadsideStyle { open_road: settings.look.open_road }),
+            None => World::with_map(route.clone(), dem, dem_offset, map.scenery.as_ref(), &map.footprints).with_roadside(req.course),
         };
         // Automated check only: VP_SMOKE_SURFACE=<0–4> lays the whole route in one surface.
         if let Some(s) = std::env::var("VP_SMOKE_SURFACE")
@@ -807,5 +809,18 @@ fn run(
     devices.command_trainer(TrainerCommand::Simulation { grade: 0.0, crr: 0.004, cw: 0.2 });
     if let Some(smart) = smart {
         smart.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_ride_request_says_which_course_and_is_a_closed_race_by_default() {
+        let road: RideRequest = serde_json::from_str(r#"{"routeId":"r","course":"road"}"#).unwrap();
+        assert_eq!(road.course, Course::Road);
+        let plain: RideRequest = serde_json::from_str(r#"{"routeId":"r"}"#).unwrap();
+        assert_eq!(plain.course, Course::Race);
     }
 }

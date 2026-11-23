@@ -157,6 +157,19 @@ impl Default for Goal {
     }
 }
 
+/// What kind of ride the road is set up for, chosen when setting up a ride.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Course {
+    /// A closed race: the road closed to traffic, with crowd barriers and netting on the
+    /// hairpins.
+    #[default]
+    Race,
+    /// A road ride: the road open as on an ordinary day, with no crowd barriers, and kerbs and
+    /// pavements where it is built up.
+    Road,
+}
+
 /// How the world looks: time of day and weather.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -170,14 +183,11 @@ pub struct WorldLook {
     /// Street-level photos from Mapillary (needs a free client token).
     pub photos: bool,
     pub mapillary_token: String,
-    /// The road as it is on an ordinary day: no race barriers, and kerbs and sidewalks where
-    /// it is built up.
-    pub open_road: bool,
 }
 
 impl Default for WorldLook {
     fn default() -> Self {
-        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new(), open_road: false }
+        Self { time_of_day: "day".into(), weather: "clear".into(), landmarks: true, photos: false, mapillary_token: String::new() }
     }
 }
 

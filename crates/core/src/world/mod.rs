@@ -33,7 +33,7 @@ pub use height::{HeightField, Probe, BRIDGE, OPEN, TUNNEL};
 pub use landmarks::{landmarks, Landmark};
 pub use mesh::TriMesh;
 pub use mvt::{corridor_tiles, parse_building_tile, parse_tile, route_corridor, Label, MapTile, MAP_ZOOM};
-pub use roadside::{RoadsidePlan, RoadsideStyle, Stretch};
+pub use roadside::{RoadsidePlan, Stretch};
 pub use scenery::{route_structures, Area, AreaKind, Crossing, Deck, Overbridge, Road, RoadKind, Scene, Scenery, SceneryCounts, Waterway, WaterwayKind};
 pub use structures::Structures;
 pub use surface::{
@@ -51,6 +51,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::gpx::Route;
+use crate::types::Course;
 use height::{fbm, hash2, smoothstep, BLEND};
 
 /// Side of a square terrain chunk in metres, and cells along each side.
@@ -219,15 +220,16 @@ impl World {
         self.venue.as_ref().is_some_and(|v| v.grounds.outside(x, z) < 2.0)
     }
 
-    /// Works out the roadside (stretch kinds, medians) for the tropical roadside rules, with
-    /// the rider's choices. After the buildings, which say where the route is built up.
-    pub fn with_roadside(mut self, style: RoadsideStyle) -> Self {
-        let plan = roadside::plan(&self.route, &self.scene, &self.buildings, style);
-        if style.open_road {
+    /// Works out the roadside (stretch kinds, medians) for the kind of ride chosen and for the
+    /// tropical roadside rules: a road ride has pavements where it is built up, and no crowd
+    /// barriers. After the buildings, which say where the route is built up.
+    pub fn with_roadside(mut self, course: Course) -> Self {
+        let plan = roadside::plan(&self.route, &self.scene, &self.buildings, course);
+        if course == Course::Road {
             let widths = self.scene.widths.clone();
             let half = |i: usize| widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0;
             let route = self.route.clone();
-            self.scene.add_sidewalks(&route, &plan, half);
+            self.scene.add_pavements(&route, &plan, half);
         }
         self.roadside = Some(plan);
         self

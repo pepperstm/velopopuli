@@ -16,7 +16,7 @@ export interface Settings {
   autoUpload: string[]
   exportDir: string
   goal: { name: string; distanceKm: number; deadline: string; from: string }
-  look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string; openRoad: boolean }
+  look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string }
   smart: {
     kind: 'none' | 'homeassistant' | 'shelly' | 'tasmota' | 'webhook'
     url: string
@@ -73,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoUpload: [],
   exportDir: '',
   goal: { name: 'Winter miles', distanceKm: 1000, deadline: '', from: '' },
-  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '', openRoad: false },
+  look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },
   smart: { kind: 'none', url: '', fanEntity: '', lightEntity: '', fanBy: 'speed', fanFrom: 10, fanFull: 35 },
   group: { relayUrl: 'ws://127.0.0.1:47800' },
   nativeRenderer: false,
@@ -301,7 +301,11 @@ export interface RideRequest {
   groupRoom?: string | null
   /** Laps on a closed route: absent or null = none, 0 = until I stop, n = n laps. Ghosts are off on lap rides. */
   laps?: number | null
+  /** A closed race (crowd barriers, the road to yourself) or a road ride (the open road). Absent = a closed race. */
+  course?: Course
 }
+
+export type Course = 'race' | 'road'
 
 export interface Profile {
   xp: number

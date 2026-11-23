@@ -13,6 +13,7 @@
 
 use super::mesh::TriMesh;
 use super::{World, OPEN, ROAD_LIFT};
+use crate::types::Course;
 
 /// Length of one barrier section, and the gap left between neighbours.
 pub const SECTION_M: f64 = 2.5;
@@ -307,8 +308,8 @@ impl World {
         if self.venue.is_some() {
             return Vec::new();
         }
-        // An open road has no crowd barriers; a tropical one has its lamps and median barriers.
-        let mut out = if self.roadside.as_ref().is_some_and(|p| p.style.open_road) { Vec::new() } else { self.crowd_barriers() };
+        // A road ride has no crowd barriers; a tropical road has its lamps and median barriers.
+        let mut out = if self.roadside.as_ref().is_some_and(|p| p.course == Course::Road) { Vec::new() } else { self.crowd_barriers() };
         if let Some(plan) = self.roadside.as_ref().filter(|p| p.tropical) {
             out.extend(super::roadside::props(self, plan));
         }

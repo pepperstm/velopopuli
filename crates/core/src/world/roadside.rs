@@ -15,11 +15,12 @@ use super::surface::{runs, tidy};
 use super::tropics::{in_americas, tropical_weight};
 use super::ROAD_WIDTH;
 use crate::gpx::Route;
+use crate::types::Course;
 
 /// What kind of road a stretch of the route is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stretch {
-    /// A divided road through a built-up area: a planted median, lamps, sidewalks.
+    /// A divided road through a built-up area: a planted median, lamps, pavements.
     Avenue,
     /// A divided road through open country: a concrete barrier down the middle.
     Periurban,
@@ -27,13 +28,6 @@ pub enum Stretch {
     Rural,
     /// A single carriageway through a built-up area.
     Town,
-}
-
-/// What the rider has chosen for the roadside.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RoadsideStyle {
-    /// The road as it is on an ordinary day: no race barriers, kerbs and sidewalks instead.
-    pub open_road: bool,
 }
 
 /// The roadside along the route, one entry per route sample.
@@ -49,7 +43,8 @@ pub struct RoadsidePlan {
     pub tropical: bool,
     /// In the Americas.
     pub americas: bool,
-    pub style: RoadsideStyle,
+    /// What the rider chose: a closed race or a road ride.
+    pub course: Course,
 }
 
 /// Another carriageway counts if it is this nearly parallel to the route (as a cosine)…
@@ -97,7 +92,7 @@ fn tangent(route: &Route, i: usize) -> (f64, f64) {
 }
 
 /// Works out the roadside along the route from its scenery and buildings.
-pub fn plan(route: &Route, scene: &Scene, buildings: &Buildings, style: RoadsideStyle) -> RoadsidePlan {
+pub fn plan(route: &Route, scene: &Scene, buildings: &Buildings, course: Course) -> RoadsidePlan {
     let n = route.n;
     let half = |i: usize| scene.widths.get(i).copied().unwrap_or(ROAD_WIDTH) / 2.0;
 
@@ -201,7 +196,7 @@ pub fn plan(route: &Route, scene: &Scene, buildings: &Buildings, style: Roadside
     let mut heights: Vec<f64> = route.ele.iter().map(|&e| e as f64).collect();
     heights.sort_by(f64::total_cmp);
     let typical = heights.get(heights.len() / 2).copied().unwrap_or(0.0);
-    RoadsidePlan { stretch, median, median_side, tropical: tropical_weight(route.lat0.abs(), typical) > 0.5, americas: in_americas(route.lon0), style }
+    RoadsidePlan { stretch, median, median_side, tropical: tropical_weight(route.lat0.abs(), typical) > 0.5, americas: in_americas(route.lon0), course }
 }
 
 /// Lamps stand this far apart along an avenue or a town street, the first this far in.
@@ -219,7 +214,7 @@ const LAMP_CLEAR_M: f64 = 3.0;
 /// Palms along an avenue's outer side: this far apart, this far beyond the road's edge.
 const OUTER_SPACING_M: f64 = 24.0;
 const OUTER_SET_BACK_M: f64 = 5.0;
-/// A town street's lamps stand this far beyond the road's edge (beyond the sidewalk on an open road).
+/// A town street's lamps stand this far beyond the road's edge (beyond the pavement on a road ride).
 const TOWN_LAMP_SET_BACK: (f64, f64) = (0.8, 2.8);
 /// A median barrier stands at this offset where the median is too narrow to be centred in.
 const JERSEY_NARROW_M: f64 = 1.0;
@@ -299,7 +294,7 @@ pub(super) fn props(world: &super::World, plan: &RoadsidePlan) -> Vec<[f32; 7]> 
                 }
             }
             Stretch::Town => {
-                let set_back = if plan.style.open_road { TOWN_LAMP_SET_BACK.1 } else { TOWN_LAMP_SET_BACK.0 };
+                let set_back = if plan.course == Course::Road { TOWN_LAMP_SET_BACK.1 } else { TOWN_LAMP_SET_BACK.0 };
                 put(d, 1.0, world.half_width(i) + set_back, LAMP_SINGLE, 0.0);
             }
             _ => {}

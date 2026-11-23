@@ -63,6 +63,7 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_SMOKE_ROUTE` | Ride this route id instead of the newest in the library (e.g. `herne-hill`, `herne-hill-clockwise`, `demo`) |
 | `VP_SMOKE_AT` | Start this many metres along the route |
 | `VP_SMOKE_CAM` | Camera: 0 behind, 1 high behind, 2 alongside, 3 overhead (good for junctions) |
+| `VP_SMOKE_COURSE` | `race` (the default) for a closed race, `road` for a road ride |
 | `VP_SMOKE_LAPS` | Ride a loop for this many laps (`0`: until stopped) |
 | `VP_SMOKE_WORKOUT` | Ride with this workout (e.g. `builtin-sweetspot`) |
 | `VP_SMOKE_GHOSTS` | Race these ghosts (comma-separated ids) |

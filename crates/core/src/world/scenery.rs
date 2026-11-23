@@ -1211,13 +1211,13 @@ impl Scene {
         best
     }
 
-    /// Sidewalks along the route where it is built up and the road is open: beside an avenue on
-    /// its outer side (the median is on the other), beside a town street on both. Each is a
-    /// paved strip `SIDEWALK_M` wide just beyond the kerb, laid on the ground like the other
-    /// roads, with a light edge on both sides that reads as the kerb.
-    pub(super) fn add_sidewalks(&mut self, route: &Route, plan: &super::roadside::RoadsidePlan, half_width: impl Fn(usize) -> f64) {
+    /// Pavements along the route where it is built up, on a road ride: beside an avenue on its
+    /// outer side (the median is on the other), beside a town street on both. Each is a paved
+    /// strip `PAVEMENT_M` wide just beyond the kerb, laid on the ground like the other roads,
+    /// with a light edge on both sides that reads as the kerb.
+    pub(super) fn add_pavements(&mut self, route: &Route, plan: &super::roadside::RoadsidePlan, half_width: impl Fn(usize) -> f64) {
         use super::roadside::Stretch;
-        const SIDEWALK_M: f64 = 2.5;
+        const PAVEMENT_M: f64 = 2.5;
         const KERB_GAP_M: f64 = 0.3;
         const PIECE_M: f64 = 20.0;
         if route.n < 2 {
@@ -1248,15 +1248,15 @@ impl Scene {
             }
             if self.kinds.get(i0).is_none_or(|&kind| kind == OPEN) {
                 for &side in sides(i0) {
-                    // The middle of the sidewalk, to the given side (+1 the rider's right, (−tz, tx)).
+                    // The middle of the pavement, to the given side (+1 the rider's right, (−tz, tx)).
                     let centre = |i: usize| {
                         let (tx, tz) = tangent(i);
-                        let off = side * (half_width(i) + KERB_GAP_M + SIDEWALK_M / 2.0);
+                        let off = side * (half_width(i) + KERB_GAP_M + PAVEMENT_M / 2.0);
                         ((route.x[i] - tz * off, route.z[i] + tx * off), (tz, -tx))
                     };
                     let ((a, na), (b, nb)) = (centre(i0), centre(i1));
                     let ends = (i0 as f64 * route.step, i1 as f64 * route.step);
-                    for (half, casing) in [(SIDEWALK_M / 2.0, true), (SIDEWALK_M / 2.0 - EDGE_LINE, false)] {
+                    for (half, casing) in [(PAVEMENT_M / 2.0, true), (PAVEMENT_M / 2.0 - EDGE_LINE, false)] {
                         let at = |p: (f64, f64), n: (f64, f64), s: f64| (p.0 + n.0 * half * s, p.1 + n.1 * half * s);
                         let corners = [at(a, na, -1.0), at(a, na, 1.0), at(b, nb, 1.0), at(b, nb, -1.0)];
                         self.add_strip(&beside, RoadStrip { a, b, corners, along: ends, half, kind: RoadKind::Pedestrian, steel: false, joins: false, oneway: true, casing, cap: false });
