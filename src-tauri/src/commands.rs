@@ -421,25 +421,35 @@ pub fn ride_update_settings(state: State<AppState>, settings: Settings) {
 
 /// Ends the ride and saves it. Resolves to `null` if it was too short to keep.
 #[tauri::command]
-pub async fn ride_finish(state: State<'_, AppState>) -> Res<Option<RideSummary>> {
+pub async fn ride_finish(app: AppHandle, state: State<'_, AppState>) -> Res<Option<RideSummary>> {
     if let Some(n) = state.native.lock().unwrap().take() {
         n.stop();
     }
+    leave_overlay(&app, &state);
     let Some(session) = state.session.lock().unwrap().take() else { return Ok(None) };
     session.finish(&state.store)
 }
 
 #[tauri::command]
-pub fn ride_abort(state: State<AppState>) {
+pub fn ride_abort(app: AppHandle, state: State<AppState>) {
     if let Some(n) = state.native.lock().unwrap().take() {
         n.stop();
     }
+    leave_overlay(&app, &state);
     if let Some(session) = state.session.lock().unwrap().take() {
         session.halt();
     }
 }
 
 // ── Native renderer ────────────────────────────────────────────────────────
+
+/// Pauses the native renderer (hiding its picture), or carries on.
+#[tauri::command]
+pub fn native_pause(state: State<AppState>, paused: bool) {
+    if let Some(n) = state.native.lock().unwrap().as_ref() {
+        n.set_paused(paused);
+    }
+}
 
 #[tauri::command]
 pub fn native_available() -> bool {
@@ -1077,6 +1087,8 @@ pub struct SmokeConfig {
     route: Option<String>,
     /// On the Explore screen, plan `lat,lon;lat,lon;…` or make `loop:lat,lon,km` (VP_SMOKE_PLAN).
     plan: Option<String>,
+    /// Switch the ride to overlay mode a few seconds in (VP_SMOKE_OVERLAY).
+    overlay: bool,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -1109,6 +1121,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         laps: std::env::var("VP_SMOKE_LAPS").ok().and_then(|v| v.parse().ok()),
         route: std::env::var("VP_SMOKE_ROUTE").ok(),
         plan: std::env::var("VP_SMOKE_PLAN").ok(),
+        overlay: std::env::var_os("VP_SMOKE_OVERLAY").is_some(),
     })
 }
 
@@ -1151,4 +1164,30 @@ pub fn smoke_done(app: AppHandle, state: State<AppState>, png: Option<String>, i
 pub fn log(message: String) {
     crate::diag::event("ui", &message);
     eprintln!("[ui] {message}");
+}
+
+// ── Overlay ────────────────────────────────────────────────────────────────
+
+/// The ride is over: the window goes back to normal if it was an overlay.
+fn leave_overlay(app: &AppHandle, state: &AppState) {
+    let Some(normal) = state.overlay.lock().unwrap().take() else { return };
+    if let Ok(window) = crate::overlay::main_window(app) {
+        if let Err(e) = crate::overlay::leave(&window, &state.store, normal) {
+            crate::diag::event("overlay", format!("could not put the window back: {e}"));
+        }
+    }
+}
+
+/// Turns the window into a small see-through panel above other apps (`on`), or back.
+#[tauri::command]
+pub fn overlay_set(app: AppHandle, state: State<AppState>, on: bool) -> Res<()> {
+    let window = crate::overlay::main_window(&app)?;
+    let mut normal = state.overlay.lock().unwrap();
+    match (on, normal.take()) {
+        (true, None) => *normal = Some(crate::overlay::enter(&window, &state.store)?),
+        (true, Some(already)) => *normal = Some(already),
+        (false, Some(back)) => crate::overlay::leave(&window, &state.store, back)?,
+        (false, None) => {}
+    }
+    Ok(())
 }
