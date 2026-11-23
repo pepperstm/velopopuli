@@ -28,7 +28,11 @@ export function MiniMap({ route, lat, lon }: { route: Route; lat: number; lon: n
     marker.current = L.circleMarker([route.lat[0], route.lon[0]], { radius: 7, color: '#fff', weight: 2, fillColor: '#2f7fd8', fillOpacity: 1 }).addTo(m)
     m.setView([route.lat[0], route.lon[0]], 14, { animate: false })
     map.current = m
+    // Keep the map filling its box when that changes size (the overlay panel can be resized).
+    const resized = new ResizeObserver(() => m.invalidateSize({ animate: false }))
+    resized.observe(el.current!)
     return () => {
+      resized.disconnect()
       m.remove()
       map.current = null
     }

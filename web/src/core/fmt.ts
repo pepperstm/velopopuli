@@ -45,6 +45,12 @@ export function zoneColor(power: number, ftp: number): string {
   return '#d44aff'
 }
 
+/** Coggan zone number for a power. */
+export function powerZone(power: number, ftp: number): number {
+  const r = ftp > 0 ? power / ftp : 0
+  return [0.55, 0.75, 0.9, 1.05, 1.2, 1.5].filter((l) => r >= l).length + 1
+}
+
 export function gradeColor(grade: number): string {
   const g = grade * 100
   if (g < -1) return '#4aa3ff'

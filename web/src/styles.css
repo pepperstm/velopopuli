@@ -1472,3 +1472,144 @@ body.native-3d canvas.world {
   padding: 4px 10px;
   font-size: 12.5px;
 }
+
+/* Overlay mode: the ride as a small see-through panel floating over other apps. Everything
+   behind the panel is transparent, so the video underneath shows through. */
+html:has(body.overlay),
+body.overlay,
+body.overlay #root,
+body.overlay .ride {
+  background: transparent !important;
+}
+body.overlay canvas.world {
+  visibility: hidden;
+}
+.overlay-panel {
+  --overlay-alpha: 0.5;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(14, 18, 13, var(--overlay-alpha));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+.overlay-panel b {
+  font-weight: 700;
+}
+.overlay-panel span {
+  color: #d6dcc8;
+}
+.op-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+  min-height: 28px;
+}
+.op-head b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.op-clock {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text) !important;
+}
+.op-head button {
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.op-power {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 4px solid;
+}
+.op-power b {
+  font-size: 48px;
+  line-height: 1;
+}
+.op-power span {
+  font-size: 12px;
+}
+.op-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  gap: 6px;
+}
+.op-tiles > div,
+.op-road,
+.op-workout {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  padding: 5px 8px;
+}
+.op-tiles b {
+  display: block;
+  font-size: 24px;
+  line-height: 1.15;
+}
+.op-tiles span,
+.op-road span,
+.op-workout span {
+  font-size: 11px;
+}
+.op-road,
+.op-workout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.op-road b,
+.op-workout b {
+  font-size: 18px;
+}
+.op-cue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.op-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--warn);
+}
+.op-status span {
+  color: var(--warn);
+}
+.op-status button {
+  padding: 3px 10px;
+}
+.overlay-panel .minimap {
+  flex: 1;
+  min-height: 90px;
+  height: auto;
+}
+.op-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.op-controls button {
+  padding: 5px 12px;
+}
