@@ -33,6 +33,8 @@ export interface Settings {
   gears: GearSettings
   /** How the app's screens look: frosted glass (the default) or the flat, solid look from before. */
   theme: Theme
+  /** Beeps, chimes and fanfares during a ride. */
+  sound: { volume: number; workout: boolean; moments: boolean }
 }
 
 export type Theme = 'glass' | 'simple'
@@ -96,7 +98,8 @@ export const DEFAULT_SETTINGS: Settings = {
     keysHarder: [']', '=', 'PageDown', 'ArrowRight'],
     keysEasier: ['[', '-', 'PageUp', 'ArrowLeft']
   },
-  theme: 'glass'
+  theme: 'glass',
+  sound: { volume: 0.6, workout: true, moments: true }
 }
 
 export type SurfaceClass = 'paved' | 'cobbles' | 'gravel' | 'dirt' | 'unknown'

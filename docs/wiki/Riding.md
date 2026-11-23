@@ -85,6 +85,18 @@ Ride at dawn, in the day, in the evening, at dusk or at night (with a lamp on th
 |---|---|
 | ![Dusk in the rain](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-dusk-rain.jpg) | ![Night](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-night.jpg) |
 
+## Sound
+
+The app plays a few sounds during a ride, all made on the fly with no audio files:
+
+- **A fanfare** at the top of every climb, and a grander one when you finish the route.
+- **Bells** for a personal best on a climb or segment, and for each lap.
+- **A countdown** of three beeps before a workout step changes, and a higher tone as the next step starts.
+- **A soft warning** if your sensors drop out.
+- **A click** when a handlebar controller button is pressed.
+
+Set the volume, or turn off the workout beeps or the other sounds, under **Settings → Sound**. That section can also play the fanfare, a countdown and a best so you can hear them.
+
 ## Ending a ride
 
 Finish the route, or press **End ride** at any time. The summary shows your distance, time, climbing, power and heart rate, and any personal bests, segment bests and badges you've earned. If the ride suggests a new FTP, you can set it in one click.

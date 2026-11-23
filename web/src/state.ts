@@ -19,6 +19,7 @@ export function mergeSettings(stored: Partial<Settings> | null): Settings {
     goal: { ...DEFAULT_SETTINGS.goal, ...s.goal },
     look: { ...DEFAULT_SETTINGS.look, ...s.look },
     smart: { ...DEFAULT_SETTINGS.smart, ...s.smart },
+    sound: { ...DEFAULT_SETTINGS.sound, ...s.sound },
     group: { ...DEFAULT_SETTINGS.group, ...s.group },
     gears: { ...DEFAULT_SETTINGS.gears, ...s.gears }
   }
