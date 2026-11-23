@@ -124,6 +124,9 @@ const CYCLE_REACH_M: f64 = 12.0;
 const CYCLE_PARALLEL_COS: f64 = 0.94;
 const CYCLE_MIN_M: f64 = 40.0;
 
+/// Trees as `(x, z, height)` by the chunk `(cx, cz)` they stand in.
+pub type ChunkTrees = HashMap<(i32, i32), Vec<(f64, f64, f64)>>;
+
 /// The pack in the route's local metres.
 #[derive(Debug, Clone, Default)]
 pub struct OpenScene {
@@ -135,7 +138,7 @@ pub struct OpenScene {
     pub jersey: Vec<Vec<(f64, f64)>>,
     pub water_towers: Vec<(f64, f64)>,
     /// Trees as `(x, z, height)`, by the chunk they stand in.
-    pub trees: HashMap<(i32, i32), Vec<(f64, f64, f64)>>,
+    pub trees: ChunkTrees,
     pub trees_corridor_m: f64,
     /// Per route sample, whether a cycle lane runs along its right and its left: `[right, left]`.
     pub cycle_sides: Vec<[bool; 2]>,
