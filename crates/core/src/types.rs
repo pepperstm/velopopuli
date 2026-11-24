@@ -246,6 +246,9 @@ pub struct Settings {
     /// Connectors (by id, see the app's `connectors` module) every finished ride is sent to without asking.
     #[serde(default)]
     pub auto_upload: Vec<String>,
+    /// Rides shorter than this many minutes aren't uploaded automatically: the summary asks
+    /// first. 0 uploads every ride.
+    pub auto_upload_min_minutes: f64,
     pub export_dir: String,
     pub goal: Goal,
     pub look: WorldLook,
@@ -304,6 +307,7 @@ impl Default for Settings {
             buildings: true,
             scenery: true,
             auto_upload: Vec::new(),
+            auto_upload_min_minutes: 15.0,
             export_dir: String::new(),
             goal: Default::default(),
             look: Default::default(),

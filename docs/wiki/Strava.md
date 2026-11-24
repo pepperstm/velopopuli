@@ -15,7 +15,7 @@ Strava may ask for an app icon when you create the application. Any square pictu
 
 ## What you can do
 
-- **Upload rides.** Press **Upload to Strava** on the ride summary, or later under **Progress → Rides**. Rides go up as **Virtual Rides**, with power, heart rate and the route map. Tick **Upload every ride automatically** on the Strava card to skip the button. Afterwards, **View on Strava** opens the activity.
+- **Upload rides.** Press **Upload to Strava** on the ride summary, or later under **Progress → Rides**. Rides go up as **Virtual Rides**, with power, heart rate and the route map. Tick **Upload every ride automatically** on the Strava card to skip the button. A ride shorter than 15 minutes, like a test ride or a cut-short warm-up, isn't sent by itself: the summary asks **Upload this short ride?** first. Change the length under **Ask first for rides shorter than** on the same card, or set it to 0 to upload every ride. Afterwards, **View on Strava** opens the activity.
 - **Ride your Strava routes.** On **Find a route**, press **Show my Strava routes** to list the routes you've made or starred, then save the ones you want to your library. See [[Routes and the map]].
 - **Race your rides as ghosts.** When setting up a ride, press **From Strava…** under *Ghosts to race* and pick a ride. The rides that follow the route are listed first.
 - **Strava segments.** When setting up a ride, press **Find Strava segments**. You're timed on each one along the route, with a live gap to your best.

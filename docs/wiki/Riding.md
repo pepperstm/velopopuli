@@ -101,7 +101,7 @@ Set the volume, or turn off the workout beeps or the other sounds, under **Setti
 
 Finish the route, or press **End ride** at any time. The summary shows your distance, time, climbing, power and heart rate, and any personal bests, segment bests and badges you've earned. If the ride suggests a new FTP, you can set it in one click.
 
-Every ride is saved as a `.FIT` file, which most training sites can import. **Show .FIT file** finds it on your computer. In ERG and workouts the file also records the power the trainer was asked to hold, so sites that chart extra data, such as Intervals.icu or GoldenCheetah, can show it next to the power you rode. With [[Strava]] or [[Dreeve]] connected, upload the ride from the summary, or have it sent automatically.
+Every ride is saved as a `.FIT` file, which most training sites can import. **Show .FIT file** finds it on your computer. In ERG and workouts the file also records the power the trainer was asked to hold, so sites that chart extra data, such as Intervals.icu or GoldenCheetah, can show it next to the power you rode. With [[Strava]] or [[Dreeve]] connected, upload the ride from the summary, or have it sent automatically. A short ride (under 15 minutes, unless you change it) asks before it's sent, so test rides don't end up in your feed.
 
 Rides under a minute aren't saved. If you press **End ride** that early, the app asks whether you want to keep riding or leave without saving.
 

@@ -304,6 +304,18 @@ function ConnectorCard({ info, status: initial }: { info: ConnectorInfo; status:
             Connected{status.account ? ` to ${status.account}` : ''}. {info.description}
           </p>
           <Toggle label="Upload every ride automatically" value={auto} onChange={setAuto} />
+          {auto && (
+            <Num
+              label="Ask first for rides shorter than"
+              value={settings.autoUploadMinMinutes}
+              onChange={(v) => update((s) => ({ ...s, autoUploadMinMinutes: v }))}
+              min={0}
+              max={120}
+              step={5}
+              suffix="min"
+              hint="A test ride or a cut-short warm-up waits for you to say yes on the summary. 0 uploads every ride. Shared by every service."
+            />
+          )}
           <button disabled={busy} onClick={() => void run(() => api.connectors.disconnect(info.id))}>
             Disconnect
           </button>
