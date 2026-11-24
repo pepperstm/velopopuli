@@ -53,7 +53,7 @@ The full release is then tagged `v0.4.0` on `main` once the last candidate has b
    git push origin vX.Y.Z
    ```
 
-6. CI builds everything again from the tag, and its **Publish release** job makes the GitHub Release (below). It takes about 15 minutes. If a macOS job is cancelled because no runner picked it up, re-run the failed jobs: `gh run rerun <run id> --failed`.
+6. CI builds everything again from the tag, and its **Publish release** job makes the GitHub Release (below). The repository has immutable releases turned on, so the job makes the release as a draft, uploads every file, and only then publishes it; once published, its files and tag can't change. A release that fails partway stays a draft and can be deleted, but a tag that was published can't be used again: fix the problem and tag the next candidate or patch version. It takes about 15 minutes. If a macOS job is cancelled because no runner picked it up, re-run the failed jobs: `gh run rerun <run id> --failed`.
 7. **Check the release page**: every file is there, the notes read right, and the download links on the website point at the new version.
 
 ### What the release contains
