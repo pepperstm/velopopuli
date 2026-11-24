@@ -4,6 +4,8 @@ import * as sound from '../core/sound'
 import { api, useSettings } from '../state'
 import type { ConnectorEntry, ConnectorInfo, ConnectorStatus, GearPreview, GearSettings, Settings } from '../types'
 import { ReportButton } from './Diagnostics'
+import { KeyboardHelp } from './KeyboardHelp'
+import { generalShortcuts, keyName, plannerShortcuts, rideShortcuts } from './shortcuts'
 
 function Num(props: {
   label: string
@@ -72,15 +74,6 @@ function teeth(text: string): number[] {
     .filter((t) => t >= 6 && t <= 90)
 }
 
-/** A key name as the rider would recognise it. */
-function keyName(key: string): string {
-  return (
-    ({ ' ': 'Space', ArrowRight: '→', ArrowLeft: '←', ArrowUp: '↑', ArrowDown: '↓', PageDown: 'Page Down', PageUp: 'Page Up' } as Record<string, string>)[
-      key
-    ] ?? key
-  )
-}
-
 function KeyList(props: { label: string; keys: string[]; onChange: (keys: string[]) => void }): React.JSX.Element {
   const [listening, setListening] = useState(false)
   useEffect(() => {
@@ -116,6 +109,7 @@ function GearsCard(): React.JSX.Element {
   const g = settings.gears
   const set = (patch: Partial<GearSettings>): void => update((s) => ({ ...s, gears: { ...s.gears, ...patch } }))
   const [preview, setPreview] = useState<GearPreview | null>(null)
+  const [help, setHelp] = useState(false)
   const [rings, setRings] = useState(g.chainrings.join(', '))
   const [cogs, setCogs] = useState(g.cogs.join(', '))
   useEffect(() => {
@@ -128,6 +122,20 @@ function GearsCard(): React.JSX.Element {
   return (
     <section className="card">
       <h2>Gears</h2>
+      <p className="muted small">
+        Every key on the ride screen, and the controller buttons that do the same:{' '}
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault()
+            setHelp(true)
+          }}
+        >
+          Keyboard shortcuts
+        </a>
+        .
+      </p>
+      {help && <KeyboardHelp sections={[rideShortcuts(settings, null), plannerShortcuts(), generalShortcuts()]} onClose={() => setHelp(false)} />}
       <div className="seg gear-mode">
         <button className={!virtual ? 'on' : ''} onClick={() => set({ mode: 'real' })}>
           My bike's gears
