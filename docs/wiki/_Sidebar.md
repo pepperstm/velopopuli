@@ -10,6 +10,7 @@
 - [[Riding]]
 - [[Workouts]]
 - [[Virtual gears]]
+- [[Keyboard shortcuts]]
 - [[Progress and goals]]
 - [[Strava]]
 - [[Dreeve]]

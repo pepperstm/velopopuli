@@ -9,6 +9,8 @@ import { World } from '../world/scene'
 import { look, timeFromHour, weatherFromCode } from '../world/weather'
 import { MiniMap } from './MiniMap'
 import { OverlayPanel } from './OverlayPanel'
+import { KeyboardHelp } from './KeyboardHelp'
+import { generalShortcuts, rideKeyAction, rideShortcuts } from './shortcuts'
 import { StreetPhoto } from './StreetPhoto'
 import { RideSounds } from './rideSounds'
 import * as sound from '../core/sound'
@@ -265,6 +267,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const nativeRef = useRef(false)
   /** Overlay mode: the window is a small see-through panel floating over other apps. */
   const [overlay, setOverlay] = useState(false)
+  /** The keyboard shortcuts panel. */
+  const [help, setHelp] = useState(false)
   const overlayRef = useRef(false)
   const toggleOverlay = async (): Promise<void> => {
     const on = !overlayRef.current
@@ -299,15 +303,18 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      const gears = settingsRef.current.gears
-      // The rider's own shift keys come first, so any key can be used.
-      if (gears.mode === 'virtual' && gears.keysHarder.includes(e.key)) void api.ride.shift(1)
-      else if (gears.mode === 'virtual' && gears.keysEasier.includes(e.key)) void api.ride.shift(-1)
-      else if (e.key === ' ') togglePause()
-      else if (e.key === 'c' || e.key === 'C') cycleCamera()
-      else if (e.key === 'o' || e.key === 'O') void toggleOverlay()
-      else if (e.key === 'ArrowUp') nudge(10)
-      else if (e.key === 'ArrowDown') nudge(-10)
+      // Keys typed into a box (a chat message, say) aren't shortcuts.
+      const t = e.target as HTMLElement
+      if (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return
+      const action = rideKeyAction(e.key, settingsRef.current)
+      if (action === 'shiftHarder') void api.ride.shift(1)
+      else if (action === 'shiftEasier') void api.ride.shift(-1)
+      else if (action === 'pause') togglePause()
+      else if (action === 'camera') cycleCamera()
+      else if (action === 'overlay') void toggleOverlay()
+      else if (action === 'harder') nudge(10)
+      else if (action === 'easier') nudge(-10)
+      else if (action === 'help' && !overlayRef.current) setHelp((h) => !h)
       else return
       e.preventDefault()
     }
@@ -612,6 +619,15 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             </div>
           )}
 
+          {help && (
+            <KeyboardHelp
+              sections={[
+                rideShortcuts(settings, { workout: !!(init.workout && hud.workout), erg: mode === 'erg', demo: hud.demoTarget !== null }),
+                generalShortcuts()
+              ]}
+              onClose={() => setHelp(false)}
+            />
+          )}
           {leaving && !saving && !hud.finished && (
             <div className="ride-overlay">
               <div className="modal">
@@ -688,6 +704,9 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               <button onClick={() => cycleCamera()}>Camera</button>
               <button onClick={() => void toggleOverlay()} title="Float the numbers and map over another app, such as a video (O)">
                 Overlay
+              </button>
+              <button onClick={() => setHelp((h) => !h)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+                ?
               </button>
               {init.workout && hud.workout ? null : (
                 <div className="seg">

@@ -435,6 +435,51 @@ textarea:focus {
 .modal .row {
   margin-top: 6px;
 }
+/* The keyboard shortcuts panel: keys, what they do, the controller button. */
+.modal.keyboard-help {
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.keyboard-help th {
+  padding: 14px 0 4px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.keyboard-help table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.keyboard-help td {
+  padding: 5px 8px 5px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.keyboard-help td.keys,
+.keyboard-help td.controller {
+  white-space: nowrap;
+  width: 1%;
+}
+.keyboard-help table + p {
+  margin-top: 12px;
+}
+.keyboard-help kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.05);
+}
+
 /* Importing a ride from a connected service as a route: 80 % of the window. */
 .modal.remote-import {
   width: 80vw;
