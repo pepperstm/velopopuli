@@ -31,8 +31,9 @@ Then press **Start riding**.
 | `C` | Change camera: behind, high behind, alongside, overhead |
 | `O` | Overlay mode on or off |
 | `↑` / `↓` | Raise or lower the ERG target, the workout's intensity, or the demo rider's effort |
+| `?` | Show the keyboard shortcuts |
 
-The same controls are on screen, along the bottom. A [handlebar controller](Virtual-gears#controllers) can do them too.
+The same controls are on screen, along the bottom; **?** there lists every key that works right now, including your gear keys. A [handlebar controller](Virtual-gears#controllers) can do them too. All of it is in [[Keyboard shortcuts]].
 
 ![Overhead camera](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-hairpins.jpg)
 

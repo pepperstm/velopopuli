@@ -4,6 +4,8 @@ import 'leaflet/dist/leaflet.css'
 import { errorText } from '../bridge'
 import { distUnit, fmtDist, fmtEle, type Units } from '../core/fmt'
 import { api, useSettings } from '../state'
+import { KeyboardHelp } from './KeyboardHelp'
+import { generalShortcuts, plannerShortcuts } from './shortcuts'
 import type { Climb } from '../core/gpx'
 import type { ConnectorEntry, Planned, RemoteRoute, RouteList, RouteMeta, SurfaceClass, WayClass } from '../types'
 
@@ -190,6 +192,8 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
   const [plan, setPlan] = useState<Plan>(EMPTY)
   const [past, setPast] = useState<Plan[]>([])
   const [future, setFuture] = useState<Plan[]>([])
+  /** The keyboard shortcuts panel. */
+  const [help, setHelp] = useState(false)
   /** The style new sections get. */
   const [style, setStyle] = useState('fastbike')
   const [planned, setPlanned] = useState<Planned | null>(null)
@@ -308,9 +312,14 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
   // Undo and redo from the keyboard, when not typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
       const t = e.target as HTMLElement
       if (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return
+      if (e.key === '?') {
+        e.preventDefault()
+        setHelp((h) => !h)
+        return
+      }
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
       e.preventDefault()
       if (e.shiftKey) redo()
       else undo()
@@ -613,6 +622,9 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
           <button disabled={!future.length} onClick={redo} title="Redo (⇧⌘Z / Ctrl+Shift+Z)">
             Redo
           </button>
+          <button onClick={() => setHelp(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+            ?
+          </button>
           <button disabled={n < 2} onClick={() => edit((p) => ({ points: [...p.points].reverse(), styles: [...p.styles].reverse() }))}>
             Reverse
           </button>
@@ -847,6 +859,7 @@ export function Explore({ onSaved }: { onSaved: () => void }): React.JSX.Element
         </div>
       </div>
       <div ref={el} className="explore-map" />
+      {help && <KeyboardHelp sections={[plannerShortcuts(), generalShortcuts()]} onClose={() => setHelp(false)} />}
     </div>
   )
 }

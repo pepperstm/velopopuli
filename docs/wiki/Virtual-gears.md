@@ -15,7 +15,7 @@
 | **Wheel** | Only used to show your cadence when you have no cadence sensor (worked out from your speed and gear). |
 | **Feel** | **Realistic** follows the physics of real gears. **Simple steps** adds a fixed amount of gradient per gear (you choose how much), which is more predictable if your trainer behaves oddly with the realistic version. |
 | **Start each ride in** | The gear closest to your bike's, or a gear you pick. |
-| **Harder / Easier gear** | The keys that shift. Press **+ Add** and then any key, or a button on a Bluetooth presentation clicker or media remote, most of which send arrow or Page Up/Page Down keys. Defaults: `]` `=` Page Down → (harder) and `[` `-` Page Up ← (easier). |
+| **Harder / Easier gear** | The keys that shift. Press **+ Add** and then any key, or a button on a Bluetooth presentation clicker or media remote, most of which send arrow or Page Up/Page Down keys. Defaults: `]` `=` Page Down → (harder) and `[` `-` Page Up ← (easier). See also [[Keyboard shortcuts]]. |
 
 The bars under the settings show every gear, from easiest to hardest, with the starting gear highlighted.
 
