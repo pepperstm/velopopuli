@@ -1,5 +1,7 @@
 # Keyboard shortcuts
 
+> **New in 0.4.0.** The **?** panel and the Settings link are in the [0.4.0 release candidates](https://github.com/pepperstm/velopopuli/releases), for testing, and not yet in a full release. The other ride keys, apart from `O` for overlay mode, also work in 0.3.10.
+
 Every key in VeloPopuli. During a ride, press **?** (the button at the bottom of the ride screen, or the `?` key) for a list of the keys that work right now, with your own gear keys and the handlebar-controller buttons that do the same. The same list is under **Settings → Gears → Keyboard shortcuts**.
 
 ## Riding
