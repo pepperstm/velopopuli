@@ -29,15 +29,17 @@ Then press **Start riding**.
 |---|---|
 | `Space` | Pause and resume |
 | `C` | Change camera: behind, high behind, alongside, overhead |
-| `O` | Overlay mode on or off |
+| `O` | Overlay mode on or off (new in 0.4.0) |
 | `↑` / `↓` | Raise or lower the ERG target, the workout's intensity, or the demo rider's effort |
-| `?` | Show the keyboard shortcuts |
+| `?` | Show the keyboard shortcuts (new in 0.4.0) |
 
 The same controls are on screen, along the bottom; **?** there lists every key that works right now, including your gear keys. A [handlebar controller](Virtual-gears#controllers) can do them too. All of it is in [[Keyboard shortcuts]].
 
 ![Overhead camera](https://raw.githubusercontent.com/pepperstm/velopopuli/main/docs/images/ride-hairpins.jpg)
 
 ### Overlay mode: ride while watching something
+
+> **New in 0.4.0.** This is in the [0.4.0 release candidates](https://github.com/pepperstm/velopopuli/releases), for testing, and not yet in a full release.
 
 Press **Overlay** (or `O`) to shrink the ride to a small see-through panel that floats above every other window. It shows your power, speed, heart rate, cadence, gear, the gradient, distance to go, your workout step and the map, so you can watch YouTube, a race or a film in another app while you ride.
 
@@ -88,6 +90,8 @@ Ride at dawn, in the day, in the evening, at dusk or at night (with a lamp on th
 
 ## Sound
 
+> **New in 0.4.0.** This is in the [0.4.0 release candidates](https://github.com/pepperstm/velopopuli/releases), for testing, and not yet in a full release.
+
 The app plays a few sounds during a ride, all made on the fly with no audio files:
 
 - **A fanfare** at the top of every climb, and a grander one when you finish the route.
@@ -102,7 +106,7 @@ Set the volume, or turn off the workout beeps or the other sounds, under **Setti
 
 Finish the route, or press **End ride** at any time. The summary shows your distance, time, climbing, power and heart rate, and any personal bests, segment bests and badges you've earned. If the ride suggests a new FTP, you can set it in one click.
 
-Every ride is saved as a `.FIT` file, which most training sites can import. **Show .FIT file** finds it on your computer. In ERG and workouts the file also records the power the trainer was asked to hold, so sites that chart extra data, such as Intervals.icu or GoldenCheetah, can show it next to the power you rode. With [[Strava]] or [[Dreeve]] connected, upload the ride from the summary, or have it sent automatically. A short ride (under 15 minutes, unless you change it) asks before it's sent, so test rides don't end up in your feed.
+Every ride is saved as a `.FIT` file, which most training sites can import. **Show .FIT file** finds it on your computer. In ERG and workouts the file also records the power the trainer was asked to hold, so sites that chart extra data, such as Intervals.icu or GoldenCheetah, can show it next to the power you rode. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)* With [[Strava]] or [[Dreeve]] connected, upload the ride from the summary, or have it sent automatically. A short ride (under 15 minutes, unless you change it) asks before it's sent, so test rides don't end up in your feed. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
 
 Rides under a minute aren't saved. If you press **End ride** that early, the app asks whether you want to keep riding or leave without saving.
 

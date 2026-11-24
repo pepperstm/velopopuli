@@ -25,7 +25,7 @@ Import a GPX from anywhere, plan one on the map, or pick from your Strava routes
 No. Pair it once and it connects by itself next time you open the app, as soon as it wakes up.
 
 **Can I change how the app looks?**
-Yes: **Settings → Rider → Theme**. **Glass**, the default, has frosted panels over a softly lit background, like the website. **Simple** has flat, solid panels. The theme changes the screens around the ride, not the 3D world.
+Yes, from 0.4.0 (in the [release candidates](https://github.com/pepperstm/velopopuli/releases) for now): **Settings → Rider → Theme**. **Glass**, the default, has frosted panels over a softly lit background, like the website. **Simple** has flat, solid panels. The theme changes the screens around the ride, not the 3D world.
 
 **Why wasn't my ride saved?**
 Rides under a minute aren't saved. The app warns you if you press **End ride** before then.

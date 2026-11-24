@@ -14,6 +14,8 @@ Press **Import GPX…**, or drag files onto the window. Any GPX works: exports f
 
 ### Plan one on the map
 
+> **New in 0.4.0:** routing styles, sections, dragging the route, **Make a loop** and the route breakdown below are in the [0.4.0 release candidates](https://github.com/pepperstm/velopopuli/releases), for testing, and not yet in a full release.
+
 Open **Find a route**.
 
 1. Search for a place, or move the map there.
