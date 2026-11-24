@@ -14,6 +14,8 @@ export interface Settings {
   scenery: boolean
   /** Connector ids (see ConnectorInfo) every finished ride is sent to without asking. */
   autoUpload: string[]
+  /** Rides shorter than this many minutes aren't uploaded automatically: the summary asks first. 0 uploads every ride. */
+  autoUploadMinMinutes: number
   exportDir: string
   goal: { name: string; distanceKm: number; deadline: string; from: string }
   look: { timeOfDay: TimeOfDay; weather: Weather; landmarks: boolean; photos: boolean; mapillaryToken: string }
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
   buildings: true,
   scenery: true,
   autoUpload: [],
+  autoUploadMinMinutes: 15,
   exportDir: '',
   goal: { name: 'Winter miles', distanceKm: 1000, deadline: '', from: '' },
   look: { timeOfDay: 'day', weather: 'clear', landmarks: true, photos: false, mapillaryToken: '' },

@@ -73,14 +73,38 @@ export function UploadButtons({ ride, auto }: { ride: RideSummary; auto?: boolea
     void api.connectors.list().then(setEntries)
   }, [])
 
+  // A short ride (a test, a cut-short warm-up) isn't sent automatically: the rider is asked.
+  const minS = settings.autoUploadMinMinutes * 60
+  const [answer, setAnswer] = useState<'upload' | 'skip' | null>(null)
+
   if (!entries) return null
   if (!entries.some((e) => e.status.connected) && !entries.some((e) => uploadOf(ride, e.info.id))) {
     return <span className="muted small">Connect {entries.map((e) => e.info.name).join(' or ')} in Settings to upload rides.</span>
   }
+  const autoFor = (e: ConnectorEntry): boolean => Boolean(auto) && settings.autoUpload.includes(e.info.id)
+  // The services that would upload this ride by themselves, if it were long enough.
+  const waiting = entries.filter((e) => autoFor(e) && e.status.connected && !uploadOf(ride, e.info.id))
+  const short = minS > 0 && ride.durationS < minS && waiting.length > 0
+  if (short && answer === null) {
+    const names = waiting.map((e) => e.info.name)
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]
+    return (
+      <>
+        <span className="upload-ask">Upload this short ride to {list}?</span>
+        <button onClick={() => setAnswer('upload')}>Upload</button>
+        <button onClick={() => setAnswer('skip')}>Not this time</button>
+        {entries
+          .filter((e) => !waiting.includes(e))
+          .map((entry) => (
+            <UploadButton key={entry.info.id} ride={ride} entry={entry} auto={autoFor(entry)} />
+          ))}
+      </>
+    )
+  }
   return (
     <>
       {entries.map((entry) => (
-        <UploadButton key={entry.info.id} ride={ride} entry={entry} auto={Boolean(auto) && settings.autoUpload.includes(entry.info.id)} />
+        <UploadButton key={entry.info.id} ride={ride} entry={entry} auto={autoFor(entry) && (!short || answer === 'upload')} />
       ))}
     </>
   )

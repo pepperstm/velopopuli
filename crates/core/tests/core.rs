@@ -2198,3 +2198,12 @@ fn settings_saved_before_themes_open_in_glass() {
     let simple: Settings = serde_json::from_str(r#"{"theme":"simple"}"#).unwrap();
     assert_eq!(simple.theme, Theme::Simple);
 }
+
+#[test]
+fn short_rides_ask_before_uploading_by_default() {
+    use velopopuli_core::types::Settings;
+    let old: Settings = serde_json::from_str(r#"{"autoUpload":["strava"]}"#).unwrap();
+    assert_eq!(old.auto_upload_min_minutes, 15.0);
+    let off: Settings = serde_json::from_str(r#"{"autoUploadMinMinutes":0}"#).unwrap();
+    assert_eq!(off.auto_upload_min_minutes, 0.0);
+}
