@@ -200,4 +200,11 @@ jobs:
           body_path: notes.md
           # A suffix (v0.4.0-rc.1) makes a pre-release; plain versions become the latest release.
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # Releases are immutable once published, so the files go up while it's a draft…
+          draft: true
           files: out/*
+      - name: Publish it
+        # …and it's published once they're all there.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
