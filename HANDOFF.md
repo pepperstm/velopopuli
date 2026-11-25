@@ -42,8 +42,8 @@ It started on 2026-10-13 as "WinterMiles" (an icTrainer alternative for riding G
 | Where | What | State |
 |---|---|---|
 | PR #89 (from RalfLeonFasler, issue #69) | OpenBikeNet: meet riders from other apps on Herne Hill (`herne-hill-450`) | Draft. Changes requested on 2026-11-18, mostly around reconnects: stale riders after a drop, queued updates sent in a burst, fast retries after a fatal error, a group link left open, speed sent while paused. Still to do before merging: a live ride with a second app (OpenRadlr) through the public server |
-| Branch `next` | World update (#39): imagery on the ground (national orthophotos, Sentinel-2 cloudless, or the rider's own provider), buildings styled by region, skyline landmarks, live weather with its wind in the physics | Built, not in `main` or any release. Last brought up to date at v0.3.8, so it needs `main` merged in again (v0.3.9, v0.3.10 and later) before it can land |
-| Branch `feature/visual-style` (issue #50) | Settings → Virtual world → Visual style: Simple or Satellite, replacing the imagery checkbox | One commit, built on `next`, so it lands with or after it |
+| Branch `testing` (called `next` until 25 November 2026) | World update (#39): imagery on the ground (national orthophotos, Sentinel-2 cloudless, or the rider's own provider), buildings styled by region, skyline landmarks, live weather with its wind in the physics | Built, not in `main` or any release. Last brought up to date at v0.3.8, so it needs `main` merged in again (v0.3.9, v0.3.10 and later) before it can land. Not planned for 0.4.0; it lands in a later release |
+| Branch `feature/visual-style` (issue #50) | Settings → Virtual world → Visual style: Simple or Satellite, replacing the imagery checkbox | One commit, built on `testing`, so it lands with or after it |
 
 ## 3. Repository map
 
