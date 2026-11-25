@@ -153,6 +153,8 @@ fn main() {
             commands::ride_intensity,
             commands::ride_skip_step,
             commands::ride_lap,
+            commands::connector_planned_workouts,
+            commands::workout_import_connector,
             commands::ride_shift,
             commands::gears_preview,
             commands::segments_fetch,

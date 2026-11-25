@@ -1020,6 +1020,28 @@ textarea {
 .card.workout h3 {
   margin: 4px 0 0;
 }
+.planned-workouts {
+  margin-bottom: 8px;
+}
+.planned-day {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.planned-notes {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-line;
+  margin: 0;
+}
+.card.workout button {
+  margin-top: auto;
+  align-self: flex-start;
+}
 .hud.workout-panel {
   top: 78px;
   left: 50%;

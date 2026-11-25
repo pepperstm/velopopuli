@@ -377,6 +377,21 @@ export interface ConnectorEntry {
   listsRoutes: boolean
   /** One of the rider's rides on the service can be imported as a route. */
   importsRoutes: boolean
+  /** The service has a training calendar whose planned workouts can be added (Workouts screen). */
+  plansWorkouts: boolean
+}
+
+/** A workout planned on the rider's training calendar on a service. */
+export interface PlannedWorkout {
+  id: string
+  /** YYYY-MM-DD, in the rider's time zone. */
+  date: string
+  name: string
+  description: string
+  durationS: number
+  load: number | null
+  /** Already in the workout library. */
+  added: boolean
 }
 
 /** One of the rider's saved routes on a service. */

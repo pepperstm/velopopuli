@@ -9,6 +9,6 @@
 
 **During the ride:** `Space` pauses, `C` changes the camera, and `↑`/`↓` change the ERG target, the workout's intensity or the demo rider's effort. See [[Riding]] for the rest.
 
-**After the ride:** finish the route or press **End ride**. The summary shows your time, power, personal bests and badges. The ride is saved as a `.FIT` file, and you can send it to [[Strava]] or [[Dreeve]] in one click. Rides under a minute aren't saved.
+**After the ride:** finish the route or press **End ride**. The summary shows your time, power, personal bests and badges. The ride is saved as a `.FIT` file, and you can send it to [[Strava]], [[Dreeve]] or [[Intervals.icu|Intervals-icu]] in one click. Rides under a minute aren't saved.
 
 **Next time:** your trainer and sensors connect by themselves when you open the app. Just wake them up.

@@ -6,6 +6,7 @@ Everything the app talks to over the network besides map data (which is in [The 
 |---|---|---|
 | Strava | Uploads, ghosts, segments, your routes | `connectors/strava.rs` |
 | Dreeve (self-hosted) | Uploads, ghosts, rides as routes | `connectors/dreeve.rs` |
+| Intervals.icu | Uploads, planned workouts | `connectors/intervals.rs` |
 | A group-ride relay (self-hosted) | Riding together | `group.rs`, `crates/relay` |
 | BRouter, Nominatim | Planning routes, finding places | `geo.rs` |
 | Overpass | Waymarked routes (and map detail) | `geo.rs`, `mapdata.rs` |
@@ -57,6 +58,14 @@ The optional parts default to "not supported", so a connector only writes what i
 - `GET /api/v1/status` checks the address and key (**Save and test**).
 - `POST /api/v1/activity/upload` with the FIT file as a multipart `file`. The server queues it (`202 Accepted`) and imports it within minutes, so there's no activity page to link to; the record keeps the server's message ("File queued for import.").
 - `GET /api/v1/activities` lists rides, and `GET /api/v1/activities/{id}/streams` gives a ride's track, for a ghost or a route.
+
+### Intervals.icu
+
+[`connectors/intervals.rs`](../../src-tauri/src/connectors/intervals.rs): [Intervals.icu](https://intervals.icu) is a training log and planner ([API](https://intervals.icu/api/v1/docs)). The rider gives their athlete id (`i12345`; a bare number gets its `i`) and an API key, both from Settings → Developer Settings. Requests use HTTP basic auth: user name `API_KEY`, the key as the password.
+
+- `GET /api/v1/athlete/{id}` checks the key and gives the rider's name (**Save and test**).
+- `POST /api/v1/athlete/{id}/activities` with the FIT file as a multipart `file`, and `name`, `description`, `device_name` and `external_id` (the file name, which is unique per ride) in the query. The reply's activity id makes the link to `https://intervals.icu/activities/{id}`.
+- **Planned workouts** (`plans_workouts`): `GET …/events?oldest&newest&category=WORKOUT` for today and the next 13 days, keeping cycling types with steps; `GET …/events/{event id}/download.zwo` fetches one as a Zwift file, which `parse_zwo` reads. `workout_import_connector` adds it to the library and records its source (`intervals:<event id>`) under `workout-sources`, so adding it again replaces it and the list can mark it as added.
 
 ## Group rides
 

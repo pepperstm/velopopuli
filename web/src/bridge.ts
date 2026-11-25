@@ -14,6 +14,7 @@ import type {
   GearSettings,
   GhostMeta,
   Planned,
+  PlannedWorkout,
   RideInit,
   RideRequest,
   RideSearch,
@@ -104,7 +105,11 @@ export const api = {
     /** One saved route, ready to preview and save like a planned one. */
     route: (id: string, routeId: string) => invoke<Planned>('connector_route', { id, routeId }),
     /** Every ride the rider has on the service, newest first, with a preview of each. */
-    rideList: (id: string) => invoke<RideSearch>('connector_ride_list', { id })
+    rideList: (id: string) => invoke<RideSearch>('connector_ride_list', { id }),
+    /** Workouts planned on the service's training calendar for the next two weeks. */
+    planned: (id: string) => invoke<PlannedWorkout[]>('connector_planned_workouts', { id }),
+    /** Adds a planned workout to the library (again, to update it); returns its name. */
+    addPlanned: (id: string, workoutId: string) => invoke<string>('workout_import_connector', { id, workoutId })
   },
   workouts: {
     list: () => invoke<WorkoutMeta[]>('workouts_list'),

@@ -279,6 +279,8 @@ impl Connector for Dreeve {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    use crate::connectors::testing::fake_server;
 
     const KEY: &str = "drv_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -331,40 +333,6 @@ mod tests {
         assert_eq!(load(&ctx).api_key, KEY);
         assert_eq!(Dreeve.status(&ctx).fields["url"], "https://other.example.com");
         std::fs::remove_dir_all(dir).ok();
-    }
-
-    /// An HTTP server that takes one connection per reply, records each request and answers
-    /// the reply's status with its JSON body.
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    async fn fake_server(replies: &[(&'static str, &'static str)]) -> (String, tokio::task::JoinHandle<Vec<String>>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let replies: Vec<String> =
-            replies.iter().map(|(status, body)| format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())).collect();
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("http://{}", listener.local_addr().unwrap());
-        let handle = tokio::spawn(async move {
-            let mut requests = Vec::new();
-            for reply in replies {
-                let (mut socket, _) = listener.accept().await.unwrap();
-                let mut got = Vec::new();
-                let mut buf = [0u8; 4096];
-                loop {
-                    let n = socket.read(&mut buf).await.unwrap();
-                    got.extend_from_slice(&buf[..n]);
-                    let text = String::from_utf8_lossy(&got);
-                    let Some(head_end) = text.find("\r\n\r\n") else { continue };
-                    let length = text[..head_end].lines().find_map(|l| l.strip_prefix("content-length: ")).and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(0);
-                    if got.len() >= head_end + 4 + length || n == 0 {
-                        break;
-                    }
-                }
-                socket.write_all(reply.as_bytes()).await.unwrap();
-                socket.shutdown().await.ok();
-                requests.push(String::from_utf8_lossy(&got).into_owned());
-            }
-            requests
-        });
-        (url, handle)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]

@@ -56,6 +56,35 @@ pub fn load_workout(store: &Store, id: &str) -> Option<Workout> {
 
 /// Reads a .zwo, .erg or .mrc file and adds it to the library.
 pub fn import_workout(store: &Store, file_name: &str, text: &str, ftp: f64) -> Result<String, String> {
+    add_workout(store, file_name, text, ftp).map(|(_, name)| name)
+}
+
+/// Where workouts added from a connector came from: `"<connector>:<its id>"` → workout id.
+const WORKOUT_SOURCES: &str = "workout-sources";
+
+/// The library's workout added from `source` (`"<connector>:<its id>"`), if it's still there.
+pub fn workout_from(store: &Store, source: &str) -> Option<String> {
+    let sources: std::collections::BTreeMap<String, String> = store.get(WORKOUT_SOURCES).unwrap_or_default();
+    let id = sources.get(source)?;
+    let ids: Vec<String> = store.get("workouts").unwrap_or_default();
+    ids.contains(id).then(|| id.clone())
+}
+
+/// Adds a workout from a connector. Adding the same one again replaces it, so a workout
+/// changed on the service can be fetched again.
+pub fn import_workout_from(store: &Store, source: &str, file_name: &str, text: &str, ftp: f64) -> Result<String, String> {
+    let (id, name) = add_workout(store, file_name, text, ftp)?;
+    if let Some(old) = workout_from(store, source) {
+        delete_workout(store, &old)?;
+    }
+    let mut sources: std::collections::BTreeMap<String, String> = store.get(WORKOUT_SOURCES).unwrap_or_default();
+    sources.insert(source.to_string(), id);
+    store.set(WORKOUT_SOURCES, &sources)?;
+    Ok(name)
+}
+
+/// Reads a workout file into the library: its new id and name.
+fn add_workout(store: &Store, file_name: &str, text: &str, ftp: f64) -> Result<(String, String), String> {
     let id = uuid::Uuid::new_v4().simple().to_string();
     let lower = file_name.to_ascii_lowercase();
     let stem = file_name.rsplit_once('.').map_or(file_name, |(s, _)| s);
@@ -64,7 +93,7 @@ pub fn import_workout(store: &Store, file_name: &str, text: &str, ftp: f64) -> R
     let mut ids: Vec<String> = store.get("workouts").unwrap_or_default();
     ids.insert(0, id.clone());
     store.set("workouts", &ids)?;
-    Ok(workout.name)
+    Ok((id, workout.name))
 }
 
 pub fn delete_workout(store: &Store, id: &str) -> Result<(), String> {

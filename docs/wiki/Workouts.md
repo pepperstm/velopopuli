@@ -6,6 +6,7 @@ Ride a structured session on any route: the trainer holds each step's target in 
 
 - **Built in:** endurance hour, sweet spot, threshold, VO₂max, over-unders, sprints, and an **FTP ramp test** (your FTP is estimated as 75% of your best one-minute power).
 - **Import** Zwift `.zwo` files and `.erg`/`.mrc` files under **Workouts → Import workouts…** (or drag them on).
+- **Planned on Intervals.icu:** with [[Intervals.icu|Intervals-icu]] connected, the workouts on your calendar for the next two weeks are listed at the top. **Add to my workouts** puts one in your library. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
 - Targets are a share of your FTP (Settings → Rider).
 - During the ride: `↑`/`↓` adjust intensity, **Skip step** moves on. With **Settings → Trainer & physics → Hold workout targets** off, targets are shown and the gradient drives the resistance instead.
 - Each step is saved as a lap of its own in the ride's `.FIT` file, along with the workout's steps, so Intervals.icu, Strava and others show each interval separately. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
