@@ -69,6 +69,7 @@ VP_DATA_DIR=/tmp/vp VP_SMOKE=/tmp/vp/shot.png target/debug/velopopuli
 | `VP_SMOKE_ROOM` | Join this group-ride room |
 | `VP_SMOKE_OVERLAY` | Switch the ride to overlay mode 3 s in (with `VP_SMOKE_WINDOW`, the panel is what's saved) |
 | `VP_SMOKE_SHIFT` | Shift this many virtual gears (negative: easier), one every 0.4 s from 3 s in |
+| `VP_SMOKE_LAP` | Press Lap this many seconds into the ride |
 | `VP_SMOKE_SURFACE` | Lay the whole route in one surface: 0 tarmac, 1 concrete, 2 cobbles, 3 gravel, 4 dirt |
 | `VP_SMOKE_CLIP` | Save this many seconds of window frames (15 fps) to `<name>.frames/`, for demo clips |
 | `VP_SMOKE_REPORT` | Also save a diagnostics report here |

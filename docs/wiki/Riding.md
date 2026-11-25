@@ -28,6 +28,7 @@ Then press **Start riding**.
 | Key | What it does |
 |---|---|
 | `Space` | Pause and resume |
+| `L` | Mark a lap (new in 0.4.0) |
 | `C` | Change camera: behind, high behind, alongside, overhead |
 | `O` | Overlay mode on or off (new in 0.4.0) |
 | `↑` / `↓` | Raise or lower the ERG target, the workout's intensity, or the demo rider's effort |
@@ -107,6 +108,10 @@ Set the volume, or turn off the workout beeps or the other sounds, under **Setti
 Finish the route, or press **End ride** at any time. The summary shows your distance, time, climbing, power and heart rate, and any personal bests, segment bests and badges you've earned. If the ride suggests a new FTP, you can set it in one click.
 
 Every ride is saved as a `.FIT` file, which most training sites can import. **Show .FIT file** finds it on your computer. In ERG and workouts the file also records the power the trainer was asked to hold, so sites that chart extra data, such as Intervals.icu or GoldenCheetah, can show it next to the power you rode. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)* With [[Strava]] or [[Dreeve]] connected, upload the ride from the summary, or have it sent automatically. A short ride (under 15 minutes, unless you change it) asks before it's sent, so test rides don't end up in your feed. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
+
+### Laps
+
+Press **Lap** (or `L`, or the Lap button on a [handlebar controller](Virtual-gears#controllers)) to end one lap and start the next without stopping the ride, for your own efforts on a free ride. A banner shows the lap you just finished: its time, distance, average power and heart rate. Laps are also made for you: each workout step is a lap, and so is each time round a loop. The `.FIT` file keeps them all, so Strava, Intervals.icu and other sites show each lap, or each interval, on its own. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
 
 Rides under a minute aren't saved. If you press **End ride** that early, the app asks whether you want to keep riding or leave without saving.
 

@@ -593,6 +593,121 @@ mod ride {
         engine.set_surfaces(Vec::new());
         assert_eq!(engine.surface(), Surface::Asphalt);
     }
+
+    mod laps {
+        use super::*;
+        use velopopuli_core::workout::{Step, StepKind, Workout};
+
+        type Records = Vec<fitparser::FitDataRecord>;
+
+        fn decode(engine: &RideEngine) -> Records {
+            fitparser::from_bytes(&encode_fit(&engine.samples, &engine.session(0, 0))).expect("valid FIT file")
+        }
+
+        fn of(records: &Records, kind: fitparser::profile::MesgNum) -> Vec<&fitparser::FitDataRecord> {
+            records.iter().filter(|r| r.kind() == kind).collect()
+        }
+
+        fn field(r: &fitparser::FitDataRecord, name: &str) -> Option<String> {
+            r.fields().iter().find(|f| f.name() == name).map(|f| f.value().to_string())
+        }
+
+        fn num(r: &fitparser::FitDataRecord, name: &str) -> f64 {
+            field(r, name).unwrap_or_else(|| panic!("missing {name}")).parse().unwrap()
+        }
+
+        #[test]
+        fn the_lap_button_splits_the_ride_into_laps_in_the_fit_file() {
+            let mut clock = 1_700_000_000_000;
+            let mut engine = RideEngine::new(flat(), &settings(), None);
+            run(&mut engine, 60, 200.0, &mut clock);
+            assert!(engine.lap());
+            assert!(!engine.lap(), "a second press straight away makes no empty lap");
+            run(&mut engine, 30, 300.0, &mut clock);
+            assert!(engine.lap());
+            let last = engine.last_lap.clone().unwrap();
+            assert_eq!((last.number, last.manual), (2, true));
+            assert!(close(last.avg_power, 300.0, 1e-6) && close(last.time_s, 30.0, 0.2));
+            assert_eq!(last.avg_hr, Some(150.0));
+            run(&mut engine, 20, 250.0, &mut clock);
+            assert_eq!(engine.laps_finished(), 2);
+
+            let records = decode(&engine);
+            let laps = of(&records, fitparser::profile::MesgNum::Lap);
+            assert_eq!(laps.len(), 3);
+            let triggers: Vec<_> = laps.iter().map(|l| field(l, "lap_trigger").unwrap()).collect();
+            assert_eq!(triggers, ["manual", "manual", "session_end"]);
+            let powers: Vec<f64> = laps.iter().map(|l| num(l, "avg_power")).collect();
+            assert_eq!(powers, [200.0, 300.0, 250.0]);
+            // The laps add up to the ride.
+            let timer: f64 = laps.iter().map(|l| num(l, "total_timer_time")).sum();
+            assert!(close(timer, engine.elapsed, 0.01));
+            let distance: f64 = laps.iter().map(|l| num(l, "total_distance")).sum();
+            assert!(close(distance, engine.ridden, 0.1));
+            assert!(laps.windows(2).all(|w| field(w[0], "timestamp") == field(w[1], "start_time")), "each lap starts where the last ended");
+            assert_eq!(num(of(&records, fitparser::profile::MesgNum::Session)[0], "num_laps"), 3.0);
+            assert!(of(&records, fitparser::profile::MesgNum::Workout).is_empty());
+        }
+
+        #[test]
+        fn each_workout_step_is_its_own_lap_and_names_its_step() {
+            let step = |kind, duration_s, from, to| Step { kind, duration_s, from, to, cadence: None };
+            let workout = Workout {
+                id: "w".into(),
+                name: "Tempo blocks".into(),
+                description: String::new(),
+                steps: vec![step(StepKind::Power, 30.0, 0.5, 0.5), step(StepKind::Power, 20.0, 0.5, 0.8), step(StepKind::Free, 10.0, 0.0, 0.0), step(StepKind::Power, 20.0, 0.9, 0.9)],
+                cues: Vec::new(),
+            };
+            let mut clock = 1_700_000_000_000;
+            let mut engine = RideEngine::with_options(flat(), &settings(), None, RideOptions { workout: Some(workout), ..Default::default() });
+            run(&mut engine, 30, 150.0, &mut clock);
+            run(&mut engine, 20, 200.0, &mut clock);
+            run(&mut engine, 5, 180.0, &mut clock);
+            // Skip the rest of the free step, then skip the next one at once: no empty lap for it.
+            let left = engine.workout_pos().unwrap().step_left_s;
+            engine.workout_time += left + 0.01;
+            engine.tick(0.1, RideInput { power: 0.0, cadence: None, hr: None }, clock);
+            let left = engine.workout_pos().unwrap().step_left_s;
+            engine.workout_time += left + 0.01;
+            // Riding on after the workout makes one more lap, with no step.
+            run(&mut engine, 15, 120.0, &mut clock);
+
+            let records = decode(&engine);
+            let laps = of(&records, fitparser::profile::MesgNum::Lap);
+            let steps: Vec<Option<String>> = laps.iter().map(|l| field(l, "wkt_step_index")).collect();
+            assert_eq!(steps, [Some("0".into()), Some("1".into()), Some("2".into()), None]);
+            let triggers: Vec<_> = laps.iter().map(|l| field(l, "lap_trigger").unwrap()).collect();
+            assert_eq!(triggers, ["time", "time", "time", "session_end"]);
+            assert_eq!(num(laps[0], "avg_power"), 150.0);
+            assert_eq!(num(laps[1], "avg_power"), 200.0);
+
+            let workout = of(&records, fitparser::profile::MesgNum::Workout);
+            assert_eq!(field(workout[0], "wkt_name").as_deref(), Some("Tempo blocks"));
+            assert_eq!(num(workout[0], "num_valid_steps"), 4.0);
+            let steps = of(&records, fitparser::profile::MesgNum::WorkoutStep);
+            let names: Vec<_> = steps.iter().map(|s| field(s, "wkt_step_name").unwrap()).collect();
+            assert_eq!(names, ["50% FTP", "Ramp 50-80% FTP", "Free ride", "90% FTP"]);
+            assert_eq!(field(steps[1], "duration_type").as_deref(), Some("time"));
+            assert!(close(num(steps[1], "duration_time"), 20.0, 1e-6));
+        }
+
+        #[test]
+        fn each_time_round_a_loop_is_a_lap() {
+            let mut clock = 1_700_000_000_000;
+            let mut engine = lap_engine(ring(800.0), Some(2), None);
+            run(&mut engine, 600, 250.0, &mut clock);
+            assert!(engine.finished);
+            let records = decode(&engine);
+            let laps = of(&records, fitparser::profile::MesgNum::Lap);
+            let triggers: Vec<_> = laps.iter().map(|l| field(l, "lap_trigger").unwrap()).collect();
+            assert_eq!(triggers, ["position_lap", "session_end"]);
+            for l in &laps {
+                assert!(close(num(l, "total_distance"), engine.route.total, 15.0), "each lap is once round");
+            }
+            assert_eq!(engine.last_lap.as_ref().map(|l| l.manual), Some(false));
+        }
+    }
 }
 
 mod gamify {

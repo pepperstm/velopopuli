@@ -36,6 +36,52 @@ pub struct FitSession {
     pub kj: f64,
     /// Local time minus UTC, in seconds, for the activity's local timestamp.
     pub utc_offset_s: i64,
+    /// The ride's laps, in order. Empty writes the whole ride as one lap.
+    pub laps: Vec<FitLap>,
+    /// The workout ridden, written with its steps so a lap can say which step it was.
+    pub workout: Option<FitWorkout>,
+}
+
+/// Why a lap ended: FIT's `lap_trigger`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LapTrigger {
+    /// The rider pressed Lap.
+    Manual = 0,
+    /// A workout step ended.
+    Time = 1,
+    /// The rider crossed the line of a loop.
+    PositionLap = 4,
+    /// The ride ended.
+    SessionEnd = 7,
+}
+
+/// One lap: a run of samples and what was ridden in it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FitLap {
+    /// Index of the lap's first sample, and one past its last.
+    pub samples: std::ops::Range<usize>,
+    pub timer_s: f64,
+    pub distance_m: f64,
+    pub ascent_m: f64,
+    pub descent_m: f64,
+    pub trigger: LapTrigger,
+    /// The workout step ridden in this lap (index into `FitWorkout::steps`).
+    pub workout_step: Option<usize>,
+}
+
+/// A workout, as FIT's `workout` and `workout_step` messages.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FitWorkout {
+    pub name: String,
+    pub steps: Vec<FitWorkoutStep>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FitWorkoutStep {
+    pub name: String,
+    pub duration_s: f64,
+    /// Lowest and highest target, as a percentage of FTP; None for a step with no target.
+    pub power_pct: Option<(f64, f64)>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -93,10 +139,14 @@ type Layout = (u16, Vec<(u8, u8, u8)>, Vec<(u8, u8, u8)>);
 /// match on it to know which app's `target_power` they're looking at.
 const APP_ID: [u8; 16] = [0xd1, 0x5c, 0x7f, 0x0c, 0xde, 0x7b, 0x42, 0x72, 0x8c, 0x63, 0x37, 0xff, 0x17, 0xf7, 0x24, 0xf6];
 
-/// NUL-padded fixed-size string.
+/// NUL-padded fixed-size string, cut at a character boundary if it's too long.
 fn padded<const N: usize>(s: &str) -> [u8; N] {
+    let mut end = s.len().min(N - 1);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
     let mut out = [0; N];
-    out[..s.len().min(N - 1)].copy_from_slice(&s.as_bytes()[..s.len().min(N - 1)]);
+    out[..end].copy_from_slice(&s.as_bytes()[..end]);
     out
 }
 
@@ -170,6 +220,41 @@ fn positive(v: f64, max: f64) -> Option<f64> {
     (v > 0.0).then(|| v.min(max))
 }
 
+/// What a lap's samples add up to.
+struct LapStats {
+    avg_power: f64,
+    max_power: f64,
+    np: Option<f64>,
+    avg_hr: f64,
+    max_hr: f64,
+    avg_cadence: f64,
+    max_cadence: f64,
+    max_speed: f64,
+}
+
+fn lap_stats(samples: &[FitSample]) -> LapStats {
+    let n = samples.len().max(1) as f64;
+    let mean = |v: Vec<f64>| if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 };
+    let max = |v: &mut dyn Iterator<Item = f64>| v.fold(0.0_f64, f64::max);
+    let hr: Vec<f64> = samples.iter().filter_map(|p| p.hr).filter(|h| *h > 0.0).collect();
+    let cad: Vec<f64> = samples.iter().filter_map(|p| p.cadence).filter(|c| *c > 0.0).collect();
+    // Normalised power needs 30 s of riding: the 4th-power mean of the 30 s rolling average.
+    let np = (samples.len() >= 30).then(|| {
+        let rolling: Vec<f64> = samples.windows(30).map(|w| w.iter().map(|p| p.power).sum::<f64>() / 30.0).collect();
+        (rolling.iter().map(|m| m.powi(4)).sum::<f64>() / rolling.len() as f64).powf(0.25)
+    });
+    LapStats {
+        avg_power: samples.iter().map(|p| p.power).sum::<f64>() / n,
+        max_power: max(&mut samples.iter().map(|p| p.power)),
+        np,
+        avg_hr: mean(hr.clone()),
+        max_hr: max(&mut hr.into_iter()),
+        avg_cadence: mean(cad.clone()),
+        max_cadence: max(&mut cad.into_iter()),
+        max_speed: max(&mut samples.iter().map(|p| p.speed)),
+    }
+}
+
 pub fn encode_fit(samples: &[FitSample], s: &FitSession) -> Vec<u8> {
     let mut w = Writer::default();
     let start = ts(s.start_time);
@@ -188,6 +273,32 @@ pub fn encode_fit(samples: &[FitSample], s: &FitSession) -> Vec<u8> {
         &[(3, 0x07, &padded::<16>("target_power")), (8, 0x07, &padded::<8>("watts"))],
         &[],
     );
+    if let Some(wk) = &s.workout {
+        // workout: sport=cycling, and its steps, so each lap can point at the step it was.
+        w.message_ext(7, 26, &[(4, T::Enum, Some(2.0)), (6, T::U16, Some(wk.steps.len() as f64))], &[(8, 0x07, &padded::<32>(&wk.name))], &[]);
+        for (i, step) in wk.steps.iter().enumerate() {
+            // Power targets above 1000 would be watts; up to 1000 they're a percentage of FTP.
+            let (target_type, low, high) = match step.power_pct {
+                Some((low, high)) => (4.0, Some(low.clamp(0.0, 1000.0)), Some(high.clamp(0.0, 1000.0))),
+                None => (2.0, None, None),
+            };
+            w.message_ext(
+                7,
+                27,
+                &[
+                    (254, T::U16, Some(i as f64)),
+                    (1, T::Enum, Some(0.0)),
+                    (2, T::U32, Some(step.duration_s * 1000.0)),
+                    (3, T::Enum, Some(target_type)),
+                    (4, T::U32, low.map(|_| 0.0)),
+                    (5, T::U32, low),
+                    (6, T::U32, high),
+                ],
+                &[(0, 0x07, &padded::<32>(&step.name))],
+                &[],
+            );
+        }
+    }
     // event: timer start
     w.message(1, 21, &[(253, T::U32, Some(start)), (0, T::Enum, Some(0.0)), (1, T::Enum, Some(0.0))]);
     for p in samples {
@@ -213,24 +324,50 @@ pub fn encode_fit(samples: &[FitSample], s: &FitSession) -> Vec<u8> {
     }
     // event: timer stop_all
     w.message(1, 21, &[(253, T::U32, Some(end)), (0, T::Enum, Some(0.0)), (1, T::Enum, Some(4.0))]);
-    let first = samples.first();
-    // lap
-    w.message(
-        3,
-        19,
-        &[
-            (254, T::U16, Some(0.0)),
-            (253, T::U32, Some(end)),
-            (0, T::Enum, Some(9.0)),
-            (1, T::Enum, Some(1.0)),
-            (2, T::U32, Some(start)),
-            (3, T::S32, first.map(|p| p.lat * SEMICIRCLES)),
-            (4, T::S32, first.map(|p| p.lon * SEMICIRCLES)),
-            (7, T::U32, Some(elapsed_ms)),
-            (8, T::U32, Some(s.timer_s * 1000.0)),
-            (9, T::U32, Some(s.distance_m * 100.0)),
-        ],
-    );
+    let whole = [FitLap { samples: 0..samples.len(), timer_s: s.timer_s, distance_m: s.distance_m, ascent_m: s.ascent_m, descent_m: s.descent_m, trigger: LapTrigger::SessionEnd, workout_step: None }];
+    let laps: &[FitLap] = if s.laps.is_empty() { &whole } else { &s.laps };
+    for (i, lap) in laps.iter().enumerate() {
+        let range = lap.samples.start.min(samples.len())..lap.samples.end.min(samples.len());
+        let in_lap = &samples[range.clone()];
+        let stats = lap_stats(in_lap);
+        // A lap runs from its first sample to the next lap's first, so the laps add up to the ride.
+        let lap_start = in_lap.first().map_or(start, |p| ts(p.time));
+        let lap_end = samples.get(range.end).filter(|_| i + 1 < laps.len()).or(in_lap.last()).map_or(end, |p| ts(p.time));
+        let (first, last) = (in_lap.first(), in_lap.last());
+        w.message(
+            3,
+            19,
+            &[
+                (254, T::U16, Some(i as f64)),
+                (253, T::U32, Some(lap_end)),
+                (0, T::Enum, Some(9.0)),
+                (1, T::Enum, Some(1.0)),
+                (2, T::U32, Some(lap_start)),
+                (3, T::S32, first.map(|p| p.lat * SEMICIRCLES)),
+                (4, T::S32, first.map(|p| p.lon * SEMICIRCLES)),
+                (5, T::S32, last.map(|p| p.lat * SEMICIRCLES)),
+                (6, T::S32, last.map(|p| p.lon * SEMICIRCLES)),
+                (7, T::U32, Some((lap_end - lap_start) * 1000.0)),
+                (8, T::U32, Some(lap.timer_s * 1000.0)),
+                (9, T::U32, Some(lap.distance_m * 100.0)),
+                (13, T::U16, if lap.timer_s > 0.0 { cap(lap.distance_m / lap.timer_s * 1000.0, 65534.0) } else { None }),
+                (14, T::U16, cap(stats.max_speed * 1000.0, 65534.0)),
+                (15, T::U8, positive(stats.avg_hr, 254.0)),
+                (16, T::U8, positive(stats.max_hr, 254.0)),
+                (17, T::U8, positive(stats.avg_cadence, 254.0)),
+                (18, T::U8, positive(stats.max_cadence, 254.0)),
+                (19, T::U16, cap(stats.avg_power, 65534.0)),
+                (20, T::U16, cap(stats.max_power, 65534.0)),
+                (21, T::U16, cap(lap.ascent_m, 65534.0)),
+                (22, T::U16, cap(lap.descent_m, 65534.0)),
+                (24, T::Enum, Some(lap.trigger as u8 as f64)),
+                (25, T::Enum, Some(2.0)),
+                (33, T::U16, stats.np.and_then(|np| cap(np, 65534.0))),
+                (39, T::Enum, Some(58.0)),
+                (71, T::U16, lap.workout_step.map(|i| i as f64)),
+            ],
+        );
+    }
     // session: sport=cycling, sub_sport=virtual_activity (Strava files it as a Virtual Ride)
     w.message(
         4,
@@ -258,7 +395,7 @@ pub fn encode_fit(samples: &[FitSample], s: &FitSession) -> Vec<u8> {
             (22, T::U16, cap(s.ascent_m, 65534.0)),
             (23, T::U16, cap(s.descent_m, 65534.0)),
             (25, T::U16, Some(0.0)),
-            (26, T::U16, Some(1.0)),
+            (26, T::U16, Some(laps.len() as f64)),
             (34, T::U16, cap(s.np, 65534.0)),
         ],
     );

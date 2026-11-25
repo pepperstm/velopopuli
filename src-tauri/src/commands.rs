@@ -407,6 +407,12 @@ pub fn ride_shift(state: State<AppState>, delta: i32) -> Res<()> {
 }
 
 #[tauri::command]
+pub fn ride_lap(state: State<AppState>) -> Res<()> {
+    state.current_session()?.lap();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn ride_skip_step(state: State<AppState>) -> Res<()> {
     state.current_session()?.skip_step();
     Ok(())
@@ -1079,6 +1085,8 @@ pub struct SmokeConfig {
     clip: Option<f64>,
     /// Virtual gears to shift during the ride (VP_SMOKE_SHIFT, negative = easier).
     shift: Option<i32>,
+    /// Press Lap this many seconds into the ride (VP_SMOKE_LAP).
+    lap: Option<f64>,
     /// Scroll to the heading with this text before capturing (VP_SMOKE_SCROLL).
     scroll: Option<String>,
     /// Laps to ride on a closed route (VP_SMOKE_LAPS, 0 = until stopped).
@@ -1117,6 +1125,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         ghosts: std::env::var("VP_SMOKE_GHOSTS").ok().map(|v| v.split(',').map(str::to_string).collect()),
         clip: std::env::var("VP_SMOKE_CLIP").ok().and_then(|v| v.parse().ok()),
         shift: std::env::var("VP_SMOKE_SHIFT").ok().and_then(|v| v.parse().ok()),
+        lap: std::env::var("VP_SMOKE_LAP").ok().and_then(|v| v.parse().ok()),
         scroll: std::env::var("VP_SMOKE_SCROLL").ok(),
         laps: std::env::var("VP_SMOKE_LAPS").ok().and_then(|v| v.parse().ok()),
         route: std::env::var("VP_SMOKE_ROUTE").ok(),

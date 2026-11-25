@@ -173,7 +173,7 @@ mod openbikecontrol {
 
     #[test]
     fn app_information_message() {
-        assert_eq!(app_info("velopopuli", "0.3.7"), [4, 1, 10, 118, 101, 108, 111, 112, 111, 112, 117, 108, 105, 5, 48, 46, 51, 46, 55, 8, 1, 2, 48, 49, 50, 51, 52, 64]);
+        assert_eq!(app_info("velopopuli", "0.3.7"), [4, 1, 10, 118, 101, 108, 111, 112, 111, 112, 117, 108, 105, 5, 48, 46, 51, 46, 55, 9, 1, 2, 48, 49, 50, 51, 52, 53, 64]);
     }
 
     #[test]
@@ -211,6 +211,7 @@ mod openbikecontrol {
         assert_eq!(pick(&[0x34], SIM), Some(Action::Resume));
         assert_eq!(pick(&[0x33, 0x01], REAL_GEARS), Some(Action::Pause));
         assert_eq!(pick(&[0x40], ERG), Some(Action::Camera));
+        assert_eq!(pick(&[0x35], SIM), Some(Action::Lap));
         // Ids VeloPopuli has nothing for: steering, select, emotes.
         assert_eq!(pick(&[0x18, 0x14, 0x20], SIM), None);
     }

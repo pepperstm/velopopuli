@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::fit::{FitSample, FitSession};
+use crate::fit::{FitLap, FitSample, FitSession, FitWorkout, FitWorkoutStep, LapTrigger};
 use crate::fitness::power_curve;
 use crate::gpx::{Climb, Route, RoutePos};
 use crate::physics::{step_speed, wind_coefficient, PhysicsParams};
@@ -111,6 +111,42 @@ pub struct ClimbResult {
     pub previous_best: Option<f64>,
 }
 
+/// Where a lap starts or ends in the recorded ride.
+#[derive(Debug, Clone, Copy)]
+struct LapMark {
+    sample: usize,
+    elapsed: f64,
+    ridden: f64,
+    ascent: f64,
+    descent: f64,
+    /// The workout step being ridden at this point.
+    workout_step: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LapDone {
+    start: LapMark,
+    end: LapMark,
+    trigger: LapTrigger,
+}
+
+/// A lap just finished, for the ride screen.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LapResult {
+    /// From 1.
+    pub number: usize,
+    /// The rider pressed Lap (rather than a workout step or a loop ending it).
+    pub manual: bool,
+    pub time_s: f64,
+    pub distance_m: f64,
+    pub avg_power: f64,
+    pub avg_hr: Option<f64>,
+}
+
+/// A manual lap shorter than this is ignored, so a double press doesn't make an empty lap.
+const MIN_MANUAL_LAP_S: usize = 3;
+
 const BOT_NAMES: [&str; 5] = ["Tempo Tom", "Steady Sam", "Punchy Pia", "Diesel Dana", "Rocket Ro"];
 const BOT_COLORS: [u32; 5] = [0x4aa3ff, 0xffb347, 0xc56bff, 0x4ddb8a, 0xff6b9a];
 
@@ -163,6 +199,12 @@ pub struct RideEngine {
     seg_state: Vec<SegState>,
     /// Climbs already timed on this lap.
     climbs_done: BTreeSet<usize>,
+    /// Laps finished so far: by the Lap button, a workout step ending, or a loop's line.
+    laps_done: Vec<LapDone>,
+    /// Where the lap being ridden started.
+    lap_start: LapMark,
+    /// The last lap finished, for the ride screen.
+    pub last_lap: Option<LapResult>,
 
     params: PhysicsParams,
     /// The road surface at each route sample; empty means tarmac all the way.
@@ -226,6 +268,7 @@ impl RideEngine {
             }
         }
         let pos = route.sample_at(0.0);
+        let first_step = options.workout.as_ref().and_then(|w| w.at(0.0)).map(|p| p.index);
         Self {
             route,
             pb,
@@ -253,6 +296,9 @@ impl RideEngine {
             last_climb_result: None,
             seg_state: vec![SegState::Waiting; options.segments.len()],
             climbs_done: BTreeSet::new(),
+            laps_done: Vec::new(),
+            lap_start: LapMark { sample: 0, elapsed: 0.0, ridden: 0.0, ascent: 0.0, descent: 0.0, workout_step: first_step },
+            last_lap: None,
             segments: options.segments,
             segment_bests: options.segment_bests,
             new_segment_bests: BTreeMap::new(),
@@ -298,6 +344,10 @@ impl RideEngine {
             self.moving = false;
             return;
         }
+        // Each workout step is a lap of its own.
+        if self.workout.is_some() && self.workout_pos().map(|p| p.index) != self.lap_start.workout_step {
+            self.mark_lap(LapTrigger::Time);
+        }
         // Hold the bike still until the rider pedals, even if the start points downhill.
         if self.speed < 0.3 && input.power < 5.0 {
             self.speed = 0.0;
@@ -326,6 +376,7 @@ impl RideEngine {
                 self.track_climbs();
                 self.track_segments();
                 self.distance = overshoot;
+                self.mark_lap(LapTrigger::PositionLap);
                 self.lap += 1;
                 self.climbs_done.clear();
                 self.climb_index = None;
@@ -555,6 +606,66 @@ impl RideEngine {
         }
     }
 
+    /// The rider pressed Lap: ends the lap being ridden without ending the ride. Returns false
+    /// when the lap so far is too short to keep.
+    pub fn lap(&mut self) -> bool {
+        self.mark_lap(LapTrigger::Manual)
+    }
+
+    /// How many laps have been finished.
+    pub fn laps_finished(&self) -> usize {
+        self.laps_done.len()
+    }
+
+    fn mark_here(&self) -> LapMark {
+        LapMark { sample: self.samples.len(), elapsed: self.elapsed, ridden: self.ridden, ascent: self.ascent, descent: self.descent, workout_step: self.workout_pos().map(|p| p.index) }
+    }
+
+    /// Ends the lap being ridden and starts the next one here.
+    fn mark_lap(&mut self, trigger: LapTrigger) -> bool {
+        let here = self.mark_here();
+        let start = self.lap_start;
+        let min = if trigger == LapTrigger::Manual { MIN_MANUAL_LAP_S } else { 1 };
+        if here.sample < start.sample + min {
+            // Nothing ridden since the last lap (a step skipped straight away): this lap
+            // carries on, but belongs to the step the rider is on now.
+            self.lap_start.workout_step = here.workout_step;
+            return false;
+        }
+        let ridden = &self.samples[start.sample..here.sample];
+        let hr: Vec<f64> = ridden.iter().filter_map(|p| p.hr).filter(|h| *h > 0.0).collect();
+        self.laps_done.push(LapDone { start, end: here, trigger });
+        self.last_lap = Some(LapResult {
+            number: self.laps_done.len(),
+            manual: trigger == LapTrigger::Manual,
+            time_s: here.elapsed - start.elapsed,
+            distance_m: here.ridden - start.ridden,
+            avg_power: ridden.iter().map(|p| p.power).sum::<f64>() / ridden.len() as f64,
+            avg_hr: (!hr.is_empty()).then(|| hr.iter().sum::<f64>() / hr.len() as f64),
+        });
+        self.lap_start = here;
+        true
+    }
+
+    /// The ride's laps for the FIT file: the finished ones, then the one ridden at the end.
+    fn fit_laps(&self) -> Vec<FitLap> {
+        let lap = |start: LapMark, end: LapMark, trigger| FitLap {
+            samples: start.sample..end.sample,
+            timer_s: end.elapsed - start.elapsed,
+            distance_m: end.ridden - start.ridden,
+            ascent_m: end.ascent - start.ascent,
+            descent_m: end.descent - start.descent,
+            trigger,
+            workout_step: start.workout_step,
+        };
+        let mut laps: Vec<FitLap> = self.laps_done.iter().map(|l| lap(l.start, l.end, l.trigger)).collect();
+        let here = self.mark_here();
+        if laps.is_empty() || here.sample > self.lap_start.sample {
+            laps.push(lap(self.lap_start, here, LapTrigger::SessionEnd));
+        }
+        laps
+    }
+
     /// Whether this ride goes round a loop for laps.
     pub fn lap_ride(&self) -> bool {
         self.laps.is_some()
@@ -718,8 +829,22 @@ impl RideEngine {
             max_speed: self.max_speed,
             kj: self.kj(),
             utc_offset_s,
+            laps: self.fit_laps(),
+            workout: self.workout.as_ref().map(|w| FitWorkout { name: w.name.clone(), steps: w.steps.iter().map(fit_step).collect() }),
         }
     }
+}
+
+/// A workout step for the FIT file, named for what it asks of the rider.
+fn fit_step(step: &crate::workout::Step) -> FitWorkoutStep {
+    let pct = |f: f64| (f * 100.0).round();
+    let (name, power_pct) = match step.kind {
+        StepKind::Power if (step.from - step.to).abs() < 0.005 => (format!("{}% FTP", pct(step.from)), Some((pct(step.from), pct(step.to)))),
+        StepKind::Power => (format!("Ramp {}-{}% FTP", pct(step.from), pct(step.to)), Some((pct(step.from.min(step.to)), pct(step.from.max(step.to))))),
+        StepKind::Free => ("Free ride".to_string(), None),
+        StepKind::Max => ("Max effort".to_string(), None),
+    };
+    FitWorkoutStep { name, duration_s: step.duration_s, power_pct }
 }
 
 /// A recorded trace's distance at `t` seconds, interpolated.

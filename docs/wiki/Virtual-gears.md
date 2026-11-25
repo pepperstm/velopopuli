@@ -41,6 +41,7 @@ Controllers that speak [OpenBikeControl](https://openbikecontrol.org), an open p
 | Increase / decrease difficulty | ERG target ±10 W, or the workout ±5% |
 | Skip interval | Next workout step |
 | Pause / Resume | Pause or resume the ride |
+| Lap | Mark a lap (new in 0.4.0) |
 | Camera view | Next camera |
 
 A controller can send several of these for one button, so that every app finds one it knows (shift up and increase difficulty, say). Each press does only one thing: shifting wins, except in ERG (or a workout held in ERG), where gears change nothing and the difficulty buttons win. Holding a button counts as one press. A trainer or sensor with OpenBikeControl buttons of its own keeps working as a trainer or sensor, and its buttons work too.

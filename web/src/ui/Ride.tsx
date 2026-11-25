@@ -168,6 +168,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         // Automated check: shift this many gears (negative: easier), one every 0.4 s from 3 s in.
         const shifts = smoke?.shift ?? 0
         for (let i = 0; i < Math.abs(shifts); i++) setTimeout(() => void api.ride.shift(Math.sign(shifts)), 3000 + i * 400)
+        // Automated check: press Lap this many seconds in.
+        if (smoke?.lap) setTimeout(() => void api.ride.lap(), smoke.lap * 1000)
 
         let latest: { s: RideState; at: number } | null = null
         let received = 0
@@ -310,6 +312,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
       if (action === 'shiftHarder') void api.ride.shift(1)
       else if (action === 'shiftEasier') void api.ride.shift(-1)
       else if (action === 'pause') togglePause()
+      else if (action === 'lap') void api.ride.lap()
       else if (action === 'camera') cycleCamera()
       else if (action === 'overlay') void toggleOverlay()
       else if (action === 'harder') nudge(10)
@@ -334,6 +337,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
         else if (action === 'harder') nudge(10)
         else if (action === 'easier') nudge(-10)
         else if (action === 'skipStep') void api.ride.skipStep()
+        else if (action === 'lap') void api.ride.lap()
         else if (action === 'camera') cycleCamera()
         else if ((action === 'pause') !== pausedRef.current) togglePause()
       }),
@@ -358,6 +362,8 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
   const ready = route && init && hud
   const climb = ready && hud.climbIndex !== null ? route.climbs[hud.climbIndex] : null
   const climbBest = ready && hud.climbIndex !== null ? init.pbClimbs[hud.climbIndex] : undefined
+  // A lap the rider just marked shows for a few seconds, in place of a climb or segment's progress.
+  const lapDone = hud?.lapResult?.manual && !hud.segmentResult && !hud.climbResult ? hud.lapResult : null
   const mode = settings.trainer.mode
   const lapRide = init?.laps != null
   const landmarksAhead = ready
@@ -559,7 +565,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
             {settings.look.photos && routeId !== 'demo' && <StreetPhoto distance={hud.distance} />}
           </div>
 
-          {hud.segment && hud.segment.source === 'remote' && (
+          {!lapDone && hud.segment && hud.segment.source === 'remote' && (
             <div className="banner climb segment">
               <b>
                 ⏱ {hud.segment.name}
@@ -588,7 +594,7 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
               </span>
             </div>
           )}
-          {climb && !(hud.segment && hud.segment.source === 'remote') && (
+          {!lapDone && climb && !(hud.segment && hud.segment.source === 'remote') && (
             <div className="banner climb">
               <b>
                 Climb {hud.climbIndex! + 1}
@@ -615,6 +621,18 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
                   : hud.climbResult.timeS < hud.climbResult.previousBest
                     ? `New best, ${fmtTime(hud.climbResult.previousBest - hud.climbResult.timeS)} faster!`
                     : `${fmtTime(hud.climbResult.timeS - hud.climbResult.previousBest)} off your best.`}
+              </span>
+            </div>
+          )}
+
+          {lapDone && (
+            <div className="banner">
+              <b>
+                Lap {lapDone.number} · {fmtTime(lapDone.timeS)}
+              </b>
+              <span>
+                {fmtDist(lapDone.distanceM, units, 2)} · {Math.round(lapDone.avgPower)} W average
+                {lapDone.avgHr !== null && ` · ${Math.round(lapDone.avgHr)} bpm`}
               </span>
             </div>
           )}
@@ -701,6 +719,9 @@ export function Ride({ request, onExit, onDevices, onFinish }: Props): React.JSX
           <div className="hud bottom">
             <div className="controls">
               <button onClick={togglePause}>{hud.paused ? 'Resume' : 'Pause'}</button>
+              <button onClick={() => void api.ride.lap()} title="End this lap and start the next, without stopping the ride (L)">
+                Lap
+              </button>
               <button onClick={() => cycleCamera()}>Camera</button>
               <button onClick={() => void toggleOverlay()} title="Float the numbers and map over another app, such as a video (O)">
                 Overlay

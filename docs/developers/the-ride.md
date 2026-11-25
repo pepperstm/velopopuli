@@ -74,6 +74,16 @@ Laps are offered only on a closed route (`Route.closed`, asked through `route_is
 
 Anything comparing distances on a lap ride must allow for the wrap. That includes the chase camera, rivals just behind the rider, the barriers and the profile behind them, and a group rider sitting at exactly 0 or `total`. The page has `wrapDist` and `wrapGap` for this (`web/src/core/gpx.ts`).
 
+### Laps in the recording
+
+Separately from `lap` (the loop being ridden), the engine splits the recording into laps for the FIT file. `mark_lap` ends the lap being ridden at the current sample and starts the next. It's called by:
+
+- the **Lap** button, `L` and the controller's Lap button (`RideEngine::lap`, via the `ride_lap` command). A manual lap under 3 seconds is ignored, so a double press makes no empty lap;
+- a **workout step** changing, checked each tick, so **Skip step** counts too. A step skipped before a second is ridden makes no lap; the lap carries on as the new step;
+- the **line on a loop**, at the wrap.
+
+Each lap remembers the workout step it started in. `last_lap` (a `LapResult`) is what the ride screen shows for a few seconds after a manual lap.
+
 ## Recording
 
 Every second, `record` appends a `FitSample`: time, position, height, `ridden`, speed, power (rounded), heart rate and cadence. Timestamps strictly increase even if two samples fall in the same wall-clock second, as FIT requires. Alongside, it keeps running totals:
@@ -83,7 +93,7 @@ Every second, `record` appends a `FitSample`: time, position, height, `ridden`, 
 - **normalised power**: the fourth-power mean of the 30-second rolling average;
 - **TSS**: `elapsed × NP × (NP / FTP) / (FTP × 3600) × 100`.
 
-[`fit.rs`](../../crates/core/src/fit.rs) writes the FIT file: `file_id` (activity), timer start and stop events, one record per sample, one lap, the session totals and the activity, with the local time offset. Laps on a lap ride aren't written as separate FIT laps yet. [`crates/core/examples/fitinfo.rs`](../../crates/core/examples/fitinfo.rs) prints a FIT file with an independent decoder, for checking.
+[`fit.rs`](../../crates/core/src/fit.rs) writes the FIT file: `file_id` (activity), timer start and stop events, one record per sample, the laps (above; the ride as one lap if none were marked), the session totals and the activity, with the local time offset. Each lap has its own totals, its `lap_trigger` (manual, time for a workout step, position_lap for a loop, session_end for the last) and, on a workout, `wkt_step_index`. A workout ride also writes `workout` and `workout_step` messages: each step's duration, and its power target as a percentage of FTP. [`crates/core/examples/fitinfo.rs`](../../crates/core/examples/fitinfo.rs) prints a FIT file with an independent decoder, for checking.
 
 ## The end of a ride
 

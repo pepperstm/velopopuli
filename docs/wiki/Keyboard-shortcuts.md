@@ -13,6 +13,7 @@ Every key in VeloPopuli. During a ride, press **?** (the button at the bottom of
 | `↑` | ERG target up 10 W, workout intensity up 5%, or the demo rider's effort up | Increase difficulty |
 | `↓` | The same, down | Decrease difficulty |
 | `Space` | Pause or resume | Pause / Resume |
+| `L` | Mark a lap: end this lap and start the next, without stopping the ride (new in 0.4.0) | Lap |
 | `C` | Change the camera: behind, high behind, alongside, overhead | Camera view |
 | `O` | [Overlay mode](Riding#overlay-mode-ride-while-watching-something) on or off | |
 | | Skip to the next workout step (the **Skip step** button) | Skip interval |
