@@ -18,7 +18,7 @@ use crate::connectors::{self, ConnectorInfo, ConnectorStatus, Ctx, RideSearch, U
 use crate::devices::DevicesSnapshot;
 use crate::library::{self, GhostMeta, WorkoutMeta};
 use crate::session::{load_route, local_day, RideInit, RideRequest, Session, DEMO_ROUTE_ID};
-use crate::{geo, group, now_ms, photos, secrets, smart, AppState};
+use crate::{checkpoint, geo, group, now_ms, photos, secrets, session, smart, AppState};
 use velopopuli_core::fitness::{estimate_ftp, training_load, FtpEstimate, LoadDay, CURVE_DURATIONS};
 use velopopuli_core::gamify::{streaks, Streaks};
 use velopopuli_core::segments::{place_segment, Segment, SegmentSource};
@@ -268,7 +268,14 @@ pub async fn ride_start(app: AppHandle, state: State<'_, AppState>, request: Rid
     if let Some(old) = state.session.lock().unwrap().take() {
         old.halt();
     }
-    let (session, init) = Session::start(&app, &state.store, &state.http, state.devices.clone(), state.demo.clone(), &request).await?;
+    // Carrying on a ride cut short: its own request, and where it got to.
+    let (request, progress) = if request.resume {
+        let saved = checkpoint::load(&state.store).ok_or("That ride can't be carried on any more.")?;
+        (saved.request, Some(saved.progress))
+    } else {
+        (request, None)
+    };
+    let (session, init) = Session::start(&app, &state.store, &state.http, state.devices.clone(), state.demo.clone(), &request, progress).await?;
     *state.session.lock().unwrap() = Some(session);
     Ok(init)
 }
@@ -434,6 +441,31 @@ pub async fn ride_finish(app: AppHandle, state: State<'_, AppState>) -> Res<Opti
     leave_overlay(&app, &state);
     let Some(session) = state.session.lock().unwrap().take() else { return Ok(None) };
     session.finish(&state.store)
+}
+
+/// A ride cut short by the app quitting, if there is one to carry on or save.
+#[tauri::command]
+pub fn ride_checkpoint(state: State<AppState>) -> Option<checkpoint::CheckpointInfo> {
+    checkpoint::info(&state.store)
+}
+
+/// Saves a ride cut short as it was, as if it had been ended there.
+#[tauri::command]
+pub async fn ride_checkpoint_save(app: AppHandle, state: State<'_, AppState>) -> Res<Option<RideSummary>> {
+    let saved = checkpoint::load(&state.store).ok_or("That ride is no longer there to save.")?;
+    let prepared = Session::prepare(&app, &state.store, &state.http, &saved.request).await?;
+    let mut engine = prepared.engine;
+    engine.resume(saved.progress);
+    let group = saved.request.group_room.as_deref().is_some_and(|r| !r.trim().is_empty());
+    let summary = session::save_ride(&state.store, &engine, &prepared.settings, &saved.request.route_id, group, &prepared.imported_ghosts)?;
+    checkpoint::clear(&state.store);
+    Ok(summary)
+}
+
+/// Throws away a ride cut short.
+#[tauri::command]
+pub fn ride_checkpoint_discard(state: State<AppState>) {
+    checkpoint::clear(&state.store);
 }
 
 #[tauri::command]
@@ -1123,6 +1155,8 @@ pub struct SmokeConfig {
     plan: Option<String>,
     /// Switch the ride to overlay mode a few seconds in (VP_SMOKE_OVERLAY).
     overlay: bool,
+    /// Carry on the ride in the checkpoint instead of starting one (VP_SMOKE_RESUME).
+    resume: bool,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -1157,6 +1191,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         route: std::env::var("VP_SMOKE_ROUTE").ok(),
         plan: std::env::var("VP_SMOKE_PLAN").ok(),
         overlay: std::env::var_os("VP_SMOKE_OVERLAY").is_some(),
+        resume: std::env::var_os("VP_SMOKE_RESUME").is_some(),
     })
 }
 

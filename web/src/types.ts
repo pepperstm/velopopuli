@@ -312,6 +312,20 @@ export interface RideRequest {
   groupRoom?: string | null
   /** Laps on a closed route: absent or null = none, 0 = until I stop, n = n laps. Ghosts are off on lap rides. */
   laps?: number | null
+  /** Carry on the ride cut short (the backend uses its own saved request). */
+  resume?: boolean
+}
+
+/** A ride cut short by the app quitting, saved as it went. */
+export interface RideCheckpoint {
+  request: RideRequest
+  routeName: string
+  /** Unix ms. */
+  savedAt: number
+  durationS: number
+  distanceM: number
+  /** Recent enough to carry on; otherwise it can only be saved or discarded. */
+  canCarryOn: boolean
 }
 
 export interface Profile {

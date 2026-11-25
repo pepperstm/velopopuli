@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::fit::{FitLap, FitSample, FitSession, FitWorkout, FitWorkoutStep, LapTrigger};
 use crate::fitness::power_curve;
@@ -112,8 +112,8 @@ pub struct ClimbResult {
 }
 
 /// Where a lap starts or ends in the recorded ride.
-#[derive(Debug, Clone, Copy)]
-struct LapMark {
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct LapMark {
     sample: usize,
     elapsed: f64,
     ridden: f64,
@@ -123,8 +123,8 @@ struct LapMark {
     workout_step: Option<usize>,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct LapDone {
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct LapDone {
     start: LapMark,
     end: LapMark,
     trigger: LapTrigger,
@@ -142,6 +142,31 @@ pub struct LapResult {
     pub distance_m: f64,
     pub avg_power: f64,
     pub avg_hr: Option<f64>,
+}
+
+/// A ride so far, saved now and then so a ride cut short (a crash, a power cut) can be carried
+/// on or saved. The running totals aren't kept: they're worked out again from the samples.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RideProgress {
+    pub distance: f64,
+    pub lap: u32,
+    pub ridden: f64,
+    pub elapsed: f64,
+    pub ascent: f64,
+    pub descent: f64,
+    pub finished: bool,
+    pub samples: Vec<FitSample>,
+    pub climb_times: BTreeMap<usize, f64>,
+    climbs_done: BTreeSet<usize>,
+    pub new_segment_bests: BTreeMap<String, SegmentBest>,
+    laps_done: Vec<LapDone>,
+    lap_start: Option<LapMark>,
+    pub workout_time: f64,
+    pub intensity: f64,
+    pub gear: usize,
+    /// Where each pace rider was, by id.
+    bots: BTreeMap<String, f64>,
 }
 
 /// A manual lap shorter than this is ignored, so a double press doesn't make an empty lap.
@@ -463,30 +488,36 @@ impl RideEngine {
         // FIT timestamps must strictly increase even if two samples land in one wall-clock second.
         let time = (self.last_sample_time + 1000).max(wall_ms / 1000 * 1000);
         self.last_sample_time = time;
-        let power = self.power.round();
-        self.samples.push(FitSample {
+        let sample = FitSample {
             time,
             lat: self.pos.lat,
             lon: self.pos.lon,
             ele: self.pos.ele,
             dist: self.ridden,
             speed: self.speed,
-            power,
+            power: self.power.round(),
             hr: self.hr,
             cadence: self.cadence,
             target_power: self.target_power,
-        });
-        self.trace.push(self.ridden);
+        };
+        self.count(sample);
+    }
+
+    /// Adds a sample to the ride and its running totals.
+    fn count(&mut self, sample: FitSample) {
+        let (power, hr, cadence) = (sample.power, sample.hr, sample.cadence);
+        self.trace.push(sample.dist);
+        self.samples.push(sample);
         self.n += 1;
         self.sum_power += power;
         self.joules += power;
         self.max_power = self.max_power.max(power);
-        if let Some(hr) = self.hr.filter(|h| *h > 0.0) {
+        if let Some(hr) = hr.filter(|h| *h > 0.0) {
             self.sum_hr += hr;
             self.n_hr += 1;
             self.max_hr = self.max_hr.max(hr);
         }
-        if let Some(cad) = self.cadence.filter(|c| *c > 0.0) {
+        if let Some(cad) = cadence.filter(|c| *c > 0.0) {
             self.sum_cad += cad;
             self.n_cad += 1;
             self.max_cad = self.max_cad.max(cad);
@@ -615,6 +646,85 @@ impl RideEngine {
     /// How many laps have been finished.
     pub fn laps_finished(&self) -> usize {
         self.laps_done.len()
+    }
+
+    /// The ride so far, to save as a checkpoint.
+    pub fn progress(&self) -> RideProgress {
+        RideProgress {
+            distance: self.distance,
+            lap: self.lap,
+            ridden: self.ridden,
+            elapsed: self.elapsed,
+            ascent: self.ascent,
+            descent: self.descent,
+            finished: self.finished,
+            samples: self.samples.clone(),
+            climb_times: self.climb_times.clone(),
+            climbs_done: self.climbs_done.clone(),
+            new_segment_bests: self.new_segment_bests.clone(),
+            laps_done: self.laps_done.clone(),
+            lap_start: Some(self.lap_start),
+            workout_time: self.workout_time,
+            intensity: self.intensity,
+            gear: self.gear,
+            bots: self.rivals.iter().filter(|r| r.kind == RivalKind::Bot).map(|r| (r.id.clone(), r.distance)).collect(),
+        }
+    }
+
+    /// Carries on from a checkpoint, on a freshly set-up engine for the same route. The clock and
+    /// the file carry on where they stopped; the gap reads like a pause.
+    pub fn resume(&mut self, p: RideProgress) {
+        let total = self.route.total;
+        let last = p.samples.len();
+        // Leave out anything that doesn't fit this route any more (it was edited, say).
+        let fits = |m: &LapMark| m.sample <= last;
+        self.distance = p.distance.clamp(0.0, total);
+        self.lap = p.lap.max(1);
+        self.ridden = p.ridden.max(0.0);
+        self.elapsed = p.elapsed.max(0.0);
+        self.ascent = p.ascent;
+        self.descent = p.descent;
+        self.finished = p.finished;
+        self.pos = self.route.sample_at(self.distance);
+        let climbs = self.route.climbs.len();
+        self.climb_times = p.climb_times.into_iter().filter(|(i, _)| *i < climbs).collect();
+        self.climbs_done = p.climbs_done.into_iter().filter(|i| *i < climbs).collect();
+        // A climb half ridden can't be timed fairly any more.
+        for (i, c) in self.route.climbs.iter().enumerate() {
+            if self.distance > c.start && self.distance < c.end {
+                self.climbs_done.insert(i);
+            }
+        }
+        self.climb_index = None;
+        // Segments already finished stay finished; one half ridden isn't timed.
+        self.seg_state = self.segments.iter().map(|s| if self.distance > s.start { SegState::Done } else { SegState::Waiting }).collect();
+        self.new_segment_bests = p.new_segment_bests;
+        self.laps_done = p.laps_done.into_iter().filter(|l| fits(&l.start) && fits(&l.end)).collect();
+        if let Some(start) = p.lap_start.filter(fits) {
+            self.lap_start = start;
+        }
+        if self.workout.is_some() {
+            self.workout_time = p.workout_time.max(0.0);
+        }
+        if p.intensity > 0.0 {
+            self.intensity = p.intensity;
+        }
+        self.gear = p.gear;
+        for r in self.rivals.iter_mut().filter(|r| r.kind == RivalKind::Bot) {
+            if let Some(d) = p.bots.get(&r.id) {
+                r.distance = d.clamp(0.0, total);
+            }
+        }
+        // The running totals, from the samples.
+        self.samples.clear();
+        self.trace = vec![0.0];
+        for s in p.samples {
+            self.max_speed = self.max_speed.max(s.speed);
+            self.count(s);
+        }
+        self.last_sample_time = self.samples.last().map_or(0, |s| s.time);
+        self.acc = 0.0;
+        self.speed = 0.0;
     }
 
     fn mark_here(&self) -> LapMark {

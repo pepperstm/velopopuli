@@ -115,6 +115,16 @@ Press **Lap** (or `L`, or the Lap button on a [handlebar controller](Virtual-gea
 
 Rides under a minute aren't saved. If you press **End ride** that early, the app asks whether you want to keep riding or leave without saving.
 
+### If the app closes mid-ride
+
+The ride is saved as you go, every half a minute. If VeloPopuli quits before the ride ends (it crashes, the power goes, or the window is closed by mistake), the next time you open it, it asks whether to **carry on your ride**:
+
+- **Carry on** starts the ride again where you were. The clock picks up where it stopped, and the time away is left out, as if you'd paused. Laps, the workout step, pace riders and ghosts carry on too. A climb or segment you were part-way through isn't timed this time.
+- **Save what you rode** ends it there, as if you'd pressed **End ride**: the summary, the `.FIT` file and uploads.
+- **Discard** throws it away.
+
+A ride more than three days old can only be saved or discarded. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
+
 ## Native renderer (macOS, experimental)
 
 **Settings → Virtual world → Native renderer** draws the world straight on the Mac's graphics chip rather than through the app's web view. It can run more smoothly. It's new, so if something looks wrong, turn it off and [[report it|Reporting problems]].

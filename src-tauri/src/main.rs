@@ -8,6 +8,7 @@ pub const VERSION: &str = match option_env!("VP_RELEASE_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
+mod checkpoint;
 mod commands;
 mod connectors;
 mod devices;
@@ -155,6 +156,9 @@ fn main() {
             commands::ride_lap,
             commands::connector_planned_workouts,
             commands::workout_import_connector,
+            commands::ride_checkpoint,
+            commands::ride_checkpoint_save,
+            commands::ride_checkpoint_discard,
             commands::ride_shift,
             commands::gears_preview,
             commands::segments_fetch,

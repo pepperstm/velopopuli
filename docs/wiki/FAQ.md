@@ -28,7 +28,7 @@ No. Pair it once and it connects by itself next time you open the app, as soon a
 Yes, from 0.4.0 (in the [release candidates](https://github.com/pepperstm/velopopuli/releases) for now): **Settings → Rider → Theme**. **Glass**, the default, has frosted panels over a softly lit background, like the website. **Simple** has flat, solid panels. The theme changes the screens around the ride, not the 3D world.
 
 **Why wasn't my ride saved?**
-Rides under a minute aren't saved. The app warns you if you press **End ride** before then.
+Rides under a minute aren't saved. The app warns you if you press **End ride** before then. If the app closed mid-ride, open it again: it offers to carry the ride on or save it (see [[Riding#if-the-app-closes-mid-ride]]).
 
 **Can I ride with friends?**
 Yes, see [[Group rides and self-hosting]]. For now one of you runs the small relay server.

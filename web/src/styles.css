@@ -435,6 +435,12 @@ textarea:focus {
 .modal .row {
   margin-top: 6px;
 }
+.modal.resume-ride h2 {
+  margin-top: 0;
+}
+.modal.resume-ride .row {
+  margin-top: 14px;
+}
 /* The keyboard shortcuts panel: keys, what they do, the controller button. */
 .modal.keyboard-help {
   max-width: 560px;
