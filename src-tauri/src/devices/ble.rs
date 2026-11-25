@@ -69,6 +69,42 @@ impl Radio {
     }
 }
 
+/// How long one connection may take, including looking again when a discovery comes back short.
+const OPEN_TIMEOUT: Duration = Duration::from_secs(40);
+/// How many times to connect and look before giving up on a discovery that comes back short.
+const DISCOVERY_TRIES: u32 = 3;
+
+/// Why a discovery looks short of what the device offers, or None when it looks whole.
+/// `services` lists each service with its characteristics. An empty trainer or power service
+/// only counts when nothing else gave the trainer or power it would have.
+fn incomplete(services: &[(Uuid, Vec<Uuid>)], expect: Option<DeviceKind>) -> Option<&'static str> {
+    let has = |svc: Uuid, chr: Uuid| services.iter().any(|(s, c)| *s == svc && c.contains(&chr));
+    let empty = |svc: Uuid| services.iter().any(|(s, c)| *s == svc && c.is_empty());
+    let (ftms, tacx, cp) = (uuid_from_u16(SVC_FTMS), Uuid::from_u128(SVC_TACX_FEC), uuid_from_u16(SVC_CYCLING_POWER));
+    let trainer = has(ftms, uuid_from_u16(CHR_INDOOR_BIKE_DATA)) || has(tacx, Uuid::from_u128(CHR_TACX_NOTIFY));
+    let power = trainer || has(cp, uuid_from_u16(CHR_CYCLING_POWER));
+    if !trainer && (empty(ftms) || empty(tacx)) {
+        return Some("its trainer controls came back empty");
+    }
+    if !power && empty(cp) {
+        return Some("its power service came back empty");
+    }
+    match expect {
+        Some(DeviceKind::Trainer) if !trainer => Some("it no longer offers the trainer controls it had last time"),
+        Some(DeviceKind::Power) if !power => Some("it no longer sends the power it did last time"),
+        _ => None,
+    }
+}
+
+/// How much a kind of device does, so a remembered kind only ever moves up.
+fn rank(kind: DeviceKind) -> u8 {
+    match kind {
+        DeviceKind::Trainer => 3,
+        DeviceKind::Power => 2,
+        _ => 1,
+    }
+}
+
 /// How long to look for remembered sensors after launch: long enough to wake them.
 const LOOK_FOR: Duration = Duration::from_secs(180);
 /// How soon to try a remembered sensor again after a failed attempt.
@@ -253,24 +289,28 @@ async fn open_link(devices: Arc<Devices>, peripheral: Peripheral, peripheral_id:
         return Ok(());
     }
 
-    let mut link = Link { peripheral, devices: devices.clone(), id: id.clone(), control_rx, stop_rx };
-    let first = match tokio::time::timeout(Duration::from_secs(25), link.open()).await {
-        Ok(Ok(session)) => session,
-        Ok(Err(e)) => {
+    let expect = devices.remembered().kind_of(peripheral_id);
+    let mut link = Link { peripheral, devices: devices.clone(), id: id.clone(), control_rx, stop_rx, expect };
+    let failed = match tokio::time::timeout(OPEN_TIMEOUT, link.open()).await {
+        Ok(Ok(session)) => Ok(session),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err(format!("Timed out connecting to the sensor after {} s.", OPEN_TIMEOUT.as_secs())),
+    };
+    let first = match failed {
+        Ok(session) => session,
+        Err(e) => {
             diag::event("dev", format!("dev={id} first connection failed: {e}"));
             devices.remove(&id);
+            devices.set_problem(peripheral_id, Some(e.clone()));
             let _ = link.peripheral.disconnect().await;
             return Err(e);
         }
-        Err(_) => {
-            diag::event("dev", format!("dev={id} first connection failed: timed out after 25 s"));
-            devices.remove(&id);
-            let _ = link.peripheral.disconnect().await;
-            return Err("Timed out connecting to the sensor.".into());
-        }
     };
+    devices.set_problem(peripheral_id, None);
     let name = devices.snapshot().devices.into_iter().find(|d| d.id == id).map(|d| d.name).unwrap_or_default();
-    devices.change_remembered(|r| r.add_ble(peripheral_id, &name));
+    if let Some(kind) = link.expect {
+        devices.change_remembered(|r| r.add_ble(peripheral_id, &name, kind));
+    }
     tauri::async_runtime::spawn(link.run(first));
     Ok(())
 }
@@ -298,6 +338,9 @@ struct Link {
     id: String,
     control_rx: mpsc::UnboundedReceiver<TrainerCommand>,
     stop_rx: watch::Receiver<bool>,
+    /// What the device was when it last connected. A trainer that comes back offering less is
+    /// tried again rather than set up as a lesser sensor.
+    expect: Option<DeviceKind>,
 }
 
 impl Link {
@@ -310,12 +353,27 @@ impl Link {
             p.connect().await.map_err(|e| format!("Could not connect: {e}"))?;
         }
         diag::event("ble", format!("dev={id} link up after {} ms", started.elapsed().as_millis()));
-        p.discover_services().await.map_err(err)?;
-        let chars = p.characteristics();
-        for s in p.services() {
-            let list: Vec<String> = s.characteristics.iter().map(|c| format!("{}({})", short_uuid(&c.uuid), props(c.properties))).collect();
-            diag::event("ble", format!("dev={id} service {} chars=[{}]", short_uuid(&s.uuid), list.join(" ")));
-        }
+        // Windows sometimes hands back a trainer's services with nothing in them, most often
+        // while another app on the computer is connected to it. Connect again and look again.
+        let mut tries = 1;
+        let chars = loop {
+            p.discover_services().await.map_err(err)?;
+            let mut found = Vec::new();
+            for s in p.services() {
+                let list: Vec<String> = s.characteristics.iter().map(|c| format!("{}({})", short_uuid(&c.uuid), props(c.properties))).collect();
+                diag::event("ble", format!("dev={id} service {} chars=[{}]", short_uuid(&s.uuid), list.join(" ")));
+                found.push((s.uuid, s.characteristics.iter().map(|c| c.uuid).collect::<Vec<_>>()));
+            }
+            let Some(why) = incomplete(&found, self.expect) else { break p.characteristics() };
+            if tries >= DISCOVERY_TRIES {
+                return Err(format!("The sensor connected, but {why}. Another app on this computer may be connected to it: close other cycling apps, then try again."));
+            }
+            diag::event("ble", format!("dev={id} {why}; connecting again ({tries} of {DISCOVERY_TRIES})"));
+            let _ = p.disconnect().await;
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+            p.connect().await.map_err(|e| format!("Could not connect: {e}"))?;
+            tries += 1;
+        };
         let find = |service: Uuid, characteristic: Uuid| chars.iter().find(|c| c.service_uuid == service && c.uuid == characteristic).cloned();
 
         let ibd = find(uuid_from_u16(SVC_FTMS), uuid_from_u16(CHR_INDOOR_BIKE_DATA));
@@ -344,6 +402,9 @@ impl Link {
         } else {
             return Err("This device has no cycling sensors.".into());
         };
+        if self.expect.is_none_or(|e| rank(kind) >= rank(e)) {
+            self.expect = Some(kind);
+        }
 
         diag::event(
             "ble",
@@ -449,14 +510,14 @@ impl Link {
                 _ = self.stop_rx.changed() => break,
             }
             diag::event("ble", format!("dev={} reconnecting", self.id));
-            match tokio::time::timeout(Duration::from_secs(20), self.open()).await {
+            match tokio::time::timeout(OPEN_TIMEOUT, self.open()).await {
                 Ok(Ok(s)) => session = Some(s),
                 Ok(Err(e)) => {
                     diag::event("dev", format!("dev={} reconnect failed: {e}", self.id));
                     let _ = self.peripheral.disconnect().await;
                 }
                 Err(_) => {
-                    diag::event("dev", format!("dev={} reconnect failed: timed out after 20 s", self.id));
+                    diag::event("dev", format!("dev={} reconnect failed: timed out after {} s", self.id, OPEN_TIMEOUT.as_secs()));
                     let _ = self.peripheral.disconnect().await;
                 }
             }
@@ -580,4 +641,39 @@ fn props(p: CharPropFlags) -> String {
         .filter(|(f, _)| p.contains(*f))
         .map(|(_, c)| *c)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn svc(id: u16, chars: &[u16]) -> (Uuid, Vec<Uuid>) {
+        (uuid_from_u16(id), chars.iter().map(|&c| uuid_from_u16(c)).collect())
+    }
+
+    #[test]
+    fn a_trainer_whose_services_come_back_empty_is_tried_again() {
+        // #127: Windows gave the KICKR's power and FTMS services no characteristics, leaving only heart rate.
+        let short = [svc(SVC_CYCLING_POWER, &[]), svc(SVC_FTMS, &[]), svc(SVC_HEART_RATE, &[CHR_HEART_RATE])];
+        assert!(incomplete(&short, None).is_some());
+        let whole = [svc(SVC_CYCLING_POWER, &[CHR_CYCLING_POWER]), svc(SVC_FTMS, &[CHR_INDOOR_BIKE_DATA, CHR_FTMS_CONTROL_POINT]), svc(SVC_HEART_RATE, &[CHR_HEART_RATE])];
+        assert_eq!(incomplete(&whole, None), None);
+        assert_eq!(incomplete(&whole, Some(DeviceKind::Trainer)), None);
+    }
+
+    #[test]
+    fn an_empty_extra_service_does_not_matter_when_the_trainer_is_there() {
+        let services = [svc(SVC_CYCLING_POWER, &[]), svc(SVC_FTMS, &[CHR_INDOOR_BIKE_DATA, CHR_FTMS_CONTROL_POINT])];
+        assert_eq!(incomplete(&services, Some(DeviceKind::Trainer)), None);
+    }
+
+    #[test]
+    fn a_remembered_trainer_does_not_come_back_as_a_lesser_sensor() {
+        let hr_only = [svc(SVC_HEART_RATE, &[CHR_HEART_RATE])];
+        assert!(incomplete(&hr_only, Some(DeviceKind::Trainer)).is_some());
+        assert!(incomplete(&hr_only, Some(DeviceKind::Power)).is_some());
+        assert_eq!(incomplete(&hr_only, Some(DeviceKind::Hr)), None);
+        assert_eq!(incomplete(&hr_only, None), None);
+        assert!(rank(DeviceKind::Trainer) > rank(DeviceKind::Power) && rank(DeviceKind::Power) > rank(DeviceKind::Hr));
+    }
 }

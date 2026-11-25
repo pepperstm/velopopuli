@@ -57,6 +57,7 @@ When more than one device reports the same thing, the most direct measurement wi
 ## It won't connect, or keeps dropping out
 
 1. Close every other app that could be connected to the trainer (see above), then remove and re-add it under Devices.
+   If the Devices page says the trainer "connected, but its trainer controls came back empty", another app (often a controller bridge) is holding on to it. Close that app and the trainer connects properly next time. *New in 0.4.0: before, the trainer could connect as a heart-rate sensor instead, with no resistance control.*
 2. Try the other connection: ANT+ if Bluetooth misbehaves, or the other way round.
 3. Ride for a few minutes until it goes wrong, then press **Report a problem… → Report on GitHub…** on the ride summary. The report shows every connection, drop-out and message the trainer sent, which is usually enough to fix it. See [[Reporting problems]].
 
@@ -66,5 +67,6 @@ Real-world testing has only just begun. Please add your trainer to an issue (wor
 
 | Trainer or sensor | Connection | Result |
 |---|---|---|
+| Wahoo KICKR CORE | Bluetooth, Windows 11 | Works: sim resistance, virtual gears and Strava upload ([#127](https://github.com/pepperstm/velopopuli/issues/127)) |
 | Tacx Vortex Smart (T2180) | Bluetooth | First test: dropped out and showed no power; being investigated with diagnostics |
 | XOSS speed sensor | Bluetooth, Linux | Works from 0.3.10. Earlier versions couldn't connect while still searching ([#70](https://github.com/pepperstm/velopopuli/issues/70)) |
