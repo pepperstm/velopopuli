@@ -152,6 +152,7 @@ fn main() {
             commands::ride_update_settings,
             commands::ride_intensity,
             commands::ride_skip_step,
+            commands::ride_lap,
             commands::ride_shift,
             commands::gears_preview,
             commands::segments_fetch,

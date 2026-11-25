@@ -18,6 +18,7 @@ export class RideSounds {
   /** Climb and segment results already announced. */
   private announced = new Set<string>()
   private lap = 1
+  private lapMarked = 0
   private finished = false
   private noSensors = false
 
@@ -34,6 +35,7 @@ export class RideSounds {
       this.hadWorkout = s.workout !== null
       for (const key of [climbKey(s), segmentKey(s)]) if (key) this.announced.add(key)
       this.lap = s.lap
+      this.lapMarked = s.lapResult?.number ?? 0
       this.finished = s.finished
       this.noSensors = s.noSensors
       return
@@ -90,8 +92,11 @@ export class RideSounds {
       }
     }
 
-    if (s.lap > this.lap && moments) sound.lap()
+    // Round a loop, or the Lap button (a workout step has its own sound).
+    const marked = s.lapResult?.manual && s.lapResult.number > this.lapMarked
+    if ((s.lap > this.lap || marked) && moments) sound.lap()
     this.lap = s.lap
+    this.lapMarked = Math.max(this.lapMarked, s.lapResult?.number ?? 0)
 
     if (s.noSensors && !this.noSensors && moments) sound.warning()
     this.noSensors = s.noSensors

@@ -18,10 +18,11 @@ pub const EASIER: u8 = 0x31;
 pub const SKIP_INTERVAL: u8 = 0x32;
 pub const PAUSE: u8 = 0x33;
 pub const RESUME: u8 = 0x34;
+pub const LAP: u8 = 0x35;
 pub const CAMERA: u8 = 0x40;
 
 /// The button ids VeloPopuli acts on, sent to the controller after connecting.
-pub const SUPPORTED: [u8; 8] = [SHIFT_UP, SHIFT_DOWN, HARDER, EASIER, SKIP_INTERVAL, PAUSE, RESUME, CAMERA];
+pub const SUPPORTED: [u8; 9] = [SHIFT_UP, SHIFT_DOWN, HARDER, EASIER, SKIP_INTERVAL, PAUSE, RESUME, LAP, CAMERA];
 
 /// What a controller press does on the ride screen; the same things the keys do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -35,6 +36,8 @@ pub enum Action {
     SkipStep,
     Pause,
     Resume,
+    /// Mark a lap without ending the ride.
+    Lap,
     Camera,
 }
 
@@ -104,5 +107,5 @@ pub fn pick(pressed: &[u8], ctx: Context) -> Option<Action> {
     let shift = if ctx.virtual_gears { first(pressed, &[(SHIFT_UP, Action::ShiftHarder), (SHIFT_DOWN, Action::ShiftEasier)]) } else { None };
     let difficulty = first(pressed, &[(HARDER, Action::Harder), (EASIER, Action::Easier)]);
     let (a, b) = if ctx.erg { (difficulty, shift) } else { (shift, difficulty) };
-    a.or(b).or_else(|| first(pressed, &[(SKIP_INTERVAL, Action::SkipStep), (PAUSE, Action::Pause), (RESUME, Action::Resume), (CAMERA, Action::Camera)]))
+    a.or(b).or_else(|| first(pressed, &[(SKIP_INTERVAL, Action::SkipStep), (PAUSE, Action::Pause), (RESUME, Action::Resume), (LAP, Action::Lap), (CAMERA, Action::Camera)]))
 }

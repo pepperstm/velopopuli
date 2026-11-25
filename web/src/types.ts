@@ -482,6 +482,17 @@ export interface Landmark {
   detail: string
 }
 
+/** A lap just finished: by the Lap button (`manual`), a workout step or a loop's line. */
+export interface LapResult {
+  /** From 1. */
+  number: number
+  manual: boolean
+  timeS: number
+  distanceM: number
+  avgPower: number
+  avgHr: number | null
+}
+
 export interface ClimbResult {
   index: number
   climb: Climb
@@ -490,7 +501,7 @@ export interface ClimbResult {
 }
 
 /** A handlebar-controller press, already narrowed to one action (see `devices/obc.rs`). */
-export type ControllerAction = 'shiftHarder' | 'shiftEasier' | 'harder' | 'easier' | 'skipStep' | 'pause' | 'resume' | 'camera'
+export type ControllerAction = 'shiftHarder' | 'shiftEasier' | 'harder' | 'easier' | 'skipStep' | 'pause' | 'resume' | 'lap' | 'camera'
 
 /** Streamed from the simulation about 20 times a second. */
 export interface RideState {
@@ -498,6 +509,8 @@ export interface RideState {
   distance: number
   /** Current lap, from 1 (1 on a ride without laps). */
   lap: number
+  /** The lap just finished, for a few seconds after it ends. */
+  lapResult: LapResult | null
   /** Total metres ridden, across all laps. */
   ridden: number
   speed: number

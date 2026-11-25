@@ -6,7 +6,7 @@ import type { Settings } from '../types'
  */
 
 /** What a key does on the ride screen. */
-export type RideKeyAction = 'shiftHarder' | 'shiftEasier' | 'pause' | 'camera' | 'overlay' | 'harder' | 'easier' | 'help'
+export type RideKeyAction = 'shiftHarder' | 'shiftEasier' | 'pause' | 'lap' | 'camera' | 'overlay' | 'harder' | 'easier' | 'help'
 
 /** One row of the help panel. */
 export interface Shortcut {
@@ -26,6 +26,7 @@ export interface ShortcutSection {
 /** The fixed ride keys; the gear keys are the rider's own, from Settings. */
 const RIDE_KEYS: Record<Exclude<RideKeyAction, 'shiftHarder' | 'shiftEasier'>, string[]> = {
   pause: [' '],
+  lap: ['l', 'L'],
   camera: ['c', 'C'],
   overlay: ['o', 'O'],
   harder: ['ArrowUp'],
@@ -71,6 +72,7 @@ export function rideShortcuts(settings: Settings, ride: RideContext | null): Sho
     rows.push({ keys: RIDE_KEYS.easier, label: upDown[1], controller: 'Decrease difficulty' })
   }
   rows.push({ keys: RIDE_KEYS.pause, label: 'Pause or resume', controller: 'Pause / Resume' })
+  rows.push({ keys: RIDE_KEYS.lap.slice(0, 1), label: 'Mark a lap', controller: 'Lap' })
   rows.push({ keys: RIDE_KEYS.camera.slice(0, 1), label: 'Change the camera', controller: 'Camera view' })
   rows.push({ keys: RIDE_KEYS.overlay.slice(0, 1), label: 'Overlay mode: float over another app' })
   if (!ride || ride.workout) rows.push({ keys: [], label: 'Skip to the next workout step', controller: 'Skip interval' })

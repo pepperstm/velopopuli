@@ -73,6 +73,7 @@ export const api = {
     start: (request: RideRequest) => invoke<RideInit>('ride_start', { request }),
     intensity: (delta: number) => invoke<void>('ride_intensity', { delta }),
     skipStep: () => invoke<void>('ride_skip_step'),
+    lap: () => invoke<void>('ride_lap'),
     shift: (delta: number) => invoke<void>('ride_shift', { delta }),
     routeData: () => invoke<ArrayBuffer>('ride_route_data'),
     roadMesh: () => invoke<ArrayBuffer>('ride_road_mesh'),
@@ -174,6 +175,7 @@ export const api = {
         ghosts: string[] | null
         clip: number | null
         shift: number | null
+        lap: number | null
         scroll: string | null
         laps: number | null
         route: string | null

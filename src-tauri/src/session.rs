@@ -16,7 +16,7 @@ use velopopuli_core::fitness::{estimate_ftp, power_curve};
 use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
 use velopopuli_core::gearing;
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
-use velopopuli_core::ride::{ClimbResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
+use velopopuli_core::ride::{ClimbResult, LapResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
 use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
 use velopopuli_core::workout::{Workout, WorkoutPos};
@@ -132,6 +132,8 @@ struct RideState<'a> {
     distance: f64,
     /// Current lap, from 1.
     lap: u32,
+    /// The lap just finished, shown for a few seconds.
+    lap_result: Option<&'a LapResult>,
     /// Total distance ridden, over all laps.
     ridden: f64,
     speed: f64,
@@ -469,6 +471,14 @@ impl Session {
         obc::Context { virtual_gears, erg }
     }
 
+    /// Marks a lap without ending the ride.
+    pub fn lap(&self) {
+        let mut engine = self.engine.lock().unwrap();
+        if engine.lap() {
+            crate::diag::raw("ride", format!("lap {} marked", engine.laps_finished()));
+        }
+    }
+
     /// Skips to the next workout step.
     pub fn skip_step(&self) {
         let mut engine = self.engine.lock().unwrap();
@@ -637,6 +647,7 @@ fn run(
     // A finished climb's result is shown for a few seconds.
     let mut result_shown: Option<(usize, Instant)> = None;
     let mut segment_shown: Option<(String, Instant)> = None;
+    let mut lap_shown: Option<(usize, Instant)> = None;
     let mut shared = last - Duration::from_secs(2);
 
     while !stop.load(Ordering::SeqCst) {
@@ -742,6 +753,12 @@ fn run(
                 }
             }
             let show_segment = segment_shown.as_ref().is_some_and(|(_, at)| now - *at < Duration::from_secs(9));
+            if let Some(l) = &engine.last_lap {
+                if lap_shown.is_none_or(|(n, _)| n != l.number) {
+                    lap_shown = Some((l.number, now));
+                }
+            }
+            let show_lap = lap_shown.is_some_and(|(_, at)| now - at < Duration::from_secs(6));
             let workout_pos = engine.workout_pos();
             let (gear_set, gear_list) = {
                 let s = settings.lock().unwrap();
@@ -759,6 +776,7 @@ fn run(
             let state = RideState {
                 distance: engine.distance,
                 lap: engine.lap,
+                lap_result: engine.last_lap.as_ref().filter(|_| show_lap),
                 ridden: engine.ridden,
                 speed: engine.speed,
                 power: tel.power,
