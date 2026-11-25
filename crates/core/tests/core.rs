@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use velopopuli_core::fit::{encode_fit, fit_crc, FitSample, FitSession};
 use velopopuli_core::gamify::{apply_ride, level_for, RideFacts};
-use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, RawPoint, Route, M_PER_DEG};
+use velopopuli_core::gpx::{build_route, demo_route, haversine, parse_gpx, RawPoint, Route, M_PER_DEG};
 use velopopuli_core::physics::{step_speed, PhysicsParams};
 use velopopuli_core::ride::{GhostTrace, RideEngine, RideInput, RideOptions, RivalKind};
 use velopopuli_core::segments::{Segment, SegmentSource};
@@ -25,6 +25,32 @@ fn close(a: f64, b: f64, tol: f64) -> bool {
 
 mod gpx {
     use super::*;
+
+    #[test]
+    fn a_route_can_be_ridden_reversed_or_out_and_back() {
+        use velopopuli_core::gpx::Direction;
+        // Flat for a kilometre, then a kilometre's climb at 6%.
+        let points = straight(2000.0, |d| Some(100.0 + (d - 1000.0).max(0.0) * 0.06));
+        let forward = build_route("Col", &Direction::Forward.apply(&points)).unwrap();
+        let reverse = build_route("Col", &Direction::Reverse.apply(&points)).unwrap();
+        let both = build_route("Col", &Direction::OutAndBack.apply(&points)).unwrap();
+
+        assert!(close(reverse.total, forward.total, 1.0));
+        assert!(close(reverse.ascent, forward.descent, 2.0) && close(reverse.descent, forward.ascent, 2.0), "the climb is a descent the other way");
+        assert_eq!(forward.climbs.len(), 1);
+        assert!(reverse.climbs.is_empty());
+        assert!(close(reverse.sample_at(0.0).ele, forward.sample_at(forward.total).ele, 1.0));
+        assert!(reverse.sample_at(100.0).grade < -0.05);
+
+        // Rounding the turn at the far end cuts it a little short.
+        assert!(close(both.total, 2.0 * forward.total, 30.0), "{} vs {}", both.total, forward.total);
+        assert!(close(both.ascent, forward.ascent, 3.0) && close(both.descent, forward.ascent, 3.0));
+        let (start, end) = (both.sample_at(0.0), both.sample_at(both.total));
+        assert!(haversine(start.lat, start.lon, end.lat, end.lon) < 15.0, "it finishes where it started");
+        assert!(both.closed, "so it can be ridden for laps, like a loop");
+        assert_eq!(both.climbs.len(), 1, "the climb is on the way out; the way back goes down it");
+        assert!(both.climbs[0].end <= forward.total + 10.0);
+    }
 
     #[test]
     fn parses_track_points_elevation_and_name() {
