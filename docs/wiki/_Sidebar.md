@@ -14,6 +14,7 @@
 - [[Progress and goals]]
 - [[Strava]]
 - [[Dreeve]]
+- [[Intervals.icu|Intervals-icu]]
 - [[Group rides and self-hosting]]
 - [[Fan and lights]]
 

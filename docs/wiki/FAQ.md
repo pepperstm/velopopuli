@@ -34,7 +34,7 @@ Rides under a minute aren't saved. The app warns you if you press **End ride** b
 Yes, see [[Group rides and self-hosting]]. For now one of you runs the small relay server.
 
 **Does it work with Apple Health or my watch?**
-Not at the moment. Rides are saved as standard FIT files, which most platforms import, and go to [[Strava]] or [[Dreeve]] directly. A watch that broadcasts heart rate over Bluetooth works as a heart-rate sensor.
+Not at the moment. Rides are saved as standard FIT files, which most platforms import, and go to [[Strava]], [[Dreeve]] or [[Intervals.icu|Intervals-icu]] directly. A watch that broadcasts heart rate over Bluetooth works as a heart-rate sensor.
 
 **How do I report a bug?**
 See [[Reporting problems]]: the app builds the report for you.

@@ -28,4 +28,4 @@ For an ANT+ stick, Windows needs the generic WinUSB driver; see [[Connecting you
 
 ## Where your data lives
 
-Routes, rides, settings and logs are kept in the app's data folder (on macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`). Account details (Strava, Dreeve, Home Assistant) go in the system keychain on macOS and Windows, and in files readable only by you on Linux. Rides are saved as standard `.FIT` files.
+Routes, rides, settings and logs are kept in the app's data folder (on macOS `~/Library/Application Support/org.velopopuli.VeloPopuli`). Account details (Strava, Dreeve, Intervals.icu, Home Assistant) go in the system keychain on macOS and Windows, and in files readable only by you on Linux. Rides are saved as standard `.FIT` files.

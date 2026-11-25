@@ -1,4 +1,4 @@
-//! Connectors: the services a finished ride can be sent to (Strava today, Dreeve next).
+//! Connectors: the services a finished ride can be sent to (Strava, Dreeve and Intervals.icu).
 //!
 //! Each service is one file in this folder implementing [`Connector`], registered
 //! once in [`ALL`]. Everything else is generic: the settings screen draws a card
@@ -11,6 +11,7 @@
 //! which goes into diagnostics reports.
 
 pub mod dreeve;
+pub mod intervals;
 pub mod strava;
 
 use std::collections::BTreeMap;
@@ -26,7 +27,7 @@ use velopopuli_core::types::UploadRecord;
 use crate::secrets;
 
 /// Every connector there is. Adding a service means adding it here.
-pub static ALL: &[&(dyn Connector + Sync)] = &[&strava::Strava, &dreeve::Dreeve];
+pub static ALL: &[&(dyn Connector + Sync)] = &[&strava::Strava, &dreeve::Dreeve, &intervals::Intervals];
 
 pub fn get(id: &str) -> Result<&'static (dyn Connector + Sync), String> {
     ALL.iter().copied().find(|c| c.info().id == id).ok_or_else(|| format!("Unknown connector: {id}"))
@@ -214,6 +215,23 @@ pub struct RouteList {
     pub private_hidden: bool,
 }
 
+/// A workout on the rider's training calendar on a service, for adding to the workout library.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedWorkout {
+    /// The service's own id, handed back to `planned_workout_file`.
+    pub id: String,
+    /// The day it's planned for, `YYYY-MM-DD` in the rider's time zone.
+    pub date: String,
+    pub name: String,
+    pub description: String,
+    pub duration_s: f64,
+    /// The training load the service expects from it, if it gives one.
+    pub load: Option<f64>,
+    /// Set by the command: it's already in the workout library.
+    pub added: bool,
+}
+
 /// A ride to send: the FIT file this app recorded plus a title and a description.
 pub struct UploadRequest {
     pub file: PathBuf,
@@ -306,6 +324,25 @@ pub trait Connector: Send + Sync {
     /// One route as a GPX file, by the id `saved_routes` gave.
     async fn route_gpx(&self, _ctx: &Ctx, _id: &str) -> Result<String, String> {
         Err(format!("{} can't fetch a route.", self.info().name))
+    }
+
+    // ── Optional: workouts planned on the rider's training calendar ──────────
+
+    /// True when `planned_workouts` and `planned_workout_file` work; the Workouts screen then
+    /// lists them, ready to add.
+    fn plans_workouts(&self) -> bool {
+        false
+    }
+
+    /// Cycling workouts planned from today for `days` days, soonest first.
+    async fn planned_workouts(&self, _ctx: &Ctx, _days: u32) -> Result<Vec<PlannedWorkout>, String> {
+        Err(format!("{} can't list planned workouts.", self.info().name))
+    }
+
+    /// One planned workout as a file the workout importer reads (`.zwo`, `.erg` or `.mrc`):
+    /// its file name and text.
+    async fn planned_workout_file(&self, _ctx: &Ctx, _id: &str) -> Result<(String, String), String> {
+        Err(format!("{} can't fetch a workout.", self.info().name))
     }
 }
 
@@ -542,5 +579,43 @@ mod tests {
                 assert!(!f.key.is_empty() && !f.label.is_empty(), "{}: field without key/label", info.id);
             }
         }
+    }
+}
+
+/// Test helpers shared by the connectors' tests. They save credentials to a file, so they run
+/// where the keychain isn't used.
+#[cfg(all(test, not(any(target_os = "macos", target_os = "windows"))))]
+pub mod testing {
+    /// An HTTP server that takes one connection per reply, records each request and answers
+    /// the reply's status with its JSON body.
+    pub async fn fake_server(replies: &[(&'static str, &'static str)]) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let replies: Vec<String> =
+            replies.iter().map(|(status, body)| format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())).collect();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let handle = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for reply in replies {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut got = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    let n = socket.read(&mut buf).await.unwrap();
+                    got.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&got);
+                    let Some(head_end) = text.find("\r\n\r\n") else { continue };
+                    let length = text[..head_end].lines().find_map(|l| l.strip_prefix("content-length: ")).and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(0);
+                    if got.len() >= head_end + 4 + length || n == 0 {
+                        break;
+                    }
+                }
+                socket.write_all(reply.as_bytes()).await.unwrap();
+                socket.shutdown().await.ok();
+                requests.push(String::from_utf8_lossy(&got).into_owned());
+            }
+            requests
+        });
+        (url, handle)
     }
 }

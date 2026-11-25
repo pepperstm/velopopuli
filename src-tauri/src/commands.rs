@@ -539,6 +539,8 @@ pub struct ConnectorEntry {
     lists_routes: bool,
     /// The routes page can import one of the rider's rides on this service as a route.
     imports_routes: bool,
+    /// The Workouts screen can list the workouts planned on this service's training calendar.
+    plans_workouts: bool,
 }
 
 /// Every connector with its description and current state, for the settings and upload UI.
@@ -554,8 +556,32 @@ pub fn connectors_list(state: State<AppState>) -> Vec<ConnectorEntry> {
             finds_segments: c.finds_segments(),
             lists_routes: c.lists_routes(),
             imports_routes: c.imports_routes(),
+            plans_workouts: c.plans_workouts(),
         })
         .collect()
+}
+
+/// How many days ahead of today to list planned workouts for.
+const PLANNED_DAYS: u32 = 14;
+
+/// The workouts planned on a connector's training calendar, each marked if it's already in the library.
+#[tauri::command]
+pub async fn connector_planned_workouts(state: State<'_, AppState>, id: String) -> Res<Vec<connectors::PlannedWorkout>> {
+    let ctx = state.connector_ctx();
+    let mut planned = connectors::get(&id)?.planned_workouts(&ctx, PLANNED_DAYS).await?;
+    for w in &mut planned {
+        w.added = library::workout_from(&state.store, &format!("{id}:{}", w.id)).is_some();
+    }
+    Ok(planned)
+}
+
+/// Adds a workout planned on a connector to the library, replacing it if it was added before. Returns its name.
+#[tauri::command]
+pub async fn workout_import_connector(state: State<'_, AppState>, id: String, workout_id: String) -> Res<String> {
+    let ctx = state.connector_ctx();
+    let (file_name, text) = connectors::get(&id)?.planned_workout_file(&ctx, &workout_id).await?;
+    let ftp = state.store.get::<Settings>("settings").unwrap_or_default().rider.ftp;
+    library::import_workout_from(&state.store, &format!("{id}:{workout_id}"), &file_name, &text, ftp)
 }
 
 /// Every ride the rider has on a connector, for picking one to import as a route.

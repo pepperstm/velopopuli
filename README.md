@@ -26,7 +26,7 @@ Free and open source ([GPLv3](LICENSE)) for **Windows, macOS and Linux**. Writte
 - **Group rides.** Ride a route together with friends: share a room code, everyone's rider appears in everyone's world. Goes through a tiny relay server anyone can run (`crates/relay`).
 - **Living world.** Village and town signs, summit boards named after the place at the top, and roadside cafés, fountains, bike shops and viewpoints from OpenStreetMap. Dawn, day, evening, dusk or night (with a lamp on the bike), and clear, cloudy, rain, fog or snow, or the weather at the real place right now. Optional street-level photos of the road from Mapillary (bring your own free token).
 - **Fan and lights.** A fan that speeds up with your speed, power or heart rate, and a light coloured by power zone, through Home Assistant, a Shelly or Tasmota plug, or any webhook.
-- **Recording and sharing.** Every ride is saved as a standard `.FIT` file (GPS, power, heart rate, cadence, laps, normalised power) and can be uploaded in one click or automatically: to Strava as a Virtual Ride, or to your own [Dreeve](https://github.com/dreeveapp/dreeve) server. Set a second folder under **Settings → Ride files** (iCloud Drive or Dropbox, say) and each ride is copied there too.
+- **Recording and sharing.** Every ride is saved as a standard `.FIT` file (GPS, power, heart rate, cadence, laps, normalised power) and can be uploaded in one click or automatically: to Strava as a Virtual Ride, to [Intervals.icu](https://intervals.icu), or to your own [Dreeve](https://github.com/dreeveapp/dreeve) server. The workouts planned on your Intervals.icu calendar can be added in one click. Set a second folder under **Settings → Ride files** (iCloud Drive or Dropbox, say) and each ride is copied there too.
 - **Demo rider.** A simulated rider and trainer so you can try everything with no hardware.
 
 ### On the road
@@ -86,6 +86,7 @@ Be aware of what has and has not been proven:
 | Forests, water, bridges, tunnels, overpasses | Verified against the live map tiles on the same three routes: a valley town with a river, a reservoir road with a 1 km tunnel, and a city crossed by motorway and railway viaducts. Checked from screenshots of the automated run, not from a long ride. |
 | Bluetooth and ANT+ with **real hardware** | **Testing has begun.** The first real trainer (a Tacx Vortex Smart over Bluetooth) connected but dropped out and showed no power; a diagnostics log and report were added to track it down. Expect to find bugs; please send a report (see *Reporting problems*) with your device model. |
 | Strava connect, upload and routes | Tested against the live API on macOS: connecting, uploading a ride as a Virtual Ride, and listing and saving the rider's routes |
+| Intervals.icu | Written to its published API and tested against a fake server (connecting, upload, the calendar, a workout as `.zwo`); **not yet tried with a real account** |
 | Dreeve | Tested by its contributor against a real Dreeve server (listing rides, tracks, upload); the https-only check confirmed in the app on macOS |
 | Windows and Linux | **Built** (installers: `.msi`/`.exe`, `.deb`/`.AppImage`) by GitHub Actions on every push, which also runs the tests on Linux. Linux has been used by at least one rider with a real Bluetooth sensor, working since 0.3.10 (#70); Windows hasn't been reported on yet. |
 

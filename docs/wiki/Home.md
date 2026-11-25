@@ -16,11 +16,12 @@ VeloPopuli turns any GPX route into a 3D world built from OpenStreetMap and open
 
 - [[Routes and the map]]: importing, planning and finding routes, Herne Hill Velodrome, and the world around you
 - [[Riding]]: the screen and keys, gradient and ERG, laps, ghosts and pace riders, time of day and weather, ending a ride
-- [[Workouts]]: built-in sessions, importing .zwo/.erg/.mrc
+- [[Workouts]]: built-in sessions, importing .zwo/.erg/.mrc, and workouts planned on Intervals.icu
 - [[Virtual gears]]: shift with keys or a remote instead of your bike's gears (optional)
 - [[Progress and goals]]: power curve, FTP, training load, streaks, badges and the season goal
 - [[Strava]]: upload rides, ride your Strava routes, race your rides as ghosts, segments
 - [[Dreeve]]: upload rides to your own Dreeve server, and ride them again
+- [[Intervals.icu|Intervals-icu]]: upload rides to your training log, and ride the workouts on your calendar (new in 0.4.0)
 - [[Group rides and self-hosting]]: ride together; run your own relay
 - [[Fan and lights]]: Home Assistant, Shelly, Tasmota and webhooks
 

@@ -1,7 +1,7 @@
 # Adding a connector
 
-A *connector* is a service a finished ride can be sent to. Strava (OAuth) and
-Dreeve (API key) are the two there are. Each is one Rust file in `src-tauri/src/connectors/`, registered in one
+A *connector* is a service a finished ride can be sent to. Strava (OAuth),
+Dreeve and Intervals.icu (API keys) are the three there are. Each is one Rust file in `src-tauri/src/connectors/`, registered in one
 place. The page (settings card, upload buttons, auto-upload toggle, the record of
 where a ride went) is generic and needs no change for a new service.
 
@@ -173,5 +173,10 @@ where a ride went) is generic and needs no change for a new service.
   `SegmentSource::Remote` and `connector = <id>`, times them live and awards
   segment bests. The ride setup shows "Find <name> segments" per connector and
   merges the results of several services.
+- **Planned workouts are optional.** Override `plans_workouts` to return `true` and
+  implement `planned_workouts` (cycling workouts on the rider's calendar from today, soonest
+  first) and `planned_workout_file` (one of them as a `.zwo`, `.erg` or `.mrc` file the
+  workout importer reads). The Workouts screen then lists them under "Planned on <name>",
+  each with an add button. Intervals.icu does this.
 - `cargo test -p velopopuli connectors` checks ids are unique and every
   connector describes its fields.

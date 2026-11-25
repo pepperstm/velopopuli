@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { fmtTime, zoneColor } from '../core/fmt'
 import { api, useSettings } from '../state'
-import type { WorkoutMeta } from '../types'
+import type { ConnectorEntry, PlannedWorkout, WorkoutMeta } from '../types'
 
 /** A workout's power profile as coloured blocks, like the ones on a training plan. */
 export function WorkoutShape({ shape, height = 56, at }: { shape: [number, number][]; height?: number; at?: number }): React.JSX.Element {
@@ -27,12 +27,88 @@ export function WorkoutShape({ shape, height = 56, at }: { shape: [number, numbe
   )
 }
 
+/** "Today", "Tomorrow", or the weekday and date, for a YYYY-MM-DD day. */
+function dayLabel(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const day = new Date(y, m - 1, d)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const ahead = Math.round((day.getTime() - today.getTime()) / 86_400_000)
+  if (ahead === 0) return 'Today'
+  if (ahead === 1) return 'Tomorrow'
+  return day.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })
+}
+
+/** The workouts on a connected service's training calendar, each ready to add to the library. */
+function PlannedWorkouts({ connector, onAdded }: { connector: ConnectorEntry; onAdded: () => void }): React.JSX.Element {
+  const { id, name } = connector.info
+  const [planned, setPlanned] = useState<PlannedWorkout[] | null>(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState('')
+  useEffect(() => {
+    api.connectors.planned(id).then(setPlanned, (err) => setError(errorText(err)))
+  }, [id])
+
+  const add = async (w: PlannedWorkout): Promise<void> => {
+    setBusy(w.id)
+    setError('')
+    try {
+      await api.connectors.addPlanned(id, w.id)
+      setPlanned((list) => list?.map((p) => (p.id === w.id ? { ...p, added: true } : p)) ?? null)
+      onAdded()
+    } catch (err) {
+      setError(`${w.name}: ${errorText(err)}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return (
+    <section className="planned-workouts">
+      <h2>Planned on {name}</h2>
+      {error && <div className="error">{error}</div>}
+      {planned === null && !error && <p className="muted">Looking at your {name} calendar…</p>}
+      {planned?.length === 0 && <p className="muted">No rides planned on your {name} calendar for the next two weeks.</p>}
+      {planned && planned.length > 0 && (
+        <div className="grid">
+          {planned.map((w) => (
+            <div className="card workout" key={w.id}>
+              <span className="planned-day">{dayLabel(w.date)}</span>
+              <h3>{w.name}</h3>
+              <div className="route-stats">
+                {w.durationS > 0 && <span>{fmtTime(w.durationS)}</span>}
+                {w.load !== null && <span>{Math.round(w.load)} load</span>}
+              </div>
+              {w.description && <p className="muted small planned-notes">{w.description}</p>}
+              <button
+                className={w.added ? 'ghost' : 'primary'}
+                disabled={busy === w.id}
+                onClick={() => void add(w)}
+                title={w.added ? `Fetch it again from ${name}, in case it changed` : undefined}
+              >
+                {busy === w.id ? 'Adding…' : w.added ? 'Added · update' : 'Add to my workouts'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function Workouts(): React.JSX.Element {
   const { settings } = useSettings()
   const [list, setList] = useState<WorkoutMeta[]>([])
   const [error, setError] = useState('')
+  const [planners, setPlanners] = useState<ConnectorEntry[]>([])
   const refresh = (): void => void api.workouts.list().then(setList)
   useEffect(refresh, [])
+  useEffect(() => {
+    api.connectors.list().then(
+      (all) => setPlanners(all.filter((c) => c.plansWorkouts && c.status.connected)),
+      () => setPlanners([])
+    )
+  }, [])
 
   const importFiles = async (): Promise<void> => {
     try {
@@ -73,6 +149,10 @@ export function Workouts(): React.JSX.Element {
         </button>
       </div>
       {error && <div className="error">{error}</div>}
+      {planners.map((c) => (
+        <PlannedWorkouts key={c.info.id} connector={c} onAdded={refresh} />
+      ))}
+      {planners.length > 0 && <h2>Your workouts</h2>}
       <div className="grid">
         {list.map((w) => (
           <div className="card workout" key={w.id}>
