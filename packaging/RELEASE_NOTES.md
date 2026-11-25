@@ -11,6 +11,7 @@
 - **Target power in your rides.** In ERG and workouts, the `.FIT` file now records the power the trainer was asked to hold, so sites like Intervals.icu and GoldenCheetah can show it next to the power you rode. Thanks to david-uhlig for adding it.
 - **Steep climbs.** On a very steep climb at low power, the rider now crawls up slowly instead of stalling at 0 km/h. Thanks to david-uhlig for reporting it.
 - **AppImage updates.** On Linux, the AppImage can be updated with AppImageUpdate, which downloads only what has changed.
+- **The group-ride relay on Docker.** Host group rides on a home server, a NAS or a Raspberry Pi with one command: `docker run -d --restart unless-stopped -p 47800:47800 ghcr.io/pepperstm/velopopuli-relay` (on a release candidate, add `:next` to the end). See [Group rides and self-hosting](https://github.com/pepperstm/velopopuli/wiki/Group-rides-and-self-hosting#running-a-relay-with-docker) in the wiki.
 
 ## Download
 

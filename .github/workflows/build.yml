@@ -157,6 +157,58 @@ jobs:
             /build/*.pkg.tar.zst
             /build/PKGBUILD
 
+  relay-image:
+    # The relay as a container image on GitHub's registry. Every run checks that it builds;
+    # a version tag also publishes it, for Intel/AMD and ARM (a Raspberry Pi, ARM servers).
+    needs: test
+    name: Relay image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUBLISH: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        env:
+          # GitHub shows the description from the multi-platform index.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/velopopuli-relay
+          # 0.4.0 and 0.4.0-rc.1 by version. `latest` moves only with full releases;
+          # `next` moves with every release, release candidates included.
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=raw,value=next,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          labels: |
+            org.opencontainers.image.title=VeloPopuli relay
+            org.opencontainers.image.description=Group-ride relay for VeloPopuli, the free, open-source indoor cycling app. Passes riders' positions between everyone in a room.
+          annotations: |
+            org.opencontainers.image.description=Group-ride relay for VeloPopuli, the free, open-source indoor cycling app. Passes riders' positions between everyone in a room.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/relay.Dockerfile
+          platforms: ${{ env.PUBLISH == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=relay-image
+          cache-to: type=gha,scope=relay-image,mode=max
+
   release:
     # Only for version tags: gather everything into one GitHub Release.
     if: startsWith(github.ref, 'refs/tags/v')

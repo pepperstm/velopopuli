@@ -70,6 +70,23 @@ The `release` job in [`build.yml`](../../.github/workflows/build.yml) collects t
 | `velopopuli-relay-macos-arm64`, `-linux-x86_64`, `-windows-x86_64.exe` | The group-ride relay |
 | `SHA256SUMS.txt` | Checksums of all of the above |
 
+### The relay image
+
+The `relay-image` job builds the relay as a container image from [`packaging/relay.Dockerfile`](../../packaging/relay.Dockerfile): a static (musl) binary in a distroless image, run as an unprivileged user, about 3 MB. Every run checks that it builds for `linux/amd64`. A version tag also builds `linux/arm64` and pushes both to `ghcr.io/pepperstm/velopopuli-relay`:
+
+| Tag | Moves with |
+|---|---|
+| `0.4.0`, `0.4.0-rc.3` | That version only |
+| `latest` | Full releases only, so hosts on `latest` never get a release candidate |
+| `next` | Every release, release candidates included |
+
+The job alone has `packages: write`, through `GITHUB_TOKEN`. The package must be **public** to be pulled without logging in: after the very first push, set it under the package's settings on GitHub → *Change visibility*. Building the image locally:
+
+```bash
+docker build -f packaging/relay.Dockerfile -t velopopuli-relay .
+docker run --rm -p 47800:47800 velopopuli-relay
+```
+
 ### Updating the AppImage
 
 The AppImage carries update information, so [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) and tools like it can update an installed copy from the latest release, downloading only what changed. After `tauri build`, the Linux job runs [`packaging/appimage-update-info.sh`](../../packaging/appimage-update-info.sh), which unpacks the AppImage, packs it again with [appimagetool](https://github.com/AppImage/appimagetool) and `-u "gh-releases-zsync|pepperstm|velopopuli|latest|VeloPopuli_*_amd64.AppImage.zsync"`, and checks the result. The `.zsync` file it makes is published with the release. A full release uses `latest`, so pre-releases are never offered as updates to it; a release candidate uses `latest-all` instead (see [Release candidates](#release-candidates)).
