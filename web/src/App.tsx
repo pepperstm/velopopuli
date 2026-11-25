@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { levelFor } from './core/fmt'
 import { api, applyTheme, mergeSettings, refreshDevices, SettingsContext, smokeHooks, useDevices } from './state'
-import { EMPTY_PROFILE, type Profile, type RideRequest, type RideSummary, type RouteMeta, type Settings } from './types'
+import { EMPTY_PROFILE, type Profile, type RideCheckpoint, type RideRequest, type RideSummary, type RouteMeta, type Settings } from './types'
 import { Devices } from './ui/Devices'
 import { Explore } from './ui/Explore'
 import { History } from './ui/History'
 import { Home } from './ui/Home'
+import { ResumeRide } from './ui/ResumeRide'
 import { Ride } from './ui/Ride'
 import { SettingsScreen } from './ui/Settings'
 import { Summary } from './ui/Summary'
@@ -40,7 +41,8 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
         workoutId: smoke.workout,
         groupRoom: smoke.room,
         ghostIds: smoke.ghosts ?? [],
-        laps: smoke.laps ?? null
+        laps: smoke.laps ?? null,
+        resume: smoke.resume
       }
     })
   } else if (
@@ -99,7 +101,15 @@ export function App(): React.JSX.Element | null {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE)
   const [screen, setScreen] = useState<Screen>({ name: 'home' })
+  const [cutShort, setCutShort] = useState<RideCheckpoint | null>(null)
   const { devices } = useDevices()
+
+  // A ride cut short by the app quitting (or one that couldn't be saved or carried on): offer
+  // to carry it on or save it. A ride being ridden clears its own when it's saved.
+  const riding = screen.name === 'ride'
+  useEffect(() => {
+    if (!riding) api.ride.checkpoint().then(setCutShort, () => setCutShort(null))
+  }, [riding])
 
   useEffect(() => {
     void api.kv.get<Partial<Settings>>('settings').then((s) => {
@@ -189,6 +199,20 @@ export function App(): React.JSX.Element | null {
           {screen.name === 'settings' && <SettingsScreen />}
           {screen.name === 'summary' && <Summary ride={screen.ride} onDone={() => setScreen({ name: 'home' })} />}
         </main>
+        {cutShort && (
+          <ResumeRide
+            checkpoint={cutShort}
+            onCarryOn={(request) => {
+              setCutShort(null)
+              setScreen({ name: 'ride', request })
+            }}
+            onSaved={(ride) => {
+              setCutShort(null)
+              setScreen({ name: 'summary', ride })
+            }}
+            onClose={() => setCutShort(null)}
+          />
+        )}
       </div>
     )
   }

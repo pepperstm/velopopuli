@@ -15,6 +15,7 @@ import type {
   GhostMeta,
   Planned,
   PlannedWorkout,
+  RideCheckpoint,
   RideInit,
   RideRequest,
   RideSearch,
@@ -87,6 +88,11 @@ export const api = {
     updateSettings: (settings: Settings) => invoke<void>('ride_update_settings', { settings }),
     finish: () => invoke<RideSummary | null>('ride_finish'),
     abort: () => invoke<void>('ride_abort'),
+    /** A ride cut short by the app quitting, if there is one. */
+    checkpoint: () => invoke<RideCheckpoint | null>('ride_checkpoint'),
+    /** Saves the ride cut short as it was; null if it was too short to keep. */
+    checkpointSave: () => invoke<RideSummary | null>('ride_checkpoint_save'),
+    checkpointDiscard: () => invoke<void>('ride_checkpoint_discard'),
     onState: (cb: (s: RideState) => void) => on('ride:state', cb),
     onLoading: (cb: (message: string) => void) => on('ride:loading', cb),
     onControllerAction: (cb: (action: ControllerAction) => void) => on('controller:action', cb)
@@ -186,6 +192,7 @@ export const api = {
         route: string | null
         plan: string | null
         overlay: boolean
+        resume: boolean
       } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })

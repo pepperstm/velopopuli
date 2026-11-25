@@ -708,6 +708,60 @@ mod ride {
             assert_eq!(engine.last_lap.as_ref().map(|l| l.manual), Some(false));
         }
     }
+
+    mod checkpoints {
+        use super::*;
+        use velopopuli_core::ride::RideProgress;
+
+        #[test]
+        fn a_ride_carries_on_from_a_checkpoint_as_if_it_had_paused() {
+            let mut clock = 1_700_000_000_000;
+            let mut whole = RideEngine::new(flat(), &settings(), None);
+            run(&mut whole, 60, 200.0, &mut clock);
+            assert!(whole.lap());
+            run(&mut whole, 30, 300.0, &mut clock);
+
+            // The checkpoint goes through JSON on disk, then onto a new engine for the same route.
+            let saved = serde_json::to_string(&whole.progress()).unwrap();
+            let mut resumed = RideEngine::new(flat(), &settings(), None);
+            resumed.resume(serde_json::from_str::<RideProgress>(&saved).unwrap());
+            assert_eq!(resumed.samples.len(), whole.samples.len());
+            assert_eq!((resumed.elapsed, resumed.ridden, resumed.distance), (whole.elapsed, whole.ridden, whole.distance));
+            assert_eq!(resumed.laps_finished(), 1);
+            assert!(close(resumed.np(), whole.np(), 1e-9) && close(resumed.kj(), whole.kj(), 1e-9));
+            assert_eq!(resumed.speed, 0.0, "it starts from a standstill");
+
+            // Ten minutes later, the same riding on both.
+            let mut later = clock + 600_000;
+            run(&mut whole, 20, 250.0, &mut clock);
+            run(&mut resumed, 20, 250.0, &mut later);
+            assert!(close(resumed.avg_power(), whole.avg_power(), 2.0), "{} vs {}", resumed.avg_power(), whole.avg_power());
+            assert!(close(resumed.elapsed, whole.elapsed, 1.0));
+
+            let session = resumed.session(0, 0);
+            assert_eq!(session.laps.len(), 2, "the lap before the crash, then the one after");
+            let times: Vec<u64> = resumed.samples.iter().map(|s| s.time).collect();
+            assert!(times.windows(2).all(|w| w[1] > w[0]));
+            assert!(times.windows(2).any(|w| w[1] - w[0] > 500_000), "the time away is a gap in the file");
+            assert!(session.timer_s < (session.end_time - session.start_time) as f64 / 1000.0 - 500.0, "and isn't counted as riding");
+            fitparser::from_bytes(&encode_fit(&resumed.samples, &session)).expect("valid FIT file");
+        }
+
+        #[test]
+        fn a_checkpoint_from_a_changed_route_is_trimmed_to_fit() {
+            let mut clock = 1_700_000_000_000;
+            let mut engine = RideEngine::new(flat(), &settings(), None);
+            run(&mut engine, 30, 200.0, &mut clock);
+            let mut progress = engine.progress();
+            progress.distance = 1e9;
+            progress.climb_times.insert(99, 10.0);
+            let short = Arc::new(build_route("short", &straight(500.0, |_| Some(100.0))).unwrap());
+            let mut resumed = RideEngine::new(short.clone(), &settings(), None);
+            resumed.resume(progress);
+            assert_eq!(resumed.distance, short.total);
+            assert!(resumed.climb_times.is_empty());
+        }
+    }
 }
 
 mod gamify {

@@ -1,7 +1,9 @@
 //! Minimal FIT activity encoder. FIT is what Strava, Garmin Connect and most
 //! other training platforms ingest most reliably.
 
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FitSample {
     /// Unix ms.
     pub time: u64,
@@ -43,7 +45,7 @@ pub struct FitSession {
 }
 
 /// Why a lap ended: FIT's `lap_trigger`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LapTrigger {
     /// The rider pressed Lap.
     Manual = 0,

@@ -97,7 +97,7 @@ Every second, `record` appends a `FitSample`: time, position, height, `ridden`, 
 
 ## The end of a ride
 
-`Session::finish`:
+`Session::finish` halts the session and calls `save_ride`, then removes the checkpoint (below):
 
 1. **Too short?** Under 60 samples (a minute), nothing is saved and `None` comes back. The page warns before that ([`Ride.tsx`](../../web/src/ui/Ride.tsx), `leaving`).
 2. **The FIT file** goes to `activities/velopopuli-<YYYY-MM-DD-HHMM>-<route slug>.fit` in the data folder, and is copied to the export folder if one is set.
@@ -110,6 +110,18 @@ Every second, `record` appends a `FitSample`: time, position, height, `ridden`, 
 6. **An FTP estimate** is offered if this ride suggests a higher one (below).
 
 Back on the summary screen, connectors set to upload automatically get the ride straight away ([`Summary.tsx`](../../web/src/ui/Summary.tsx), `UploadButtons`). The others show an upload button. Each upload is recorded in `RideSummary.uploads` by connector id (see [Connectors](connectors-and-services.md#uploads)).
+
+## Checkpoints
+
+A ride cut short by the app quitting can be carried on or saved ([`checkpoint.rs`](../../src-tauri/src/checkpoint.rs)).
+
+- **Saving:** while riding, a thread saves a `Checkpoint` to the `ride-checkpoint` key every 30 s, once the ride is long enough to keep and whenever it has moved on: the `RideRequest` it started from, the route's name, and `RideEngine::progress()`. That `RideProgress` holds the position, lap, times, samples, laps, climb and segment bests, the workout's time and intensity, the gear and the pace riders' places. The running totals (average power, NP, kJ) aren't kept: `resume` works them out again from the samples. The store writes to a temporary file and renames it, so a crash mid-write leaves the last good checkpoint.
+- **On launch** (and whenever the rider leaves the ride screen), `ride_checkpoint` says if there is one, and the app asks:
+  - **Carry on** is `ride_start` with `resume: true`: the session is set up from the checkpoint's own request, then `RideEngine::resume` restores it. The next sample is stamped with the wall clock, so the time away is a gap in the file, as a pause would be, and isn't moving time. A climb or segment part-way through isn't timed.
+  - **Save what you rode** (`ride_checkpoint_save`) sets the ride up with `Session::prepare`, without starting it, restores it, and saves it with `save_ride`.
+  - **Discard** (`ride_checkpoint_discard`) removes it.
+- **Removed** when a ride is saved (or ended too short to keep) and on discard. Leaving the ride screen any other way (an error) keeps it, so a ride that couldn't be saved is offered again. A checkpoint over three days old, or of a ride that had finished, can only be saved or discarded.
+- **Automated runs** don't write checkpoints, since they're stopped mid-ride on purpose; `VP_SMOKE_CHECKPOINT=1` turns them on and `VP_SMOKE_RESUME=1` carries one on.
 
 ## Streaks and the season goal
 

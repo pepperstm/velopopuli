@@ -16,12 +16,13 @@ use velopopuli_core::fitness::{estimate_ftp, power_curve};
 use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
 use velopopuli_core::gearing;
 use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
-use velopopuli_core::ride::{ClimbResult, LapResult, RideEngine, RideInput, RideOptions, Rival, RivalKind, SegmentLive, SegmentResult};
+use velopopuli_core::ride::{ClimbResult, LapResult, RideEngine, RideInput, RideOptions, RideProgress, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
 use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
 use velopopuli_core::workout::{Workout, WorkoutPos};
 use velopopuli_core::world::{align_dem_with, landmarks, route_structures, Landmark, SceneryCounts, World, WorldLayout, LAYOUT};
 
+use crate::checkpoint;
 use crate::devices::sim::DemoRider;
 use crate::devices::Devices;
 use crate::group::GroupLink;
@@ -32,7 +33,7 @@ use crate::{mapdata, now_ms, terrain};
 
 pub const DEMO_ROUTE_ID: &str = "demo";
 /// Rides shorter than this many seconds aren't worth a file, a history entry or an upload.
-const MIN_SAMPLES: usize = 60;
+pub const MIN_SAMPLES: usize = 60;
 const TICK: Duration = Duration::from_millis(20);
 const EMIT_EVERY: Duration = Duration::from_millis(50);
 
@@ -43,7 +44,7 @@ struct StoredRoute {
 }
 
 /// What the rider chose before setting off.
-#[derive(serde::Deserialize, Default, Clone)]
+#[derive(serde::Deserialize, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RideRequest {
     pub route_id: String,
@@ -54,6 +55,9 @@ pub struct RideRequest {
     pub group_room: Option<String>,
     /// Laps on a closed route: absent for none, 0 to keep going until stopped.
     pub laps: Option<u32>,
+    /// Carry on the ride in the checkpoint (whose own request is used instead of this one).
+    #[serde(skip_serializing)]
+    pub resume: bool,
 }
 
 /// Days since the Unix epoch in local time.
@@ -185,10 +189,23 @@ pub struct Session {
     group: Option<Arc<GroupLink>>,
     imported_ghosts: Vec<String>,
     thread: Mutex<Option<JoinHandle<()>>>,
+    /// Saves the ride now and then, so it survives the app quitting.
+    checkpointer: Mutex<Option<JoinHandle<()>>>,
+}
+
+/// A ride set up and ready to ride: the route, its world and the engine.
+pub struct Prepared {
+    route: Arc<Route>,
+    world: Arc<World>,
+    pub engine: RideEngine,
+    pub settings: Settings,
+    init: RideInit,
+    pub imported_ghosts: Vec<String>,
 }
 
 impl Session {
-    pub async fn start(app: &AppHandle, store: &Store, http: &reqwest::Client, devices: Arc<Devices>, demo: Arc<DemoRider>, req: &RideRequest) -> Result<(Arc<Session>, RideInit), String> {
+    /// Sets a ride up: loads the route, builds its world and the engine, without starting it.
+    pub async fn prepare(app: &AppHandle, store: &Store, http: &reqwest::Client, req: &RideRequest) -> Result<Prepared, String> {
         let route_id = req.route_id.as_str();
         let settings: Settings = store.get("settings").unwrap_or_default();
         let mut route = load_route(store, route_id)?;
@@ -370,6 +387,25 @@ impl Session {
                 eprintln!("Landmark at {:.0} m ({}): {} {} {}", m.distance, if m.side > 0.0 { "+" } else { "-" }, m.kind, m.name, m.detail);
             }
         }
+        Ok(Prepared { route, world, engine, settings, init, imported_ghosts })
+    }
+
+    /// Starts riding: `resume` carries on a ride from its checkpoint.
+    pub async fn start(
+        app: &AppHandle,
+        store: &Store,
+        http: &reqwest::Client,
+        devices: Arc<Devices>,
+        demo: Arc<DemoRider>,
+        req: &RideRequest,
+        resume: Option<RideProgress>,
+    ) -> Result<(Arc<Session>, RideInit), String> {
+        let Prepared { route, world, mut engine, settings, init, imported_ghosts } = Self::prepare(app, store, http, req).await?;
+        let route_id = req.route_id.as_str();
+        if let Some(progress) = resume {
+            engine.resume(progress);
+            crate::diag::event("ride", format!("carried on from a checkpoint: {:.0} m and {:.0} s ridden", engine.ridden, engine.elapsed));
+        }
         let group = req.group_room.as_ref().filter(|r| !r.trim().is_empty()).map(|room| GroupLink::join(app.clone(), &settings.group.relay_url, room.trim(), &settings.rider.name, route_id, store));
         crate::diag::event(
             "ride",
@@ -414,6 +450,7 @@ impl Session {
             group,
             imported_ghosts,
             thread: Mutex::new(None),
+            checkpointer: Mutex::new(None),
         });
         let thread = std::thread::spawn({
             let (engine, settings, stop, app, group) = (session.engine.clone(), session.settings.clone(), session.stop.clone(), app.clone(), session.group.clone());
@@ -421,6 +458,10 @@ impl Session {
             move || run(engine, settings, stop, app, devices, demo, group, smart)
         });
         *session.thread.lock().unwrap() = Some(thread);
+        if checkpoint::enabled() {
+            let saver = checkpoint::spawn(store.dir().to_path_buf(), req.clone(), session.engine.clone(), session.stop.clone());
+            *session.checkpointer.lock().unwrap() = Some(saver);
+        }
         Ok((session, init))
     }
 
@@ -496,6 +537,9 @@ impl Session {
         if let Some(thread) = self.thread.lock().unwrap().take() {
             let _ = thread.join();
         }
+        if let Some(thread) = self.checkpointer.lock().unwrap().take() {
+            let _ = thread.join();
+        }
     }
 
     /// Ends the ride: writes the FIT file and updates bests, profile and history.
@@ -503,124 +547,133 @@ impl Session {
     pub fn finish(&self, store: &Store) -> Result<Option<RideSummary>, String> {
         self.halt();
         let engine = self.engine.lock().unwrap();
-        if engine.samples.len() < MIN_SAMPLES {
-            return Ok(None);
-        }
         let settings = self.settings.lock().unwrap().clone();
-        let session = engine.session(now_ms(), Local::now().offset().fix().local_minus_utc() as i64);
-
-        let stamp = Local.timestamp_millis_opt(session.start_time as i64).single().unwrap_or_else(Local::now).format("%Y-%m-%d-%H%M");
-        let slug: String = engine.route.name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
-        let slug: String = slug.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-").chars().take(40).collect();
-        let file_name = format!("velopopuli-{stamp}-{}.fit", if slug.is_empty() { "ride" } else { &slug });
-        let path = store.save_activity(&file_name, &encode_fit(&engine.samples, &session), &settings.export_dir)?;
-
-        let completed = engine.finished;
-        let prev = engine.pb.clone().unwrap_or_default();
-        let had_time = prev.time_s > 0.0;
-        let is_pb = engine.counts_for_route_best() && (!had_time || engine.elapsed < prev.time_s);
-        let mut climbs = prev.climbs.clone();
-        for (i, t) in &engine.climb_times {
-            let best = climbs.entry(*i).or_insert(*t);
-            *best = best.min(*t);
-        }
-        let mut segment_bests = prev.segments.clone();
-        let mut segment_prs = Vec::new();
-        for (id, best) in &engine.new_segment_bests {
-            segment_bests.insert(id.clone(), best.clone());
-            if let Some(seg) = engine.segments.iter().find(|s| &s.id == id && s.source == SegmentSource::Remote) {
-                segment_prs.push(seg.name.clone());
-            }
-        }
-        let pb = if is_pb {
-            PersonalBest { time_s: engine.elapsed, trace: engine.trace.iter().map(|d| (d * 10.0).round() / 10.0).collect(), climbs, segments: segment_bests }
-        } else {
-            PersonalBest { climbs, segments: segment_bests, ..prev }
-        };
-        store.set(&format!("pb-{}", self.route_id), &pb)?;
-        if is_pb {
-            let mut bests: BTreeMap<String, f64> = store.get("bests").unwrap_or_default();
-            bests.insert(self.route_id.clone(), engine.elapsed);
-            store.set("bests", &bests)?;
-        }
-
-        let rides: Vec<RideSummary> = store.get("rides").unwrap_or_default();
-        let today = local_day(session.start_time);
-        let mut days: Vec<i64> = rides.iter().map(|r| local_day(r.started_at)).collect();
-        days.push(today);
-        let mut routes: Vec<&str> = rides.iter().map(|r| r.route_id.as_str()).chain([self.route_id.as_str()]).collect();
-        routes.sort_unstable();
-        routes.dedup();
-        let goal_before = library::goal_progress(&settings.goal, &rides, 0.0);
-        let goal_after = library::goal_progress(&settings.goal, &rides, engine.ridden);
-        let ramp_test = engine.workout.as_ref().is_some_and(|w| w.id == "builtin-ramp-test");
-        let workout_done = engine.workout.is_some() && engine.workout_pos().is_none();
-        let curve = power_curve(&engine.samples.iter().map(|s| s.power).collect::<Vec<_>>());
-        let ftp_estimate = estimate_ftp(&curve, ramp_test).filter(|e| e.watts > settings.rider.ftp + 2.0 || (ramp_test && workout_done));
-        let hour = {
-            use chrono::Timelike;
-            Local.timestamp_millis_opt(session.start_time as i64).single().map_or(12, |t| t.hour())
-        };
-        let beat_other_ghost = completed && engine.rivals.iter().any(|r| r.kind == RivalKind::Ghost && self.imported_ghosts.contains(&r.id) && r.distance < engine.route.total);
-        let facts = RideFacts {
-            distance_m: engine.ridden,
-            ascent_m: engine.ascent,
-            duration_s: engine.elapsed,
-            completed,
-            beat_pb: is_pb && had_time,
-            np: engine.np(),
-            ftp: settings.rider.ftp,
-            climb_categories: engine.climb_times.keys().map(|i| engine.route.climbs[*i].category.clone()).collect(),
-            workout_done,
-            ramp_test,
-            beat_other_ghost,
-            segment_prs: segment_prs.len(),
-            group: self.group.is_some(),
-            night: !(5..21).contains(&hour),
-            week_streak: streaks(&days, today).weeks,
-            routes_ridden: routes.len(),
-            goal_reached: goal_before < 1.0 && goal_after >= 1.0,
-        };
-        let mut profile: Profile = store.get("profile").unwrap_or_default();
-        let (xp, new_badges) = apply_ride(&mut profile, &facts);
-        store.set("profile", &profile)?;
-
-        let summary = RideSummary {
-            id: session.start_time.to_string(),
-            route_id: self.route_id.clone(),
-            route_name: engine.route.name.clone(),
-            started_at: session.start_time,
-            duration_s: engine.elapsed,
-            distance_m: engine.ridden,
-            ascent_m: engine.ascent,
-            avg_power: session.avg_power,
-            max_power: session.max_power,
-            np: session.np,
-            avg_hr: session.avg_hr,
-            max_hr: session.max_hr,
-            avg_cadence: session.avg_cadence,
-            avg_speed: if engine.elapsed > 0.0 { engine.ridden / engine.elapsed } else { 0.0 },
-            kj: session.kj,
-            tss: engine.tss(),
-            completed,
-            is_pb,
-            xp,
-            new_badges,
-            file_path: path.to_string_lossy().into_owned(),
-            uploads: Default::default(),
-            strava_activity_id: None,
-            curve,
-            workout: engine.workout.as_ref().map(|w| w.name.clone()),
-            ftp_estimate,
-            segment_prs,
-            group: self.group.is_some(),
-        };
-        let mut rides = rides;
-        rides.insert(0, summary.clone());
-        rides.truncate(1000);
-        store.set("rides", &rides)?;
-        Ok(Some(summary))
+        let summary = save_ride(store, &engine, &settings, &self.route_id, self.group.is_some(), &self.imported_ghosts)?;
+        // Saved (or too short to keep), so there's nothing left to carry on.
+        checkpoint::clear(store);
+        Ok(summary)
     }
+}
+
+/// Ends a ride: writes the FIT file and updates bests, profile and history.
+/// Returns `None` (and saves nothing) for rides too short to keep.
+pub fn save_ride(store: &Store, engine: &RideEngine, settings: &Settings, route_id: &str, group: bool, imported_ghosts: &[String]) -> Result<Option<RideSummary>, String> {
+    if engine.samples.len() < MIN_SAMPLES {
+        return Ok(None);
+    }
+    let session = engine.session(now_ms(), Local::now().offset().fix().local_minus_utc() as i64);
+
+    let stamp = Local.timestamp_millis_opt(session.start_time as i64).single().unwrap_or_else(Local::now).format("%Y-%m-%d-%H%M");
+    let slug: String = engine.route.name.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
+    let slug: String = slug.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-").chars().take(40).collect();
+    let file_name = format!("velopopuli-{stamp}-{}.fit", if slug.is_empty() { "ride" } else { &slug });
+    let path = store.save_activity(&file_name, &encode_fit(&engine.samples, &session), &settings.export_dir)?;
+
+    let completed = engine.finished;
+    let prev = engine.pb.clone().unwrap_or_default();
+    let had_time = prev.time_s > 0.0;
+    let is_pb = engine.counts_for_route_best() && (!had_time || engine.elapsed < prev.time_s);
+    let mut climbs = prev.climbs.clone();
+    for (i, t) in &engine.climb_times {
+        let best = climbs.entry(*i).or_insert(*t);
+        *best = best.min(*t);
+    }
+    let mut segment_bests = prev.segments.clone();
+    let mut segment_prs = Vec::new();
+    for (id, best) in &engine.new_segment_bests {
+        segment_bests.insert(id.clone(), best.clone());
+        if let Some(seg) = engine.segments.iter().find(|s| &s.id == id && s.source == SegmentSource::Remote) {
+            segment_prs.push(seg.name.clone());
+        }
+    }
+    let pb = if is_pb {
+        PersonalBest { time_s: engine.elapsed, trace: engine.trace.iter().map(|d| (d * 10.0).round() / 10.0).collect(), climbs, segments: segment_bests }
+    } else {
+        PersonalBest { climbs, segments: segment_bests, ..prev }
+    };
+    store.set(&format!("pb-{route_id}"), &pb)?;
+    if is_pb {
+        let mut bests: BTreeMap<String, f64> = store.get("bests").unwrap_or_default();
+        bests.insert(route_id.to_string(), engine.elapsed);
+        store.set("bests", &bests)?;
+    }
+
+    let rides: Vec<RideSummary> = store.get("rides").unwrap_or_default();
+    let today = local_day(session.start_time);
+    let mut days: Vec<i64> = rides.iter().map(|r| local_day(r.started_at)).collect();
+    days.push(today);
+    let mut routes: Vec<&str> = rides.iter().map(|r| r.route_id.as_str()).chain([route_id]).collect();
+    routes.sort_unstable();
+    routes.dedup();
+    let goal_before = library::goal_progress(&settings.goal, &rides, 0.0);
+    let goal_after = library::goal_progress(&settings.goal, &rides, engine.ridden);
+    let ramp_test = engine.workout.as_ref().is_some_and(|w| w.id == "builtin-ramp-test");
+    let workout_done = engine.workout.is_some() && engine.workout_pos().is_none();
+    let curve = power_curve(&engine.samples.iter().map(|s| s.power).collect::<Vec<_>>());
+    let ftp_estimate = estimate_ftp(&curve, ramp_test).filter(|e| e.watts > settings.rider.ftp + 2.0 || (ramp_test && workout_done));
+    let hour = {
+        use chrono::Timelike;
+        Local.timestamp_millis_opt(session.start_time as i64).single().map_or(12, |t| t.hour())
+    };
+    let beat_other_ghost = completed && engine.rivals.iter().any(|r| r.kind == RivalKind::Ghost && imported_ghosts.contains(&r.id) && r.distance < engine.route.total);
+    let facts = RideFacts {
+        distance_m: engine.ridden,
+        ascent_m: engine.ascent,
+        duration_s: engine.elapsed,
+        completed,
+        beat_pb: is_pb && had_time,
+        np: engine.np(),
+        ftp: settings.rider.ftp,
+        climb_categories: engine.climb_times.keys().filter_map(|i| engine.route.climbs.get(*i)).map(|c| c.category.clone()).collect(),
+        workout_done,
+        ramp_test,
+        beat_other_ghost,
+        segment_prs: segment_prs.len(),
+        group,
+        night: !(5..21).contains(&hour),
+        week_streak: streaks(&days, today).weeks,
+        routes_ridden: routes.len(),
+        goal_reached: goal_before < 1.0 && goal_after >= 1.0,
+    };
+    let mut profile: Profile = store.get("profile").unwrap_or_default();
+    let (xp, new_badges) = apply_ride(&mut profile, &facts);
+    store.set("profile", &profile)?;
+
+    let summary = RideSummary {
+        id: session.start_time.to_string(),
+        route_id: route_id.to_string(),
+        route_name: engine.route.name.clone(),
+        started_at: session.start_time,
+        duration_s: engine.elapsed,
+        distance_m: engine.ridden,
+        ascent_m: engine.ascent,
+        avg_power: session.avg_power,
+        max_power: session.max_power,
+        np: session.np,
+        avg_hr: session.avg_hr,
+        max_hr: session.max_hr,
+        avg_cadence: session.avg_cadence,
+        avg_speed: if engine.elapsed > 0.0 { engine.ridden / engine.elapsed } else { 0.0 },
+        kj: session.kj,
+        tss: engine.tss(),
+        completed,
+        is_pb,
+        xp,
+        new_badges,
+        file_path: path.to_string_lossy().into_owned(),
+        uploads: Default::default(),
+        strava_activity_id: None,
+        curve,
+        workout: engine.workout.as_ref().map(|w| w.name.clone()),
+        ftp_estimate,
+        segment_prs,
+        group,
+    };
+    let mut rides = rides;
+    rides.insert(0, summary.clone());
+    rides.truncate(1000);
+    store.set("rides", &rides)?;
+    Ok(Some(summary))
 }
 
 impl Drop for Session {
