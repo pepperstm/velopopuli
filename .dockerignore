@@ -1,0 +1,9 @@
+# Only the Rust workspace is needed to build the relay image.
+*
+!Cargo.toml
+!Cargo.lock
+!rustfmt.toml
+!crates/
+!src-tauri/Cargo.toml
+!src-tauri/build.rs
+!src-tauri/src/

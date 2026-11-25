@@ -19,6 +19,69 @@ Then everyone sets **Settings → Group rides → Relay address** to `ws://your-
 - To reach it from the internet, forward the port on your router, or run it on a small cloud server.
 - For a secure `wss://` address, put it behind a reverse proxy that handles TLS, such as Caddy (`reverse_proxy localhost:47800`). The app accepts `wss://` relay addresses.
 
+## Running a relay with Docker
+
+> **New in 0.4.0.** The image is published from the 0.4.0 release candidates on. Until the full 0.4.0 release, use the `next` tag, as below. Afterwards, leave the tag off to get the latest full release.
+>
+> The relay hasn't changed since 0.3.10, so riders on 0.3.10 can use it too, and riders on either version can share a room.
+
+On a home server, a NAS (Unraid, TrueNAS, Synology), a Raspberry Pi or a cloud server with Docker, the relay is one command:
+
+```bash
+docker run -d --name velopopuli-relay --restart unless-stopped -p 47800:47800 ghcr.io/pepperstm/velopopuli-relay:next
+```
+
+It starts with the computer and restarts if it stops. The image is about 3 MB and runs on Intel/AMD and ARM (64-bit). To use another port, change the first number: `-p 9000:47800` makes the relay address `ws://your-host:9000`.
+
+To update it, pull the new image and start it again:
+
+```bash
+docker pull ghcr.io/pepperstm/velopopuli-relay:next
+docker rm -f velopopuli-relay
+# then the docker run line above
+```
+
+| Tag | What you get |
+|---|---|
+| `latest` (or no tag) | The latest full release (from 0.4.0) |
+| `next` | The newest build, release candidates included |
+| `0.4.0` | That version only |
+
+### With Docker Compose
+
+```yaml
+services:
+  relay:
+    image: ghcr.io/pepperstm/velopopuli-relay:next
+    restart: unless-stopped
+    ports:
+      - "47800:47800"
+```
+
+### With a secure `wss://` address
+
+Caddy gets a certificate for your domain by itself. Point a domain at the server, open ports 80 and 443, and use:
+
+```yaml
+services:
+  relay:
+    image: ghcr.io/pepperstm/velopopuli-relay:next
+    restart: unless-stopped
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    command: caddy reverse-proxy --from relay.example.com --to relay:47800
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+volumes:
+  caddy-data:
+```
+
+Then everyone sets the relay address to `wss://relay.example.com`.
+
 ## Coming later
 
 Club servers that are easier to run, with private rooms, scheduled rides and shared routes.
