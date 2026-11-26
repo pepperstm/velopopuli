@@ -312,9 +312,13 @@ export interface RideRequest {
   groupRoom?: string | null
   /** Laps on a closed route: absent or null = none, 0 = until I stop, n = n laps. Ghosts are off on lap rides. */
   laps?: number | null
+  /** Which way to ride the route: as drawn, reversed, or there and back. Velodromes and group rides go forward. */
+  direction?: RouteDirection
   /** Carry on the ride cut short (the backend uses its own saved request). */
   resume?: boolean
 }
+
+export type RouteDirection = 'forward' | 'reverse' | 'outAndBack'
 
 /** A ride cut short by the app quitting, saved as it went. */
 export interface RideCheckpoint {

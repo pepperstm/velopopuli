@@ -6,7 +6,7 @@
 
 Press **Ride** on a route. Before you start you can choose:
 
-- **Direction** (Herne Hill only): anticlockwise, as raced, or clockwise.
+- **Direction:** ride the route **as drawn**, **reversed** (from the finish to the start), or **out and back** (to the finish, then back the same way, for a route that isn't a loop). Climbs are found and timed the way you ride, so a descent becomes a climb on the way back. Ghosts and saved segments follow the route as drawn, so they're off the other way round, and each direction keeps its own best time. A group ride always goes the way the route is drawn. On Herne Hill, the choice is anticlockwise, as raced, or clockwise. *(New in 0.4.0: in the [release candidates](https://github.com/pepperstm/velopopuli/releases) only for now.)*
 - **Laps**, on a route that ends where it starts (see [below](#laps)).
 - **Workout:** ride a structured session on the route (see [[Workouts]]).
 - **Ghosts to race:** your best ride on the route, and others you add (see [Racing](#racing)).

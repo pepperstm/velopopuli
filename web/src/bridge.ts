@@ -21,6 +21,7 @@ import type {
   RideSearch,
   RideState,
   RideSummary,
+  RouteDirection,
   RouteList,
   RouteMeta,
   Segment,
@@ -193,6 +194,7 @@ export const api = {
         plan: string | null
         overlay: boolean
         resume: boolean
+        direction: RouteDirection | null
       } | null>('smoke_config'),
     frame: (index: number) => invoke<void>('smoke_frame', { index }),
     done: (png: string | null, info: string) => invoke<void>('smoke_done', { png, info })

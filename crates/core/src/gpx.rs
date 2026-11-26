@@ -1,7 +1,7 @@
 //! GPX → a route resampled at a fixed spacing, with smoothed elevation,
 //! gradients, detected climbs and a local metric projection for 3D.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RawPoint {
@@ -351,6 +351,48 @@ fn round_corners(pts: &[RawPoint], cum: &[f64], step: f64) -> Vec<RawPoint> {
     out
 }
 
+/// Which way a route is ridden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Direction {
+    /// As it was drawn or recorded.
+    #[default]
+    Forward,
+    /// From the finish back to the start.
+    Reverse,
+    /// To the finish, then back the same way to the start.
+    OutAndBack,
+}
+
+impl Direction {
+    /// Added to the route's name, so the ride and its history say which way it went.
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Direction::Forward => "",
+            Direction::Reverse => " (reversed)",
+            Direction::OutAndBack => " (out and back)",
+        }
+    }
+
+    /// Added to the route's id for what's kept per direction: personal bests and best times.
+    pub fn key(self) -> &'static str {
+        match self {
+            Direction::Forward => "",
+            Direction::Reverse => "-reverse",
+            Direction::OutAndBack => "-out-and-back",
+        }
+    }
+
+    /// The route's points in this direction. Out and back turns round on the spot at the far end.
+    pub fn apply(self, raw: &[RawPoint]) -> Vec<RawPoint> {
+        match self {
+            Direction::Forward => raw.to_vec(),
+            Direction::Reverse => raw.iter().rev().copied().collect(),
+            Direction::OutAndBack => raw.iter().chain(raw.iter().rev().skip(1)).copied().collect(),
+        }
+    }
+}
+
 pub fn build_route(name: &str, raw: &[RawPoint]) -> Result<Route, String> {
     build_route_with_step(name, raw, 5.0)
 }
@@ -438,9 +480,14 @@ pub fn build_route_with_step(name: &str, raw: &[RawPoint], step: f64) -> Result<
 
 /// A synthetic ~15 km loop with one proper climb, so the app is usable before any GPX is imported.
 pub fn demo_route() -> Route {
+    build_route("Demo Loop", &demo_points()).expect("demo route is valid")
+}
+
+/// The demo loop's points.
+pub fn demo_points() -> Vec<RawPoint> {
     const N: usize = 3000;
     let (lat0, lon0, radius) = (46.2f64, 7.6f64, 2200.0f64);
-    let pts: Vec<RawPoint> = (0..=N)
+    (0..=N)
         .map(|i| {
             let a = i as f64 / N as f64 * std::f64::consts::TAU;
             let r = radius * (1.0 + 0.22 * (3.0 * a).sin() + 0.08 * (7.0 * a).cos());
@@ -450,6 +497,5 @@ pub fn demo_route() -> Route {
                 ele: Some(620.0 + 110.0 * (a - 1.2).sin() + 14.0 * (4.0 * a).sin() + 3.0 * (9.0 * a).sin()),
             }
         })
-        .collect();
-    build_route("Demo Loop", &pts).expect("demo route is valid")
+        .collect()
 }

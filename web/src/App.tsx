@@ -42,7 +42,8 @@ async function runSmoke(setScreen: (s: Screen) => void): Promise<void> {
         groupRoom: smoke.room,
         ghostIds: smoke.ghosts ?? [],
         laps: smoke.laps ?? null,
-        resume: smoke.resume
+        resume: smoke.resume,
+        direction: smoke.direction ?? 'forward'
       }
     })
   } else if (

@@ -15,7 +15,7 @@ use velopopuli_core::fit::encode_fit;
 use velopopuli_core::fitness::{estimate_ftp, power_curve};
 use velopopuli_core::gamify::{apply_ride, streaks, RideFacts};
 use velopopuli_core::gearing;
-use velopopuli_core::gpx::{build_route, demo_route, parse_gpx, Climb, Route};
+use velopopuli_core::gpx::{build_route, demo_points, demo_route, parse_gpx, Climb, Direction, Route};
 use velopopuli_core::ride::{ClimbResult, LapResult, RideEngine, RideInput, RideOptions, RideProgress, Rival, RivalKind, SegmentLive, SegmentResult};
 use velopopuli_core::segments::{Segment, SegmentSource};
 use velopopuli_core::types::{PersonalBest, Profile, RideSummary, Settings, TrainerMode};
@@ -55,6 +55,8 @@ pub struct RideRequest {
     pub group_room: Option<String>,
     /// Laps on a closed route: absent for none, 0 to keep going until stopped.
     pub laps: Option<u32>,
+    /// Which way to ride the route. A velodrome's track and group rides go forward.
+    pub direction: Direction,
     /// Carry on the ride in the checkpoint (whose own request is used instead of this one).
     #[serde(skip_serializing)]
     pub resume: bool,
@@ -64,6 +66,23 @@ pub struct RideRequest {
 pub fn local_day(ms: u64) -> i64 {
     let t = Local.timestamp_millis_opt(ms as i64).single().unwrap_or_else(Local::now);
     (t.date_naive() - chrono::NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days()
+}
+
+/// A route ridden in `direction`: reversed, or there and back.
+pub fn load_route_in(store: &Store, id: &str, direction: Direction) -> Result<Route, String> {
+    if direction == Direction::Forward {
+        return load_route(store, id);
+    }
+    if velopopuli_core::velodrome::track_for(id).is_some() {
+        return Err("A velodrome's track is ridden in its own direction.".into());
+    }
+    let (name, points) = if id == DEMO_ROUTE_ID {
+        ("Demo Loop".to_string(), demo_points())
+    } else {
+        let stored: StoredRoute = store.get(&format!("route-{id}")).ok_or("This route is no longer in your library.")?;
+        (stored.name, parse_gpx(&stored.gpx)?.1)
+    };
+    build_route(&format!("{name}{}", direction.suffix()), &direction.apply(&points))
 }
 
 pub fn load_route(store: &Store, id: &str) -> Result<Route, String> {
@@ -201,6 +220,8 @@ pub struct Prepared {
     pub settings: Settings,
     init: RideInit,
     pub imported_ghosts: Vec<String>,
+    /// The route's id with its direction: personal bests and best times are kept under it.
+    pub ride_key: String,
 }
 
 impl Session {
@@ -208,7 +229,12 @@ impl Session {
     pub async fn prepare(app: &AppHandle, store: &Store, http: &reqwest::Client, req: &RideRequest) -> Result<Prepared, String> {
         let route_id = req.route_id.as_str();
         let settings: Settings = store.get("settings").unwrap_or_default();
-        let mut route = load_route(store, route_id)?;
+        // A velodrome's track has its own direction, and everyone in a group ride rides the same way.
+        let group_ride = req.group_room.as_deref().is_some_and(|r| !r.trim().is_empty());
+        let direction = if group_ride || velopopuli_core::velodrome::track_for(route_id).is_some() { Direction::Forward } else { req.direction };
+        let forward = direction == Direction::Forward;
+        let ride_key = format!("{route_id}{}", direction.key());
+        let mut route = load_route_in(store, route_id, direction)?;
 
         // The demo loop is synthetic, so there is no real place to fetch data for.
         let real_place = route_id != DEMO_ROUTE_ID;
@@ -233,7 +259,7 @@ impl Session {
         let dem_offset = dem.as_ref().map_or(0.0, |d| align_dem_with(&mut route, d, &structures));
         let _ = app.emit("ride:loading", "Building the world…");
 
-        let pb: Option<PersonalBest> = store.get(&format!("pb-{route_id}"));
+        let pb: Option<PersonalBest> = store.get(&format!("pb-{ride_key}"));
         let route = Arc::new(route);
         let real_terrain = dem.is_some();
         // A built-in track: the velodrome round it takes the place of what the map has there.
@@ -335,12 +361,15 @@ impl Session {
                 record: None,
             })
             .collect();
-        segments.extend(library::route_segments(store, route_id));
+        // Segments and ghosts are measured along the route as drawn, so they only count going that way.
+        if forward {
+            segments.extend(library::route_segments(store, route_id));
+        }
         let workout = match &req.workout_id {
             Some(id) => Some(library::load_workout(store, id).ok_or("That workout is no longer in your library.")?),
             None => None,
         };
-        let ghosts = library::load_ghosts(store, route_id, &req.ghost_ids);
+        let ghosts = if forward { library::load_ghosts(store, route_id, &req.ghost_ids) } else { Vec::new() };
         let imported_ghosts = ghosts.iter().map(|g| g.id.clone()).collect();
         let options = RideOptions { workout: workout.clone(), ghosts, segments: segments.clone(), segment_bests: pb.as_ref().map(|p| p.segments.clone()).unwrap_or_default(), laps: req.laps };
         let mut engine = RideEngine::with_options(route.clone(), &settings, pb.clone(), options);
@@ -387,7 +416,7 @@ impl Session {
                 eprintln!("Landmark at {:.0} m ({}): {} {} {}", m.distance, if m.side > 0.0 { "+" } else { "-" }, m.kind, m.name, m.detail);
             }
         }
-        Ok(Prepared { route, world, engine, settings, init, imported_ghosts })
+        Ok(Prepared { route, world, engine, settings, init, imported_ghosts, ride_key })
     }
 
     /// Starts riding: `resume` carries on a ride from its checkpoint.
@@ -400,7 +429,7 @@ impl Session {
         req: &RideRequest,
         resume: Option<RideProgress>,
     ) -> Result<(Arc<Session>, RideInit), String> {
-        let Prepared { route, world, mut engine, settings, init, imported_ghosts } = Self::prepare(app, store, http, req).await?;
+        let Prepared { route, world, mut engine, settings, init, imported_ghosts, ride_key } = Self::prepare(app, store, http, req).await?;
         let route_id = req.route_id.as_str();
         if let Some(progress) = resume {
             engine.resume(progress);
@@ -442,7 +471,7 @@ impl Session {
         devices.command_trainer(TrainerCommand::UserConfig { rider_kg: settings.rider.weight_kg, bike_kg: settings.rider.bike_kg });
 
         let session = Arc::new(Session {
-            route_id: route_id.to_string(),
+            route_id: ride_key,
             world,
             engine: Arc::new(Mutex::new(engine)),
             settings: Arc::new(Mutex::new(settings)),

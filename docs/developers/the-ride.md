@@ -2,6 +2,15 @@
 
 One ride in progress is a `RideEngine` ([`crates/core/src/ride.rs`](../../crates/core/src/ride.rs)), wrapped by a `Session` ([`src-tauri/src/session.rs`](../../src-tauri/src/session.rs)), which owns the thread, talks to the devices and saves the result. The loop's timing is in [Architecture](architecture.md#from-ride-to-the-summary).
 
+## Which way round
+
+`RideRequest.direction` ([`gpx::Direction`](../../crates/core/src/gpx.rs)) rides a route as drawn, reversed, or out and back. `load_route_in` builds a new route from the stored points, reversed or followed by themselves reversed, so everything downstream (climbs, the world, the profile) just sees a route. Out and back turns on the spot at the far end; corner rounding makes the turn, a few metres short of the end. It ends where it started, so it counts as a loop.
+
+- The map data is cached under the route's own id: it's the same area whichever way it's ridden.
+- Personal bests, best times and photos are kept under the id with the direction added (`<id>-reverse`, `<id>-out-and-back`; `Prepared::ride_key`).
+- Ghosts and saved segments are measured along the route as drawn, so they're only used going forward.
+- A velodrome's track (it has its own clockwise version) and group rides (everyone rides the same route) always go forward.
+
 ## The engine
 
 `RideEngine::tick(dt, input, wall_ms)` is called every 20 ms with the merged power, cadence and heart rate. In order, it:

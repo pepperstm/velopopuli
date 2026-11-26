@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { errorText } from '../bridge'
 import { fmtDist, fmtTime } from '../core/fmt'
 import { api, useSettings } from '../state'
-import type { ConnectorEntry, GhostMeta, RemoteRide, RideRequest, RideSearch, RouteMeta, Segment, WorkoutMeta } from '../types'
+import type { ConnectorEntry, GhostMeta, RemoteRide, RideRequest, RideSearch, RouteDirection, RouteMeta, Segment, WorkoutMeta } from '../types'
 import { WorkoutShape } from './Workouts'
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`
@@ -30,6 +30,8 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
   // A built-in velodrome (its card is the anticlockwise route): which way round to ride it.
   const isTrack = route.id === 'herne-hill'
   const [clockwise, setClockwise] = useState(false)
+  // Any other route can be ridden backwards, or there and back (not in a group ride: everyone rides the same way).
+  const [chosenDirection, setDirection] = useState<RouteDirection>('forward')
   const rideId = isTrack && clockwise ? `${route.id}-clockwise` : route.id
   const segmentConnectors = connectors.filter((c) => c.findsSegments && c.status.connected)
   const nameOf = (id: string | undefined): string => connectors.find((c) => c.info.id === id)?.info.name ?? id ?? 'a service'
@@ -76,6 +78,8 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
     })
   }
 
+  const direction: RouteDirection = isTrack || group ? 'forward' : chosenDirection
+  const forward = direction === 'forward'
   const lapRide = isLoop && laps !== ''
   const chosen = workouts.find((w) => w.id === workoutId)
 
@@ -94,6 +98,26 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
               <option value="anticlockwise">Anticlockwise, as raced</option>
               <option value="clockwise">Clockwise</option>
             </select>
+          </>
+        )}
+
+        {!isTrack && (
+          <>
+            <h3>Direction</h3>
+            <select value={direction} disabled={group} onChange={(e) => setDirection(e.target.value as RouteDirection)}>
+              <option value="forward">As drawn</option>
+              <option value="reverse">Reversed: from the finish to the start</option>
+              {!isLoop && <option value="outAndBack">Out and back: to the finish and back again ({fmtDist(route.distance * 2, u)})</option>}
+            </select>
+            {group ? (
+              <p className="muted small">A group ride goes the way the route is drawn, so everyone rides the same way.</p>
+            ) : (
+              !forward && (
+                <p className="muted small">
+                  Climbs are found and timed the way you ride. Ghosts and saved segments follow the route as drawn, so they're off this way round.
+                </p>
+              )
+            )}
           </>
         )}
 
@@ -132,7 +156,7 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
           </>
         )}
 
-        {!isDemo && (
+        {!isDemo && forward && (
           <>
             {!lapRide && (
               <>
@@ -265,9 +289,10 @@ export function RideSetup(props: { route: RouteMeta; room?: string; onCancel: ()
               props.onStart({
                 routeId: rideId,
                 workoutId: workoutId || null,
-                ghostIds: lapRide ? [] : ghostIds,
+                ghostIds: lapRide || !forward ? [] : ghostIds,
                 groupRoom: group ? room : null,
-                laps: lapRide ? Number(laps) : null
+                laps: lapRide ? Number(laps) : null,
+                direction
               })
             }
           >

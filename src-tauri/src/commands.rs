@@ -457,7 +457,7 @@ pub async fn ride_checkpoint_save(app: AppHandle, state: State<'_, AppState>) ->
     let mut engine = prepared.engine;
     engine.resume(saved.progress);
     let group = saved.request.group_room.as_deref().is_some_and(|r| !r.trim().is_empty());
-    let summary = session::save_ride(&state.store, &engine, &prepared.settings, &saved.request.route_id, group, &prepared.imported_ghosts)?;
+    let summary = session::save_ride(&state.store, &engine, &prepared.settings, &prepared.ride_key, group, &prepared.imported_ghosts)?;
     checkpoint::clear(&state.store);
     Ok(summary)
 }
@@ -1157,6 +1157,8 @@ pub struct SmokeConfig {
     overlay: bool,
     /// Carry on the ride in the checkpoint instead of starting one (VP_SMOKE_RESUME).
     resume: bool,
+    /// Ride the route this way: `reverse` or `outAndBack` (VP_SMOKE_DIRECTION).
+    direction: Option<String>,
 }
 
 /// Automated check only: saves window frame `index` as `<name>.frames/NNNN.png`, for demo clips.
@@ -1192,6 +1194,7 @@ pub fn smoke_config() -> Option<SmokeConfig> {
         plan: std::env::var("VP_SMOKE_PLAN").ok(),
         overlay: std::env::var_os("VP_SMOKE_OVERLAY").is_some(),
         resume: std::env::var_os("VP_SMOKE_RESUME").is_some(),
+        direction: std::env::var("VP_SMOKE_DIRECTION").ok(),
     })
 }
 
