@@ -118,6 +118,13 @@ export function Devices(): React.JSX.Element {
               </span>
             ))}
           </div>
+          {lookingFor
+            .filter((k) => k.problem)
+            .map((k) => (
+              <div key={k.id} className="muted small">
+                {k.name || 'Bluetooth sensor'}: {k.problem} It will be tried again.
+              </div>
+            ))}
         </div>
       )}
       {ant.state === 'opening' && <div className="notice">Opening ANT+ stick…</div>}

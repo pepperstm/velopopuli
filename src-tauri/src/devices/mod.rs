@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use velopopuli_core::devices::obc;
-use velopopuli_core::devices::{DeviceInfo, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
+use velopopuli_core::devices::{DeviceInfo, DeviceKind, DeviceStatus, Hub, Readings, Telemetry, TrainerCommand};
 
 use crate::{diag, now_ms};
 
@@ -42,6 +42,13 @@ pub struct KnownBle {
     /// The operating system's id for the peripheral (without the `ble:` prefix).
     pub id: String,
     pub name: String,
+    /// What it was when it last connected, so a trainer can't come back as a lesser sensor.
+    /// Missing for sensors remembered before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<DeviceKind>,
+    /// Why the last try to connect it failed, shown on the Devices page. Never saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
 }
 
 /// The sensors to reconnect at launch, kept in the store as `devices`.
@@ -56,12 +63,20 @@ pub struct Remembered {
 }
 
 impl Remembered {
-    /// Adds a sensor, or renames it if it is already there.
-    pub fn add_ble(&mut self, id: &str, name: &str) {
+    /// Adds a sensor, or updates its name and kind if it is already there.
+    pub fn add_ble(&mut self, id: &str, name: &str, kind: DeviceKind) {
         match self.ble.iter_mut().find(|k| k.id == id) {
-            Some(k) => k.name = name.to_string(),
-            None => self.ble.push(KnownBle { id: id.to_string(), name: name.to_string() }),
+            Some(k) => {
+                k.name = name.to_string();
+                k.kind = Some(kind);
+            }
+            None => self.ble.push(KnownBle { id: id.to_string(), name: name.to_string(), kind: Some(kind), problem: None }),
         }
+    }
+
+    /// What a remembered sensor was when it last connected.
+    pub fn kind_of(&self, id: &str) -> Option<DeviceKind> {
+        self.ble.iter().find(|k| k.id == id).and_then(|k| k.kind)
     }
 
     pub fn forget_ble(&mut self, id: &str) -> bool {
@@ -79,15 +94,40 @@ pub struct Devices {
     handles: Mutex<HashMap<String, Handle>>,
     ant_status: Mutex<AntStatus>,
     looking_for: Mutex<Vec<KnownBle>>,
+    /// Why a remembered sensor last failed to connect, by peripheral id.
+    problems: Mutex<HashMap<String, String>>,
 }
 
 impl Devices {
     pub fn new(app: AppHandle) -> Self {
-        Self { app, hub: Mutex::default(), handles: Mutex::default(), ant_status: Mutex::new(AntStatus { state: "off", message: String::new() }), looking_for: Mutex::default() }
+        Self {
+            app,
+            hub: Mutex::default(),
+            handles: Mutex::default(),
+            ant_status: Mutex::new(AntStatus { state: "off", message: String::new() }),
+            looking_for: Mutex::default(),
+            problems: Mutex::default(),
+        }
     }
 
     pub fn snapshot(&self) -> DevicesSnapshot {
-        DevicesSnapshot { devices: self.hub.lock().unwrap().snapshot(now_ms()), ant: self.ant_status.lock().unwrap().clone(), looking_for: self.looking_for.lock().unwrap().clone() }
+        let problems = self.problems.lock().unwrap();
+        let looking_for = self.looking_for.lock().unwrap().iter().map(|k| KnownBle { problem: problems.get(&k.id).cloned(), ..k.clone() }).collect();
+        DevicesSnapshot { devices: self.hub.lock().unwrap().snapshot(now_ms()), ant: self.ant_status.lock().unwrap().clone(), looking_for }
+    }
+
+    /// Records why a remembered sensor failed to connect, or clears it once it connects.
+    pub fn set_problem(&self, peripheral_id: &str, problem: Option<String>) {
+        let changed = {
+            let mut problems = self.problems.lock().unwrap();
+            match problem {
+                Some(p) => problems.insert(peripheral_id.to_string(), p.clone()).as_ref() != Some(&p),
+                None => problems.remove(peripheral_id).is_some(),
+            }
+        };
+        if changed {
+            self.changed();
+        }
     }
 
     /// The sensors to reconnect at launch.
@@ -228,14 +268,18 @@ mod tests {
     #[test]
     fn remembered_sensors_are_kept_once_and_forgotten() {
         let mut r = Remembered::default();
-        r.add_ble("A1", "Trainer");
-        r.add_ble("B2", "HRM");
-        r.add_ble("A1", "Tacx Neo");
+        r.add_ble("A1", "Trainer", DeviceKind::Power);
+        r.add_ble("B2", "HRM", DeviceKind::Hr);
+        r.add_ble("A1", "Tacx Neo", DeviceKind::Trainer);
+        assert_eq!(r.kind_of("A1"), Some(DeviceKind::Trainer));
         assert_eq!(r.ble.iter().map(|k| (k.id.as_str(), k.name.as_str())).collect::<Vec<_>>(), [("A1", "Tacx Neo"), ("B2", "HRM")]);
         assert!(r.forget_ble("A1") && !r.forget_ble("A1"));
         assert_eq!(r.ble.len(), 1);
         // Older stores have no list yet.
         let old: Remembered = serde_json::from_str("{}").unwrap();
         assert_eq!(old, Remembered::default());
+        // Sensors remembered before the kind was kept.
+        let old: Remembered = serde_json::from_str(r#"{"ble":[{"id":"C3","name":"KICKR"}]}"#).unwrap();
+        assert_eq!(old.kind_of("C3"), None);
     }
 }

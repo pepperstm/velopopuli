@@ -455,7 +455,8 @@ export interface DevicesSnapshot {
   devices: DeviceInfo[]
   ant: { state: 'off' | 'opening' | 'scanning' | 'error'; message: string }
   /** Bluetooth sensors connected before and not connected yet, while the app looks for them. */
-  lookingFor: { id: string; name: string }[]
+  /** Remembered Bluetooth sensors not connected yet; `problem` is why the last try failed. */
+  lookingFor: { id: string; name: string; problem?: string }[]
 }
 
 export interface WorldLayout {

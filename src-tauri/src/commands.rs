@@ -208,6 +208,7 @@ pub fn device_forget(state: State<AppState>, id: String) {
     });
     let pending = state.devices.snapshot().looking_for.into_iter().filter(|k| k.id != id).collect();
     state.devices.set_looking_for(pending);
+    state.devices.set_problem(&id, None);
 }
 
 #[tauri::command]
